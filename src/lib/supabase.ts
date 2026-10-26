@@ -1,0 +1,147 @@
+import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
+import type {
+  ArtworkCategory,
+  AvailabilityStatus,
+  OfferStatus,
+  SaleMode,
+  UserRole,
+} from '../types/artverse';
+
+export interface SupabaseDatabase {
+  public: {
+    Tables: {
+      profiles: {
+        Row: {
+          id: string;
+          email: string;
+          full_name: string;
+          handle: string;
+          role: UserRole;
+          avatar_url: string | null;
+          cover_url: string | null;
+          bio: string;
+          location: string;
+          discipline: string;
+          verified: boolean;
+          is_demo: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+      };
+      artworks: {
+        Row: {
+          id: string;
+          artist_id: string;
+          title: string;
+          description: string;
+          category: ArtworkCategory;
+          medium: string;
+          dimensions: string;
+          year: number;
+          price: number;
+          currency: string;
+          availability: AvailabilityStatus;
+          sale_mode: SaleMode;
+          image_key: string;
+          provenance: string;
+          accession_number: string;
+          edition_info: string;
+          featured: boolean;
+          likes_count: number;
+          is_demo: boolean;
+          created_at: string;
+          updated_at: string;
+        };
+      };
+      conversations: {
+        Row: {
+          id: string;
+          artwork_id: string;
+          collector_id: string;
+          artist_id: string;
+          last_message_preview: string;
+          last_message_at: string;
+          is_demo: boolean;
+          created_at: string;
+        };
+      };
+      messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_id: string;
+          body: string;
+          attachment_name: string | null;
+          message_type: 'text' | 'offer_event' | 'system';
+          created_at: string;
+        };
+      };
+      artwork_offers: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          artwork_id: string;
+          sender_id: string;
+          recipient_id: string;
+          amount: number;
+          currency: string;
+          status: OfferStatus;
+          note: string;
+          parent_offer_id: string | null;
+          expires_at: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+      };
+    };
+  };
+}
+
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL as string | undefined;
+const supabaseAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY as string | undefined;
+
+export const isSupabaseConfigured = Boolean(
+  supabaseUrl &&
+    supabaseAnonKey &&
+    !supabaseUrl.includes('your-project-ref') &&
+    !supabaseAnonKey.includes('placeholder')
+);
+
+export const supabase: SupabaseClient<SupabaseDatabase> | null = isSupabaseConfigured
+  ? createClient<SupabaseDatabase>(supabaseUrl!, supabaseAnonKey!)
+  : null;
+
+/**
+ * Subscribes to real-time message and offer updates for a specific conversation
+ * when Supabase Realtime is configured.
+ */
+export function subscribeToConversationRealtime(
+  conversationId: string,
+  onEvent: () => void
+): RealtimeChannel | null {
+  if (!supabase) return null;
+
+  return supabase
+    .channel(`conversation:${conversationId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'messages',
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      () => onEvent()
+    )
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'artwork_offers',
+        filter: `conversation_id=eq.${conversationId}`,
+      },
+      () => onEvent()
+    )
+    .subscribe();
+}

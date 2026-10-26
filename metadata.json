@@ -1,0 +1,6 @@
+{
+  "name": "ArtVerse",
+  "description": "A digital fine-art gallery and collector community where artists publish original works, collectors negotiate offers, and art lovers connect.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
