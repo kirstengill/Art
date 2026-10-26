@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import {
   ArrowLeft,
@@ -20,10 +20,12 @@ import {
   formatMoney,
   formatSaleModeLabel,
 } from '../utils/formatters';
+import marbleArtwork from '../assets/images/art_marble_form_1792993238374.jpg';
 
 export const ArtworkDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
   const {
     artworks,
@@ -36,6 +38,7 @@ export const ArtworkDetailPage: React.FC = () => {
     openOrCreateConversation,
     makeOffer,
     createOrderIntent,
+    currentUser,
   } = useArtVerse();
 
   const artwork = id ? getArtworkById(id) : undefined;
@@ -113,8 +116,25 @@ export const ArtworkDetailPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-[#FAF8F3] w-full">
-      <div className="max-w-[1380px] mx-auto px-4 sm:px-8 py-6 sm:py-8 lg:py-12">
+    <div className="w-full relative isolate">
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `url("${marbleArtwork}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          opacity: 0.06,
+        }}
+      />
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(250, 248, 243, 0.94) 0%, rgba(247, 243, 237, 0.96) 100%)',
+        }}
+      />
+      <div className="bg-transparent w-full">
+        <div className="max-w-[1380px] mx-auto px-4 sm:px-8 py-6 sm:py-8 lg:py-12">
         <Link
           to="/gallery"
           className="inline-flex items-center gap-2 text-xs font-medium text-[#575048] hover:text-[#141312] mb-6 sm:mb-8 transition-colors"
@@ -288,7 +308,7 @@ export const ArtworkDetailPage: React.FC = () => {
             </div>
 
             {/* Price, Availability & Acquisition Actions */}
-            <div className="p-6 bg-white border border-[#E6DFD3] rounded-2xl shadow-[0_14px_34px_-18px_rgba(20,19,18,0.1)] space-y-5">
+            <div className="p-6 rounded-2xl shadow-[0_20px_60px_-20px_rgba(20,19,18,0.15)] space-y-5" style={{ background: 'rgba(255, 255, 255, 0.75)', backdropFilter: 'blur(16px) saturate(180%)', border: '1px solid rgba(255, 255, 255, 0.5)' }}>
               <div className="flex items-baseline justify-between gap-4">
                 <div>
                   <p className="text-xs text-[#787066]">Listed Gallery Price</p>
@@ -313,12 +333,23 @@ export const ArtworkDetailPage: React.FC = () => {
                 {canBuyNow && (
                   <motion.button
                     type="button"
-                    whileHover={shouldReduceMotion ? undefined : { y: -1 }}
+                    whileHover={shouldReduceMotion ? undefined : { y: -2, scale: 1.02 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                    onClick={() => setPurchaseModalOpen(true)}
-                    className="flex-1 px-5 py-3 text-sm font-medium bg-[#141312] text-[#FAF8F3] rounded-xl hover:bg-[#292623] transition-colors whitespace-nowrap"
+                    onClick={() => {
+                      if (!currentUser) {
+                        navigate('/login', { state: { from: { pathname: `/artwork/${artwork.id}` } } });
+                        return;
+                      }
+                      setPurchaseModalOpen(true);
+                    }}
+                    className="flex-1 px-5 py-3 text-sm font-medium rounded-xl transition-all duration-300 whitespace-nowrap"
+                    style={{
+                      background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+                      color: '#FAF8F3',
+                      boxShadow: '0 6px 24px rgba(179, 139, 64, 0.4)',
+                    }}
                   >
-                    Buy Now (Preview)
+                    Buy Artwork
                   </motion.button>
                 )}
 
@@ -500,6 +531,7 @@ export const ArtworkDetailPage: React.FC = () => {
         onClose={() => setPurchaseModalOpen(false)}
         onCreateIntent={createOrderIntent}
       />
+      </div>
     </div>
   );
 };

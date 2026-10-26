@@ -3,9 +3,11 @@ import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Columns2, Grid3x3, RefreshCw, Search, X } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
+import { ArtworkGrid } from '../components/artwork/ArtworkGrid';
 import { ArtworkCard } from '../components/artwork/ArtworkCard';
 import { ArtworkGridSkeleton } from '../components/ui/Skeletons';
 import type { ArtworkCategory } from '../types/artverse';
+import lapisArtwork from '../assets/images/art_lapis_refraction_1792993241626.jpg';
 
 const CATEGORIES: { value: 'all' | ArtworkCategory; label: string }[] = [
   { value: 'all', label: 'All Works' },
@@ -96,7 +98,23 @@ export const GalleryPage: React.FC = () => {
   };
 
   return (
-    <div className="bg-[#FAF8F3] w-full">
+    <div className="w-full relative isolate min-h-screen">
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `url("${lapisArtwork}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          opacity: 0.12,
+        }}
+      />
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(250, 248, 243, 0.85) 0%, rgba(247, 243, 237, 0.9) 100%)',
+        }}
+      />
       <div className="max-w-[1380px] mx-auto px-4 sm:px-8 py-8 sm:py-12 lg:py-16">
         <motion.div
           initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
@@ -318,43 +336,41 @@ export const GalleryPage: React.FC = () => {
         ) : (
           <motion.div
             layout={!shouldReduceMotion}
-            className={`grid grid-cols-1 sm:grid-cols-2 ${
-              gridDensity === 'salon'
-                ? 'lg:grid-cols-2 gap-9'
-                : 'lg:grid-cols-3 gap-7'
-            } pt-10`}
+            className={`pt-10`}
           >
-            <AnimatePresence mode="popLayout">
-              {filteredArtworks.map((art, index) => (
-                <motion.div
-                  key={art.id}
-                  layout={!shouldReduceMotion}
-                  initial={
-                    shouldReduceMotion
-                      ? { opacity: 1 }
-                      : { opacity: 0, y: 16, scale: 0.97 }
-                  }
-                  animate={{ opacity: 1, y: 0, scale: 1 }}
-                  exit={
-                    shouldReduceMotion
-                      ? { opacity: 0 }
-                      : { opacity: 0, scale: 0.95 }
-                  }
-                  transition={{
-                    duration: 0.24,
-                    delay: shouldReduceMotion ? 0 : Math.min(index * 0.035, 0.18),
-                    ease: [0.16, 1, 0.3, 1],
-                  }}
-                >
-                  <ArtworkCard
-                    artwork={art}
-                    aspectClass={
-                      gridDensity === 'salon' ? 'aspect-[4/3]' : 'aspect-[4/5]'
+            <ArtworkGrid>
+              <AnimatePresence mode="popLayout">
+                {filteredArtworks.map((art, index) => (
+                  <motion.div
+                    key={art.id}
+                    layout={!shouldReduceMotion}
+                    initial={
+                      shouldReduceMotion
+                        ? { opacity: 1 }
+                        : { opacity: 0, y: 20, scale: 0.96 }
                     }
-                  />
-                </motion.div>
-              ))}
-            </AnimatePresence>
+                    animate={{ opacity: 1, y: 0, scale: 1 }}
+                    exit={
+                      shouldReduceMotion
+                        ? { opacity: 0 }
+                        : { opacity: 0, scale: 0.95 }
+                    }
+                    transition={{
+                      duration: 0.3,
+                      delay: shouldReduceMotion ? 0 : Math.min(index * 0.04, 0.2),
+                      ease: [0.16, 1, 0.3, 1],
+                    }}
+                  >
+                    <ArtworkCard
+                      artwork={art}
+                      aspectClass={
+                        gridDensity === 'salon' ? 'aspect-[4/3]' : 'aspect-[4/5]'
+                      }
+                    />
+                  </motion.div>
+                ))}
+              </AnimatePresence>
+            </ArtworkGrid>
           </motion.div>
           )}
         </AnimatePresence>

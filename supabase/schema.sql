@@ -179,6 +179,31 @@ ALTER TABLE public.artwork_offers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 
+-- Artwork images are public so artwork listings render for every visitor.
+INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
+VALUES (
+  'artwork-images',
+  'artwork-images',
+  true,
+  4718592,
+  ARRAY['image/jpeg', 'image/png', 'image/webp']
+)
+ON CONFLICT (id) DO UPDATE SET
+  public = EXCLUDED.public,
+  file_size_limit = EXCLUDED.file_size_limit,
+  allowed_mime_types = EXCLUDED.allowed_mime_types;
+
+CREATE POLICY "Anyone can view artwork images"
+  ON storage.objects FOR SELECT
+  USING (bucket_id = 'artwork-images');
+
+CREATE POLICY "Authenticated users upload their own artwork images"
+  ON storage.objects FOR INSERT TO authenticated
+  WITH CHECK (
+    bucket_id = 'artwork-images' AND
+    (storage.foldername(name))[1] = auth.uid()::text
+  );
+
 -- Artwork ownership policies
 CREATE POLICY "Public artworks are viewable by everyone"
   ON public.artworks FOR SELECT USING (true);

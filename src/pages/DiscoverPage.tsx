@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import {
   AnimatePresence,
   motion,
@@ -18,6 +18,7 @@ import {
   formatSaleModeLabel,
   formatShortDate,
 } from '../utils/formatters';
+import heroArtwork from '../assets/images/hero_gilded_horizon_1792993235968.jpg';
 
 export const DiscoverPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
@@ -56,7 +57,24 @@ export const DiscoverPage: React.FC = () => {
   const recentPosts = posts.slice(0, 3);
 
   return (
-    <div className="bg-[#FAF8F3] w-full">
+    <div className="w-full relative isolate">
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `url("${heroArtwork}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          opacity: 0.08,
+        }}
+      />
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(250, 248, 243, 0.92) 0%, rgba(247, 243, 237, 0.95) 100%)',
+        }}
+      />
+      <div className="bg-transparent w-full">
       {/* 1. Modern Kinetic Exhibition Hero */}
       <section className="max-w-[1380px] mx-auto px-4 sm:px-8 pt-8 pb-12 sm:pt-10 sm:pb-16 lg:py-20">
         <div className="grid grid-cols-1 lg:grid-cols-12 gap-8 sm:gap-10 lg:gap-14 items-stretch">
@@ -657,6 +675,7 @@ export const DiscoverPage: React.FC = () => {
           </div>
         </div>
       </section>
+      </div>
     </div>
   );
 };

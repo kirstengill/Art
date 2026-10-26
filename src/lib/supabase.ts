@@ -7,6 +7,8 @@ import type {
   UserRole,
 } from '../types/artverse';
 
+export const ARTWORK_IMAGE_BUCKET = 'artwork-images';
+
 export interface SupabaseDatabase {
   public: {
     Tables: {
@@ -110,6 +112,56 @@ export const isSupabaseConfigured = Boolean(
 export const supabase: SupabaseClient<SupabaseDatabase> | null = isSupabaseConfigured
   ? createClient<SupabaseDatabase>(supabaseUrl!, supabaseAnonKey!)
   : null;
+
+export async function uploadArtworkImage(
+  dataUrl: string,
+  artistId: string
+): Promise<string> {
+  if (!supabase || !isSupabaseConfigured) {
+    throw new Error('Supabase Storage is not configured.');
+  }
+
+  const imageMatch = dataUrl.match(
+    /^data:(image\/(?:jpeg|png|webp));base64,([A-Za-z\d+/]+={0,2})$/
+  );
+  if (!imageMatch) {
+    throw new Error('Artwork images must be JPEG, PNG, or WebP files.');
+  }
+
+  const [, contentType, encodedImage] = imageMatch;
+  const imageBytes = Uint8Array.from(atob(encodedImage), (character) =>
+    character.charCodeAt(0)
+  );
+  if (imageBytes.byteLength > 4.5 * 1024 * 1024) {
+    throw new Error('Artwork images must be under 4.5 MB.');
+  }
+
+  const extensionByType: Record<string, string> = {
+    'image/jpeg': 'jpg',
+    'image/png': 'png',
+    'image/webp': 'webp',
+  };
+  const imagePath = `${artistId}/${crypto.randomUUID()}.${extensionByType[contentType]}`;
+  const { error } = await supabase.storage
+    .from(ARTWORK_IMAGE_BUCKET)
+    .upload(imagePath, imageBytes, {
+      cacheControl: '3600',
+      contentType,
+      upsert: false,
+    });
+  if (error) {
+    throw new Error(`Unable to upload artwork image to Supabase Storage: ${error.message}`);
+  }
+
+  return supabase.storage.from(ARTWORK_IMAGE_BUCKET).getPublicUrl(imagePath).data.publicUrl;
+}
+
+export async function getSupabaseAccessToken(): Promise<string | null> {
+  if (!supabase) return null;
+  const { data, error } = await supabase.auth.getSession();
+  if (error) throw error;
+  return data.session?.access_token ?? null;
+}
 
 /**
  * Subscribes to real-time message and offer updates for a specific conversation

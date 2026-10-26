@@ -1,10 +1,42 @@
 import type { Request, Response, NextFunction } from 'express';
-import type { DecodedIdToken } from 'firebase-admin/auth';
-import { adminAuth } from '../lib/firebase-admin.ts';
+import { getSupabaseAuthClient, verifySupabaseAccessToken } from '../lib/supabase-server.ts';
+
+interface AuthenticatedUser {
+  uid: string;
+  email?: string;
+  name?: string;
+  user_metadata: Record<string, unknown>;
+}
 
 export interface AuthRequest extends Request {
-  user?: DecodedIdToken;
+  user?: AuthenticatedUser;
 }
+
+export const requireAdmin = (
+  req: AuthRequest,
+  res: Response,
+  next: NextFunction
+) => {
+  res.setHeader('Cache-Control', 'no-store');
+  const adminUids = (process.env.ADMIN_UIDS || '')
+    .split(',')
+    .map((uid) => uid.trim())
+    .filter(Boolean);
+
+  if (adminUids.length === 0) {
+    res.status(503).json({
+      error: 'Administrator access is not configured on this server.',
+    });
+    return;
+  }
+
+  if (!req.user?.uid || !adminUids.includes(req.user.uid)) {
+    res.status(403).json({ error: 'Administrator access is required.' });
+    return;
+  }
+
+  next();
+};
 
 export const requireAuth = async (
   req: AuthRequest,
@@ -19,12 +51,24 @@ export const requireAuth = async (
 
   const token = authHeader.split('Bearer ')[1];
   try {
-    const decodedToken = await adminAuth.verifyIdToken(token);
-    req.user = decodedToken;
+    if (!getSupabaseAuthClient()) {
+      res.status(503).json({ error: 'Supabase Auth is not configured on the server.' });
+      return;
+    }
+    const user = await verifySupabaseAccessToken(token);
+    if (!user) {
+      res.status(401).json({ error: 'Unauthorized: Invalid or expired access token.' });
+      return;
+    }
+    req.user = user;
     next();
   } catch (error) {
-    console.error('Error verifying Firebase ID token:', error);
-    res.status(401).json({ error: 'Unauthorized: Invalid or expired authentication token.' });
+    if (error instanceof Error && error.message.includes('not configured')) {
+      res.status(503).json({ error: error.message });
+      return;
+    }
+    console.error('Supabase access token verification failed.');
+    res.status(503).json({ error: 'Unable to verify access token with Supabase Auth.' });
   }
 };
 
@@ -41,10 +85,10 @@ export const optionalAuth = async (
 
   const token = authHeader.split('Bearer ')[1];
   try {
-    const decodedToken = await adminAuth.verifyIdToken(token);
-    req.user = decodedToken;
-  } catch (error) {
-    console.warn('Optional auth token verification skipped:', error);
+    const user = await verifySupabaseAccessToken(token);
+    if (user) req.user = user;
+  } catch {
+    console.warn('Optional Supabase authentication could not be verified.');
   }
   next();
 };

@@ -4,10 +4,15 @@ import React, {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
 } from 'react';
-import { onAuthStateChanged, signInWithPopup, signOut } from 'firebase/auth';
-import { auth, clearInMemoryToken, googleAuthProvider } from '../lib/firebase';
+import type { User as SupabaseUser } from '@supabase/supabase-js';
+import {
+  isSupabaseConfigured,
+  supabase,
+  uploadArtworkImage,
+} from '../lib/supabase';
 import { artverseApi } from '../services/artverseApi';
 import {
   DEMO_ARTWORKS,
@@ -50,13 +55,15 @@ interface ArtVerseContextValue {
   catalogError: string | null;
   refreshCatalog: () => Promise<void>;
   refreshConversations: () => Promise<void>;
-  signInWithGoogle: (preferredRole?: UserRole) => Promise<Profile>;
-  signInDemoSession: (params: {
+  signInWithGoogle: (preferredRole?: UserRole, returnTo?: string) => Promise<void>;
+  signInWithEmail: (email: string, password: string) => Promise<void>;
+  signUpWithEmail: (params: {
     email: string;
+    password: string;
     fullName: string;
     role: UserRole;
     location?: string;
-  }) => Profile;
+  }) => Promise<{ emailConfirmationRequired: boolean }>;
   switchRole: (role: UserRole) => Promise<void>;
   logout: () => Promise<void>;
   toggleSaveArtwork: (artworkId: string) => Promise<void>;
@@ -139,6 +146,52 @@ function mergeChronologicalById<T extends { id: string; createdAt: string }>(
   );
 }
 
+function isUserRole(value: unknown): value is UserRole {
+  return value === 'artist' || value === 'collector' || value === 'art_lover';
+}
+
+function safeReturnPath(path?: string): string {
+  return path && path.startsWith('/') && !path.startsWith('//') ? path : '/dashboard';
+}
+
+function profileFromSupabaseUser(
+  user: SupabaseUser,
+  preferredRole?: UserRole
+): Profile {
+  const metadata = user.user_metadata || {};
+  const fullName =
+    (typeof metadata.full_name === 'string' && metadata.full_name) ||
+    (typeof metadata.name === 'string' && metadata.name) ||
+    user.email?.split('@')[0] ||
+    'Art Universe Member';
+  const role = preferredRole || (isUserRole(metadata.role) ? metadata.role : 'collector');
+  const handle =
+    (typeof metadata.user_name === 'string' && metadata.user_name) ||
+    fullName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) ||
+    'artverse_member';
+
+  return {
+    id: user.id,
+    email: user.email || '',
+    fullName,
+    handle,
+    role,
+    avatarUrl:
+      typeof metadata.avatar_url === 'string'
+        ? metadata.avatar_url
+        : typeof metadata.picture === 'string'
+          ? metadata.picture
+          : null,
+    coverUrl: null,
+    bio: typeof metadata.bio === 'string' ? metadata.bio : '',
+    location: typeof metadata.location === 'string' ? metadata.location : '',
+    discipline: role === 'artist' ? 'Contemporary Fine Art' : 'Private Collection',
+    verified: false,
+    isDemo: false,
+    createdAt: user.created_at,
+  };
+}
+
 export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   children,
 }) => {
@@ -165,6 +218,50 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [isLoadingCatalog, setIsLoadingCatalog] = useState<boolean>(true);
   const [isLoadingThreads, setIsLoadingThreads] = useState<boolean>(true);
   const [catalogError, setCatalogError] = useState<string | null>(null);
+  const profileSyncTasks = useRef(new Map<string, Promise<Profile>>());
+
+  const syncSupabaseProfile = useCallback(
+    (user: SupabaseUser, role?: UserRole) => {
+      const taskKey = `${user.id}:${role || ''}`;
+      const activeTask = profileSyncTasks.current.get(taskKey);
+      if (activeTask) return activeTask;
+
+      const task = artverseApi
+        .syncProfile({
+          fullName:
+            typeof user.user_metadata.full_name === 'string'
+              ? user.user_metadata.full_name
+              : typeof user.user_metadata.name === 'string'
+                ? user.user_metadata.name
+                : undefined,
+          role,
+          location:
+            typeof user.user_metadata.location === 'string'
+              ? user.user_metadata.location
+              : undefined,
+        })
+        .then(({ profile }) => {
+          setCurrentUser(profile);
+          setAuthMode('authenticated');
+          setProfiles((prev) => mergeById([profile], prev));
+          return profile;
+        })
+        .finally(() => {
+          profileSyncTasks.current.delete(taskKey);
+        });
+      profileSyncTasks.current.set(taskKey, task);
+      return task;
+    },
+    []
+  );
+
+  const activateSupabaseUser = useCallback((user: SupabaseUser, role?: UserRole) => {
+    const profile = profileFromSupabaseUser(user, role);
+    setCurrentUser(profile);
+    setAuthMode('authenticated');
+    setProfiles((prev) => mergeById([profile], prev));
+    return profile;
+  }, []);
 
   const loadCatalog = useCallback(async () => {
     const startedAt = Date.now();
@@ -184,7 +281,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       if (data.comments.length > 0) {
         setComments(mergeChronologicalById(data.comments, DEMO_COMMENTS));
       }
-      if (auth.currentUser) {
+      if (currentUser) {
         setSavedArtworkIds(Array.from(new Set(data.savedArtworkIds)));
         setFollowedArtistIds(Array.from(new Set(data.followedArtistIds)));
         setLikedPostIds(Array.from(new Set(data.likedPostIds)));
@@ -198,13 +295,13 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       setIsLoadingCatalog(false);
     }
-  }, []);
+  }, [currentUser]);
 
   const refreshConversations = useCallback(async () => {
     const startedAt = Date.now();
     setIsLoadingThreads(true);
     try {
-      if (auth.currentUser) {
+      if (currentUser && authMode === 'authenticated') {
         const convData = await artverseApi.fetchConversations();
         setConversations(mergeById(convData.conversations, DEMO_CONVERSATIONS));
         setMessages(mergeChronologicalById(convData.messages, DEMO_MESSAGES));
@@ -221,134 +318,162 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       setIsLoadingThreads(false);
     }
-  }, []);
+  }, [authMode, currentUser]);
 
   useEffect(() => {
     let active = true;
     (async () => {
       await loadCatalog();
-      if (active && !auth.currentUser) {
+      if (active && !currentUser) {
         setIsLoadingThreads(false);
       }
     })();
     return () => {
       active = false;
     };
-  }, [loadCatalog]);
+  }, [currentUser, loadCatalog]);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(auth, async (fbUser) => {
-      if (!fbUser) {
-        clearInMemoryToken();
-        setAuthMode((prev) => (prev === 'demo' ? 'demo' : 'guest'));
+    if (!supabase) return;
+    let active = true;
+    const {
+      data: { subscription },
+    } = supabase.auth.onAuthStateChange((_event, session) => {
+      if (!active) return;
+      if (!session?.user) {
+        setCurrentUser(null);
+        setAuthMode('guest');
         return;
       }
 
-      setIsLoadingThreads(true);
-      try {
-        const { profile } = await artverseApi.syncProfile({
-          fullName: fbUser.displayName || undefined,
-        });
-        setCurrentUser(profile);
-        setAuthMode('authenticated');
-        setProfiles((prev) => mergeById([profile], prev));
+      const user = session.user;
+      const callbackParams = new URLSearchParams(window.location.search);
+      const requestedRole = callbackParams.get('role');
+      const callbackRole =
+        window.location.pathname === '/auth/callback' &&
+        isUserRole(requestedRole)
+          ? requestedRole
+          : undefined;
+      const role = callbackRole ||
+        (isUserRole(user.user_metadata.role) ? user.user_metadata.role : undefined);
+      activateSupabaseUser(user, role);
 
-        const [cat, convData] = await Promise.all([
-          artverseApi.fetchCatalog(),
-          artverseApi.fetchConversations(),
-        ]);
-        setProfiles(mergeById([profile, ...cat.profiles], DEMO_PROFILES));
-        setArtworks(mergeById(cat.artworks, DEMO_ARTWORKS));
-        setPosts(mergeById(cat.posts, DEMO_POSTS));
-        setComments(mergeChronologicalById(cat.comments, DEMO_COMMENTS));
-        setSavedArtworkIds(Array.from(new Set(cat.savedArtworkIds)));
-        setFollowedArtistIds(Array.from(new Set(cat.followedArtistIds)));
-        setLikedPostIds(Array.from(new Set(cat.likedPostIds)));
-        setConversations(mergeById(convData.conversations, DEMO_CONVERSATIONS));
-        setMessages(mergeChronologicalById(convData.messages, DEMO_MESSAGES));
-        setOffers(mergeChronologicalById(convData.offers, DEMO_OFFERS));
-      } catch (err) {
-        console.error('Failed to sync authenticated user:', err);
-      } finally {
-        setIsLoadingThreads(false);
+      window.setTimeout(() => {
+        if (!active) return;
+        setIsLoadingThreads(true);
+        void syncSupabaseProfile(user, role)
+          .then(async () => {
+            if (!active) return;
+            const [cat, convData] = await Promise.all([
+              artverseApi.fetchCatalog(),
+              artverseApi.fetchConversations(),
+            ]);
+            if (!active) return;
+            setProfiles(mergeById(cat.profiles, DEMO_PROFILES));
+            setArtworks(mergeById(cat.artworks, DEMO_ARTWORKS));
+            setPosts(mergeById(cat.posts, DEMO_POSTS));
+            setComments(mergeChronologicalById(cat.comments, DEMO_COMMENTS));
+            setSavedArtworkIds(Array.from(new Set(cat.savedArtworkIds)));
+            setFollowedArtistIds(Array.from(new Set(cat.followedArtistIds)));
+            setLikedPostIds(Array.from(new Set(cat.likedPostIds)));
+            setConversations(mergeById(convData.conversations, DEMO_CONVERSATIONS));
+            setMessages(mergeChronologicalById(convData.messages, DEMO_MESSAGES));
+            setOffers(mergeChronologicalById(convData.offers, DEMO_OFFERS));
+          })
+          .catch((err: unknown) => {
+            console.error('Supabase user is signed in, but application profile sync failed:', err);
+          })
+          .finally(() => {
+            if (active) setIsLoadingThreads(false);
+          });
+      }, 0);
+    });
+    return () => {
+      active = false;
+      subscription.unsubscribe();
+    };
+  }, [activateSupabaseUser, syncSupabaseProfile]);
+
+  const signInWithGoogle = useCallback(
+    async (preferredRole?: UserRole, returnTo?: string) => {
+      if (!supabase || !isSupabaseConfigured) {
+        throw new Error('Supabase Auth is not configured. Check the Supabase URL and publishable key.');
       }
-    });
-    return () => unsubscribe();
-  }, []);
+      const callbackUrl = new URL('/auth/callback', window.location.origin);
+      if (preferredRole) callbackUrl.searchParams.set('role', preferredRole);
+      callbackUrl.searchParams.set('next', safeReturnPath(returnTo));
+      const { error } = await supabase.auth.signInWithOAuth({
+        provider: 'google',
+        options: { redirectTo: callbackUrl.toString() },
+      });
+      if (error) throw error;
+    },
+    []
+  );
 
-  const signInWithGoogle = useCallback(async (preferredRole?: UserRole) => {
-    const credential = await signInWithPopup(auth, googleAuthProvider);
-    const { profile } = await artverseApi.syncProfile({
-      fullName: credential.user.displayName || undefined,
-      role: preferredRole,
-    });
-    setCurrentUser(profile);
-    setAuthMode('authenticated');
-    setProfiles((prev) => mergeById([profile], prev));
-    return profile;
-  }, []);
+  const signInWithEmail = useCallback(
+    async (email: string, password: string) => {
+      if (!supabase || !isSupabaseConfigured) {
+        throw new Error('Supabase Auth is not configured. Check the Supabase URL and publishable key.');
+      }
+      const { data, error } = await supabase.auth.signInWithPassword({
+        email: email.trim(),
+        password,
+      });
+      if (error) throw error;
+      if (!data.user) throw new Error('Supabase did not return an authenticated user.');
+      const role = isUserRole(data.user.user_metadata.role)
+        ? data.user.user_metadata.role
+        : undefined;
+      activateSupabaseUser(data.user, role);
+    },
+    [activateSupabaseUser]
+  );
 
-  const signInDemoSession = useCallback(
-    (params: {
+  const signUpWithEmail = useCallback(
+    async (params: {
       email: string;
+      password: string;
       fullName: string;
       role: UserRole;
       location?: string;
     }) => {
-      // Match Clara Vance or Julian Mercer if user picks artist/collector demo presets, or build clean demo session
-      const cleanName = params.fullName.trim() || 'Guest Collector';
-      const handle = cleanName
-        .toLowerCase()
-        .replace(/[^a-z0-9]/g, '')
-        .slice(0, 20);
-      const demoProfile: Profile = {
-        id:
-          params.role === 'artist'
-            ? 'artist-clara-vance'
-            : params.role === 'collector'
-            ? 'collector-julian-mercer'
-            : `demo-${handle || 'visitor'}`,
+      if (!supabase || !isSupabaseConfigured) {
+        throw new Error('Supabase Auth is not configured. Check the Supabase URL and publishable key.');
+      }
+      const callbackUrl = new URL('/auth/callback', window.location.origin);
+      callbackUrl.searchParams.set('role', params.role);
+      callbackUrl.searchParams.set('next', params.role === 'artist' ? '/dashboard' : '/gallery');
+      const { data, error } = await supabase.auth.signUp({
         email: params.email.trim(),
-        fullName:
-          params.role === 'artist' && cleanName === 'Clara Vance'
-            ? 'Clara Vance'
-            : cleanName,
-        handle: handle || 'artverse_member',
-        role: params.role,
-        avatarUrl: params.role === 'artist' ? 'hero_gilded_horizon' : null,
-        coverUrl: 'atelier_editorial_cover',
-        bio:
-          params.role === 'artist'
-            ? 'Contemporary fine artist sharing studio works and collector editions.'
-            : params.role === 'collector'
-            ? 'Private collector exploring original works and studio acquisitions.'
-            : 'Art enthusiast following contemporary exhibitions and studio notes.',
-        location: params.location?.trim() || 'Paris, France',
-        discipline:
-          params.role === 'artist'
-            ? 'Contemporary Fine Art'
-            : params.role === 'collector'
-            ? 'Private Collection'
-            : 'Curatorial Appreciation',
-        verified: params.role === 'artist',
-        isDemo: true,
-        createdAt: new Date().toISOString(),
-      };
-      setCurrentUser(demoProfile);
-      setAuthMode('demo');
-      setProfiles((prev) => {
-        const filtered = prev.filter((p) => p.id !== demoProfile.id);
-        return [demoProfile, ...filtered];
+        password: params.password,
+        options: {
+          emailRedirectTo: callbackUrl.toString(),
+          data: {
+            full_name: params.fullName.trim(),
+            role: params.role,
+            location: params.location?.trim() || '',
+          },
+        },
       });
-      return demoProfile;
+      if (error) throw error;
+
+      if (!data.session || !data.user) {
+        return { emailConfirmationRequired: true };
+      }
+      activateSupabaseUser(data.user, params.role);
+      return { emailConfirmationRequired: false };
     },
-    []
+    [activateSupabaseUser]
   );
 
   const switchRole = useCallback(
     async (role: UserRole) => {
       if (!currentUser) return;
       if (authMode === 'authenticated') {
+        if (!supabase) throw new Error('Supabase Auth is not configured.');
+        const { error } = await supabase.auth.updateUser({ data: { role } });
+        if (error) throw error;
         const { profile } = await artverseApi.syncProfile({ role });
         setCurrentUser(profile);
         setProfiles((prev) => mergeById([profile], prev));
@@ -362,10 +487,10 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const logout = useCallback(async () => {
-    if (auth.currentUser) {
-      await signOut(auth);
+    if (supabase) {
+      const { error } = await supabase.auth.signOut();
+      if (error) throw error;
     }
-    clearInMemoryToken();
     setCurrentUser(null);
     setAuthMode('guest');
   }, []);
@@ -421,8 +546,21 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
 
   const publishOrUpdateArtwork = useCallback(
     async (input: ArtworkInput): Promise<Artwork> => {
+      const isUploadedImage = input.imageKey.startsWith('data:image/');
+      let imageKey = input.imageKey;
+      if (isUploadedImage) {
+        if (
+          authMode !== 'authenticated' ||
+          !currentUser ||
+          currentUser.role !== 'artist'
+        ) {
+          throw new Error('Sign in with an artist account to publish uploaded artwork images.');
+        }
+        imageKey = await uploadArtworkImage(input.imageKey, currentUser.id);
+      }
+
       if (authMode === 'authenticated') {
-        const { artwork } = await artverseApi.saveArtwork(input);
+        const { artwork } = await artverseApi.saveArtwork({ ...input, imageKey });
         setArtworks((prev) => mergeById([artwork], prev));
         return artwork;
       }
@@ -1005,7 +1143,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       refreshCatalog: loadCatalog,
       refreshConversations,
       signInWithGoogle,
-      signInDemoSession,
+      signInWithEmail,
+      signUpWithEmail,
       switchRole,
       logout,
       toggleSaveArtwork,
@@ -1043,7 +1182,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       loadCatalog,
       refreshConversations,
       signInWithGoogle,
-      signInDemoSession,
+      signInWithEmail,
+      signUpWithEmail,
       switchRole,
       logout,
       toggleSaveArtwork,

@@ -23,16 +23,74 @@
 
   body {
     background-color: #FAF8F3;
-    background-image: radial-gradient(
-      ellipse 80% 50% at 50% -10%,
-      rgba(179, 139, 64, 0.07),
-      transparent 70%
-    );
     color: #141312;
     height: auto;
     min-height: 100dvh;
     overflow-x: clip;
     overflow-y: visible;
+  }
+
+  .artwork-auth-scene {
+    isolation: isolate;
+    background-color: #28221b;
+    background-position: center;
+    background-repeat: no-repeat;
+    background-size: cover;
+  }
+
+  .artwork-auth-overlay {
+    position: absolute;
+    inset: 0;
+    z-index: -1;
+    background: linear-gradient(
+      135deg,
+      rgba(14, 12, 10, 0.56),
+      rgba(14, 12, 10, 0.28) 55%,
+      rgba(14, 12, 10, 0.48)
+    );
+    pointer-events: none;
+  }
+
+  .auth-glass-panel {
+    color: #fff;
+  }
+
+  .auth-glass-panel h1,
+  .auth-glass-panel label,
+  .auth-glass-panel p,
+  .auth-glass-panel a {
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+  }
+
+  .auth-glass-panel [role="group"] {
+    border: 1px solid rgba(255, 255, 255, 0.18);
+    background: rgba(255, 255, 255, 0.08);
+  }
+
+  .auth-glass-panel [role="group"] button {
+    color: rgba(255, 255, 255, 0.78);
+  }
+
+  .auth-glass-panel [role="group"] button:hover {
+    color: #fff;
+  }
+
+  .auth-glass-panel input {
+    background-color: rgba(0, 0, 0, 0.2);
+    color: #fff;
+    caret-color: #f0d79f;
+  }
+
+  .auth-glass-panel input::placeholder {
+    color: rgba(255, 255, 255, 0.55);
+    text-shadow: 0 1px 3px rgba(0, 0, 0, 0.65);
+  }
+
+  .auth-glass-panel input:focus-visible,
+  .auth-glass-panel button:focus-visible,
+  .auth-glass-panel a:focus-visible {
+    outline: 2px solid #f0d79f;
+    outline-offset: 3px;
   }
 
   #root {

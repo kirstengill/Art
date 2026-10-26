@@ -7,23 +7,21 @@ import {
   useScroll,
   useSpring,
 } from 'motion/react';
-import { ArrowUpRight, Menu, X } from 'lucide-react';
+import { ArrowUpRight, Menu, X, LogOut } from 'lucide-react';
 import { useArtVerse } from '../../context/ArtVerseContext';
+import { formatRoleLabel } from '../../utils/formatters';
 
-const NAV_LINKS = [
-  { to: '/', label: 'Discover' },
-  { to: '/gallery', label: 'Gallery' },
+const PUBLIC_LINKS = [
+  { to: '/', label: 'Home' },
+  { to: '/gallery', label: 'Explore' },
   { to: '/artists', label: 'Artists' },
-  { to: '/community', label: 'Community' },
-  { to: '/messages', label: 'Messages' },
 ];
 
 export const Navbar: React.FC = () => {
   const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
-  const { currentUser } = useArtVerse();
+  const { currentUser, logout } = useArtVerse();
   const [mobileOpen, setMobileOpen] = useState(false);
-  const [hoveredPath, setHoveredPath] = useState<string | null>(null);
 
   const { scrollYProgress } = useScroll();
   const smoothProgress = useSpring(scrollYProgress, {
@@ -37,89 +35,146 @@ export const Navbar: React.FC = () => {
     return location.pathname.startsWith(path);
   };
 
+  const handleLogout = async () => {
+    await logout();
+    setMobileOpen(false);
+  };
+
   return (
-    <header className="sticky top-0 z-40 bg-[#141312]/95 backdrop-blur-md text-[#FAF8F3] border-b border-[#292623]">
-      <div className="max-w-[1380px] mx-auto flex items-center justify-between gap-4 sm:gap-8 px-4 sm:px-8 h-14 sm:h-16">
-        {/* Zone 1: Single-line Brand Wordmark */}
+    <header 
+      className="sticky top-0 z-50 border-b border-white/10"
+      style={{
+        background: 'rgba(20, 19, 18, 0.85)',
+        backdropFilter: 'blur(16px) saturate(180%)',
+        WebkitBackdropFilter: 'blur(16px) saturate(180%)',
+      }}
+    >
+      <div className="max-w-[1400px] mx-auto flex items-center justify-between gap-4 sm:gap-8 px-4 sm:px-6 lg:px-8 h-16 sm:h-18">
+        {/* Brand */}
         <Link
           to="/"
-          className="font-serif text-2xl font-semibold tracking-wide text-[#FAF8F3] whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C59B47]"
+          className="font-serif text-2xl sm:text-3xl font-semibold tracking-wide text-[#FAF8F3] whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C59B47]"
         >
-          ArtVerse
+          ART UNIVERSE
         </Link>
 
-        {/* Zone 2: 5 concise single-line text navigation links with dynamic gliding hover & active underline */}
+        {/* Desktop Navigation */}
         <nav
           aria-label="Primary navigation"
-          onMouseLeave={() => setHoveredPath(null)}
-          className="hidden md:flex items-center gap-2 text-sm font-medium text-[#C8C1B6]"
+          className="hidden lg:flex items-center gap-1 text-sm font-medium"
         >
-          {NAV_LINKS.map((item) => {
+          {PUBLIC_LINKS.map((item) => {
             const active = isActive(item.to);
-            const hovered = hoveredPath === item.to;
             return (
               <Link
                 key={item.to}
                 to={item.to}
-                onMouseEnter={() => setHoveredPath(item.to)}
-                className={`relative px-3.5 py-1.5 rounded-lg whitespace-nowrap shrink-0 transition-colors duration-150 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C59B47] ${
-                  active ? 'text-[#FAF8F3]' : 'hover:text-[#FAF8F3]'
+                className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
+                  active
+                    ? 'text-[#FAF8F3]'
+                    : 'text-[#C8C1B6] hover:text-[#FAF8F3] hover:bg-white/5'
                 }`}
               >
-                {hovered && !shouldReduceMotion && (
+                {active && (
                   <motion.span
-                    layoutId="artverse-nav-hover-surface"
-                    transition={{ type: 'spring', stiffness: 420, damping: 32 }}
-                    className="absolute inset-0 rounded-lg bg-white/[0.07]"
+                    layoutId={shouldReduceMotion ? undefined : 'nav-active'}
+                    className="absolute inset-0 rounded-lg bg-white/10"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
                   />
                 )}
                 <span className="relative z-10">{item.label}</span>
-                {active && (
-                  <motion.span
-                    layoutId={
-                      shouldReduceMotion ? undefined : 'artverse-nav-indicator'
-                    }
-                    transition={{ type: 'spring', stiffness: 420, damping: 34 }}
-                    className="absolute left-3.5 right-3.5 -bottom-[14px] h-[2px] bg-[#C59B47]"
-                  />
-                )}
               </Link>
             );
           })}
+          {currentUser && (
+            <Link
+              to="/dashboard"
+              className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
+                isActive('/dashboard')
+                  ? 'text-[#FAF8F3]'
+                  : 'text-[#C8C1B6] hover:text-[#FAF8F3] hover:bg-white/5'
+              }`}
+            >
+              {isActive('/dashboard') && (
+                <motion.span
+                  layoutId={shouldReduceMotion ? undefined : 'nav-active'}
+                  className="absolute inset-0 rounded-lg bg-white/10"
+                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                />
+              )}
+              <span className="relative z-10">
+                {currentUser.role === 'artist' ? 'My Studio' : 'Dashboard'}
+              </span>
+            </Link>
+          )}
         </nav>
 
-        {/* Zone 3: 1 primary action on desktop + mobile drawer button */}
-        <div className="flex items-center gap-3 shrink-0">
-          <motion.div
-            whileHover={shouldReduceMotion ? undefined : { y: -1 }}
-            whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-            transition={{ duration: 0.15 }}
-            className="hidden md:block"
-          >
-            <Link
-              to={currentUser ? '/dashboard' : '/login'}
-              className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium tracking-wide bg-[#B38B40] text-[#141312] rounded-lg hover:bg-[#C69D4E] transition-colors duration-150 whitespace-nowrap shrink-0 focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#C59B47]"
-            >
-              <span>{currentUser ? 'Artist Studio' : 'Sign In'}</span>
-              <ArrowUpRight className="w-3.5 h-3.5" />
-            </Link>
-          </motion.div>
+        {/* Auth Actions */}
+        <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+          {currentUser ? (
+            <div className="hidden sm:flex items-center gap-3">
+              <div className="text-right hidden md:block">
+                <p className="text-xs text-[#FAF8F3] font-medium">{currentUser.fullName}</p>
+                <p className="text-[10px] text-[#C8C1B6]">{formatRoleLabel(currentUser.role)}</p>
+              </div>
+              <motion.button
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                onClick={handleLogout}
+                className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-200"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  backdropFilter: 'blur(8px)',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                  color: '#FAF8F3',
+                }}
+              >
+                <LogOut className="w-3.5 h-3.5" />
+                <span>Sign Out</span>
+              </motion.button>
+            </div>
+          ) : (
+            <div className="hidden sm:flex items-center gap-2">
+              <Link
+                to="/login"
+                className="px-4 py-2 text-xs font-medium text-[#C8C1B6] hover:text-[#FAF8F3] transition-colors rounded-lg hover:bg-white/5"
+              >
+                Sign In
+              </Link>
+              <motion.div
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+              >
+                <Link
+                  to="/signup"
+                  className="inline-flex items-center gap-1.5 px-4 py-2 text-xs font-medium rounded-lg transition-all duration-200"
+                  style={{
+                    background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+                    color: '#141312',
+                    boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
+                  }}
+                >
+                  <span>Sign Up</span>
+                  <ArrowUpRight className="w-3.5 h-3.5" />
+                </Link>
+              </motion.div>
+            </div>
+          )}
 
+          {/* Mobile Menu Button */}
           <button
             type="button"
             onClick={() => setMobileOpen((prev) => !prev)}
             aria-expanded={mobileOpen}
-            aria-label={
-              mobileOpen ? 'Close navigation menu' : 'Open navigation menu'
-            }
-            className="md:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg text-[#FAF8F3] hover:bg-white/10 transition-colors focus-visible:outline-2 focus-visible:outline-[#C59B47]"
+            aria-label={mobileOpen ? 'Close navigation menu' : 'Open navigation menu'}
+            className="lg:hidden inline-flex items-center justify-center w-10 h-10 rounded-lg text-[#FAF8F3] hover:bg-white/10 transition-colors focus-visible:outline-2 focus-visible:outline-[#C59B47]"
           >
             {mobileOpen ? <X className="w-5 h-5" /> : <Menu className="w-5 h-5" />}
           </button>
         </div>
       </div>
 
-      {/* Smooth Scroll Depth Progress Rail */}
+      {/* Progress Bar */}
       {!shouldReduceMotion && (
         <motion.div
           aria-hidden="true"
@@ -128,65 +183,77 @@ export const Navbar: React.FC = () => {
         />
       )}
 
-      {/* Mobile Navigation Drawer */}
+      {/* Mobile Menu */}
       <AnimatePresence>
         {mobileOpen && (
           <motion.div
-            initial={
-              shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }
-            }
-            animate={{ opacity: 1, y: 0 }}
-            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -10 }}
-            transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
-            className="md:hidden bg-[#141312] border-t border-[#292623] px-4 sm:px-5 py-4 max-h-[calc(100dvh-3.5rem)] overflow-y-auto overscroll-contain artverse-scroll"
+            initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            animate={{ opacity: 1, height: 'auto' }}
+            exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, height: 0 }}
+            transition={{ duration: 0.2 }}
+            className="lg:hidden overflow-hidden"
+            style={{
+              background: 'rgba(20, 19, 18, 0.98)',
+              backdropFilter: 'blur(16px)',
+            }}
           >
-            <nav
-              aria-label="Mobile navigation"
-              className="flex flex-col space-y-1"
-            >
-              {NAV_LINKS.map((item, idx) => {
-                const active = isActive(item.to);
-                return (
-                  <motion.div
-                    key={item.to}
-                    initial={
-                      shouldReduceMotion ? false : { opacity: 0, x: -8 }
-                    }
-                    animate={{ opacity: 1, x: 0 }}
-                    transition={{ delay: idx * 0.03, duration: 0.16 }}
+            <nav className="px-4 py-4 space-y-2">
+              {PUBLIC_LINKS.map((item) => (
+                <Link
+                  key={item.to}
+                  to={item.to}
+                  onClick={() => setMobileOpen(false)}
+                  className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                    isActive(item.to)
+                      ? 'bg-white/10 text-[#FAF8F3]'
+                      : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
+                  }`}
+                >
+                  {item.label}
+                </Link>
+              ))}
+              {currentUser ? (
+                <>
+                  <Link
+                    to="/dashboard"
+                    onClick={() => setMobileOpen(false)}
+                    className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive('/dashboard')
+                        ? 'bg-white/10 text-[#FAF8F3]'
+                        : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
+                    }`}
                   >
-                    <Link
-                      to={item.to}
-                      onClick={() => setMobileOpen(false)}
-                      className={`block px-3.5 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                        active
-                          ? 'bg-white/10 text-[#E5C580]'
-                          : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
-                      }`}
-                    >
-                      {item.label}
-                    </Link>
-                  </motion.div>
-                );
-              })}
-              <div className="pt-3 mt-2 border-t border-[#292623] flex flex-col gap-2">
-                <Link
-                  to="/dashboard"
-                  onClick={() => setMobileOpen(false)}
-                  className="px-3.5 py-2.5 rounded-lg text-sm font-medium text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]"
-                >
-                  Artist Dashboard & Add Artwork
-                </Link>
-                <Link
-                  to={currentUser ? '/dashboard' : '/login'}
-                  onClick={() => setMobileOpen(false)}
-                  className="px-4 py-2.5 text-center rounded-lg text-sm font-semibold bg-[#B38B40] text-[#141312] hover:bg-[#C69D4E]"
-                >
-                  {currentUser
-                    ? `Signed in as ${currentUser.fullName}`
-                    : 'Sign In / Join ArtVerse'}
-                </Link>
-              </div>
+                    {currentUser.role === 'artist' ? 'My Studio' : 'Dashboard'}
+                  </Link>
+                  <button
+                    onClick={handleLogout}
+                    className="w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3] transition-colors"
+                  >
+                    Sign Out
+                  </button>
+                </>
+              ) : (
+                <>
+                  <Link
+                    to="/login"
+                    onClick={() => setMobileOpen(false)}
+                    className="block px-4 py-2.5 rounded-lg text-sm font-medium text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3] transition-colors"
+                  >
+                    Sign In
+                  </Link>
+                  <Link
+                    to="/signup"
+                    onClick={() => setMobileOpen(false)}
+                    className="block px-4 py-2.5 rounded-lg text-sm font-medium text-center"
+                    style={{
+                      background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+                      color: '#141312',
+                    }}
+                  >
+                    Sign Up
+                  </Link>
+                </>
+              )}
             </nav>
           </motion.div>
         )}

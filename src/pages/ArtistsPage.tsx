@@ -5,6 +5,7 @@ import { ArrowUpRight, Search } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
 import { formatMoney } from '../utils/formatters';
+import nocturneArtwork from '../assets/images/art_nocturne_study_1792993239582.jpg';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -28,7 +29,23 @@ export const ArtistsPage: React.FC = () => {
   }, [profiles, search]);
 
   return (
-    <div className="w-full">
+    <div className="w-full relative isolate">
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `url("${nocturneArtwork}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          opacity: 0.08,
+        }}
+      />
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(250, 248, 243, 0.93) 0%, rgba(247, 243, 237, 0.95) 100%)',
+        }}
+      />
       <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-8 sm:py-12 lg:py-16">
         <motion.div
           initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}

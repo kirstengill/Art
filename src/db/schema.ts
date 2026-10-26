@@ -20,7 +20,7 @@ export const users = pgTable('users', {
 export const profiles = pgTable(
   'profiles',
   {
-    id: text('id').primaryKey(), // Matches Firebase Auth uid or seeded artist/collector id
+    id: text('id').primaryKey(), // Matches Supabase Auth user ID or seeded artist/collector ID
     email: text('email').notNull(),
     fullName: text('full_name').notNull(),
     handle: text('handle').notNull(),

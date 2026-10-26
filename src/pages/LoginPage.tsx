@@ -1,154 +1,125 @@
-import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import React, { useEffect, useState } from 'react';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
-import type { UserRole } from '../types/artverse';
-import { formatRoleLabel } from '../utils/formatters';
+import { GlassPanel } from '../components/ui/GlassCard';
+import gildedArtwork from '../assets/images/hero_gilded_horizon_1792993235968.jpg';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 export const LoginPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
-  const { signInWithGoogle, signInDemoSession } = useArtVerse();
+  const location = useLocation();
+  const { signInWithGoogle, signInWithEmail, currentUser } = useArtVerse();
 
-  const [role, setRole] = useState<UserRole>('collector');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [loadingGoogle, setLoadingGoogle] = useState(false);
-  const [loadingDemo, setLoadingDemo] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const locationState = location.state as { from?: { pathname?: unknown } } | null;
+  const requestedDestination = locationState?.from?.pathname;
+  const from =
+    typeof requestedDestination === 'string' ? requestedDestination : '/dashboard';
+  const destination = from === '/login' || from === '/signin' ? '/dashboard' : from;
+
+  useEffect(() => {
+    if (currentUser) navigate(destination, { replace: true });
+  }, [currentUser, destination, navigate]);
 
   const handleGoogleSignIn = async () => {
     setError(null);
     setLoadingGoogle(true);
     try {
-      await signInWithGoogle(role);
-      navigate('/dashboard');
+      await signInWithGoogle(undefined, destination);
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'Google sign-in popup was closed or unavailable.'
+          : 'Unable to start Google sign-in.'
       );
     } finally {
       setLoadingGoogle(false);
     }
   };
 
-  const handleDemoSubmit = (e: React.FormEvent) => {
+  const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
     const trimmedEmail = email.trim();
     if (!trimmedEmail || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(trimmedEmail)) {
       setError('Please enter a valid email address.');
       return;
     }
-    if (password.length < 8) {
-      setError('Password must be at least 8 characters.');
+    if (!password) {
+      setError('Please enter your password.');
       return;
     }
 
     setError(null);
-    setLoadingDemo(true);
-    setTimeout(() => {
-      // Never store passwords in application tables; starts a clean demo session
-      const inferredName =
-        role === 'artist'
-          ? 'Clara Vance'
-          : role === 'collector'
-          ? 'Julian Mercer'
-          : 'Elena Rostova';
-      signInDemoSession({
-        email: trimmedEmail,
-        fullName: inferredName,
-        role,
-      });
+    setLoading(true);
+    try {
+      await signInWithEmail(trimmedEmail, password);
       setPassword('');
-      setLoadingDemo(false);
-      navigate('/dashboard');
-    }, 180);
+      navigate(destination, { replace: true });
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to sign in.');
+    } finally {
+      setLoading(false);
+    }
   };
 
   return (
-    <div className="min-h-[calc(100dvh-4rem)] flex items-center justify-center px-4 sm:px-5 py-8 sm:py-14">
+    <div
+      className="artwork-auth-scene relative flex min-h-dvh items-center justify-center px-4 py-8 sm:px-5 sm:py-12"
+      style={{ backgroundImage: `url("${gildedArtwork}")` }}
+    >
+      <div aria-hidden="true" className="artwork-auth-overlay" />
       <motion.div
         initial={shouldReduceMotion ? false : { opacity: 0, y: 16, scale: 0.99 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.26, ease: EASE_OUT }}
-        className="w-full max-w-md bg-white border border-[#E6DFD3] rounded-2xl p-6 sm:p-9 space-y-6 shadow-xs my-auto"
+        className="my-auto w-full max-w-md"
       >
+        <GlassPanel className="auth-glass-panel space-y-6 p-6 sm:p-9">
         <div className="space-y-2 text-center">
-          <p className="text-xs font-medium tracking-wide text-[#8C6828]">
-            Member Access
-          </p>
-          <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-[#141312] text-balance">
-            Sign in to ArtVerse
+          <Link to="/" className="mb-1 inline-block font-serif text-sm font-semibold tracking-[0.22em] text-white/80">
+            ART UNIVERSE
+          </Link>
+          <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-white text-balance">
+            Welcome Back
           </h1>
-          <p className="text-xs text-[#6B655E]">
-            Select your primary role in the gallery community.
+          <p className="text-xs text-white/75">
+            Sign in to your account
           </p>
         </div>
 
-        {/* Account Role Selector with spring gliding pill */}
-        <div
-          role="group"
-          aria-label="Choose account role"
-          className="grid grid-cols-3 gap-1 p-1 bg-[#EFEAE0] rounded-xl relative"
-        >
-          {(['artist', 'collector', 'art_lover'] as UserRole[]).map((item) => {
-            const active = role === item;
-            return (
-              <button
-                key={item}
-                type="button"
-                onClick={() => setRole(item)}
-                className={`relative py-2 px-1.5 sm:px-2 text-[11px] sm:text-xs font-medium rounded-lg transition-colors whitespace-nowrap truncate z-10 ${
-                  active
-                    ? 'text-[#141312]'
-                    : 'text-[#5C554C] hover:text-[#141312]'
-                }`}
-              >
-                {active && (
-                  <motion.span
-                    layoutId="login-role-pill"
-                    transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-                    className="absolute inset-0 bg-white rounded-lg shadow-xs -z-10"
-                  />
-                )}
-                {formatRoleLabel(item)}
-              </button>
-            );
-          })}
-        </div>
-
-        {/* Live Authenticated Google Sign-In */}
         <motion.button
           type="button"
-          disabled={loadingGoogle}
+          disabled={loadingGoogle || loading}
           whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
           onClick={handleGoogleSignIn}
-          className="w-full py-2.5 px-4 text-sm font-medium bg-[#141312] text-[#FAF8F3] rounded-xl hover:bg-[#2A2724] disabled:opacity-50 transition-colors whitespace-nowrap"
+          className="w-full rounded-xl border border-white/25 bg-black/55 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-black/70 disabled:opacity-50 whitespace-nowrap"
         >
-          {loadingGoogle
-            ? 'Connecting with Google...'
-            : `Continue with Google (${formatRoleLabel(role)})`}
+          {loadingGoogle ? 'Connecting with Google...' : 'Continue with Google'}
         </motion.button>
 
         <div className="relative flex items-center py-1">
-          <div className="flex-grow border-t border-[#E6DFD3]" />
-          <span className="shrink-0 mx-3 text-xs text-[#7A7267]">
-            or preview with demo credentials
+          <div className="flex-grow border-t border-white/25" />
+          <span className="shrink-0 mx-3 text-xs text-white/75">
+            or sign in with your email
           </span>
-          <div className="flex-grow border-t border-[#E6DFD3]" />
+          <div className="flex-grow border-t border-white/25" />
         </div>
 
-        <form onSubmit={handleDemoSubmit} noValidate className="space-y-4">
+        <form onSubmit={handleSignIn} noValidate className="space-y-4">
           <div className="space-y-1.5">
             <label
               htmlFor="login-email"
-              className="block text-xs font-medium text-[#3B352F]"
+              className="block text-xs font-medium text-white/90"
             >
               Email Address
             </label>
@@ -159,14 +130,14 @@ export const LoginPage: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="collector@artverse.gallery"
-              className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
+              className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm text-white placeholder:text-white/55 focus:border-[#e3c783] focus:outline-none transition-colors"
             />
           </div>
 
           <div className="space-y-1.5">
             <label
               htmlFor="login-password"
-              className="block text-xs font-medium text-[#3B352F]"
+              className="block text-xs font-medium text-white/90"
             >
               Password
             </label>
@@ -177,14 +148,14 @@ export const LoginPage: React.FC = () => {
                 autoComplete="current-password"
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
-                placeholder="Minimum 8 characters"
-                className="w-full pl-4 pr-10 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
+                placeholder="Your password"
+                className="w-full rounded-xl border border-white/25 bg-white/10 py-2.5 pl-4 pr-10 text-sm text-white placeholder:text-white/55 focus:border-[#e3c783] focus:outline-none transition-colors"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7A7267] hover:text-[#141312]"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/75 hover:text-white"
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" />
@@ -196,35 +167,39 @@ export const LoginPage: React.FC = () => {
           </div>
 
           {error && (
-            <p role="alert" className="text-xs font-medium text-[#992E24]">
+            <p role="alert" className="text-xs font-medium text-red-200">
               {error}
             </p>
           )}
 
           <motion.button
             type="submit"
-            disabled={loadingDemo}
+            disabled={loading || loadingGoogle}
             whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-            className="w-full py-2.5 px-4 text-sm font-medium bg-[#B38B40] text-[#141312] rounded-xl hover:bg-[#C69D4E] disabled:opacity-50 transition-colors"
+            className="w-full rounded-xl bg-[#d3b578] px-4 py-2.5 text-sm font-semibold text-[#211c13] transition-colors hover:bg-[#e4cb99] disabled:opacity-50"
           >
-            {loadingDemo ? 'Signing In...' : 'Enter Demo Session'}
+            {loading ? 'Signing In...' : 'Sign In'}
           </motion.button>
 
-          <p className="text-[11px] text-[#7A7267] leading-relaxed text-center">
-            Sign in with Google to save your portfolio and collection across sessions.
-            Demo sign-in opens a local role preview without storing passwords.
+          <p className="text-center text-[11px] leading-relaxed text-white/70">
+            Your account is securely authenticated by Supabase. New members can
+            create an account below.
           </p>
         </form>
 
-        <p className="text-center text-xs text-[#5C554C] pt-2 border-t border-[#ECE6DA]">
-          New to ArtVerse?{' '}
+        <p className="border-t border-white/20 pt-2 text-center text-xs text-white/80">
+          New to Art Universe?{' '}
           <Link
             to="/signup"
-            className="font-medium text-[#8C6828] hover:text-[#141312] transition-colors"
+            className="font-medium text-[#f0d79f] hover:text-white transition-colors"
           >
             Create an Artist, Collector, or Art Lover account
           </Link>
         </p>
+        <Link to="/" className="block text-center text-xs text-white/70 transition-colors hover:text-white">
+          Back to home
+        </Link>
+        </GlassPanel>
       </motion.div>
     </div>
   );

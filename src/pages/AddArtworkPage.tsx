@@ -15,6 +15,7 @@ import {
   formatMoney,
   formatSaleModeLabel,
 } from '../utils/formatters';
+import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
 
 interface ValidationErrors {
   title?: string;
@@ -90,10 +91,10 @@ export const AddArtworkPage: React.FC = () => {
   const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
-    if (!file.type.startsWith('image/')) {
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
       setErrors((prev) => ({
         ...prev,
-        imageKey: 'Please upload a valid JPEG, PNG, or WebP image file.',
+        imageKey: 'Please upload a JPEG, PNG, or WebP image file.',
       }));
       return;
     }
@@ -187,7 +188,23 @@ export const AddArtworkPage: React.FC = () => {
   };
 
   return (
-    <div className="w-full">
+    <div className="w-full relative isolate">
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `url("${atelierCover}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          opacity: 0.06,
+        }}
+      />
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(250, 248, 243, 0.95) 0%, rgba(247, 243, 237, 0.97) 100%)',
+        }}
+      />
       <div className="max-w-[1240px] mx-auto px-4 sm:px-8 py-8 sm:py-10 lg:py-14">
         <Link
           to="/dashboard"

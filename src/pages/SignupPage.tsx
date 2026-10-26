@@ -1,10 +1,12 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useLocation } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import type { UserRole } from '../types/artverse';
 import { formatRoleLabel } from '../utils/formatters';
+import { GlassPanel } from '../components/ui/GlassCard';
+import terracottaArtwork from '../assets/images/art_terracotta_study_1792993240609.jpg';
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   artist:
@@ -20,35 +22,48 @@ const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 export const SignupPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
-  const { signInWithGoogle, signInDemoSession } = useArtVerse();
+  const location = useLocation();
+  const { signInWithGoogle, signUpWithEmail } = useArtVerse();
 
   const [role, setRole] = useState<UserRole>('artist');
   const [fullName, setFullName] = useState('');
-  const [location, setLocation] = useState('');
+  const [locationInput, setLocationInput] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
+
+  const locationState = location.state as { from?: { pathname?: unknown } } | null;
+  const requestedDestination = locationState?.from?.pathname;
+  const from =
+    typeof requestedDestination === 'string'
+      ? requestedDestination
+      : role === 'artist'
+        ? '/dashboard'
+        : '/gallery';
 
   const handleGoogleJoin = async () => {
     setError(null);
     setLoading(true);
     try {
-      await signInWithGoogle(role);
-      navigate(role === 'artist' ? '/dashboard' : '/gallery');
+      await signInWithGoogle(
+        role,
+        from === '/signup' ? (role === 'artist' ? '/dashboard' : '/gallery') : from
+      );
     } catch (err) {
       setError(
         err instanceof Error
           ? err.message
-          : 'Google registration popup was closed or unavailable.'
+          : 'Unable to start Google sign-up.'
       );
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSignupSubmit = (e: React.FormEvent) => {
+  const handleSignupSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (fullName.trim().length < 2) {
       setError('Please enter your full name or studio name.');
@@ -64,35 +79,50 @@ export const SignupPage: React.FC = () => {
     }
 
     setError(null);
+    setNotice(null);
     setLoading(true);
-    setTimeout(() => {
-      // Never store passwords in application tables
-      signInDemoSession({
+    try {
+      const { emailConfirmationRequired } = await signUpWithEmail({
         email: email.trim(),
+        password,
         fullName: fullName.trim(),
         role,
-        location: location.trim() || 'London, United Kingdom',
+        location: locationInput.trim(),
       });
       setPassword('');
+      if (emailConfirmationRequired) {
+        setNotice('Account created. Check your email and confirm your address before signing in.');
+      } else {
+        const destination =
+          from === '/signup' ? (role === 'artist' ? '/dashboard' : '/gallery') : from;
+        navigate(destination, { replace: true });
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to create your account.');
+    } finally {
       setLoading(false);
-      navigate(role === 'artist' ? '/dashboard' : '/gallery');
-    }, 180);
+    }
   };
 
   return (
-    <div className="min-h-[calc(100dvh-4rem)] flex items-center justify-center px-4 sm:px-5 py-8 sm:py-14">
+    <div
+      className="artwork-auth-scene relative flex min-h-dvh items-center justify-center px-4 py-8 sm:px-5 sm:py-12"
+      style={{ backgroundImage: `url("${terracottaArtwork}")` }}
+    >
+      <div aria-hidden="true" className="artwork-auth-overlay" />
       <motion.div
         initial={shouldReduceMotion ? false : { opacity: 0, y: 16, scale: 0.99 }}
         animate={{ opacity: 1, y: 0, scale: 1 }}
         transition={{ duration: 0.26, ease: EASE_OUT }}
-        className="w-full max-w-lg bg-white border border-[#E6DFD3] rounded-2xl p-6 sm:p-9 space-y-6 shadow-xs my-auto"
+        className="my-auto w-full max-w-lg"
       >
+        <GlassPanel className="auth-glass-panel space-y-6 p-6 sm:p-9">
         <div className="space-y-2 text-center">
-          <p className="text-xs font-medium tracking-wide text-[#8C6828]">
-            Community Membership
-          </p>
-          <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-[#141312] text-balance">
-            Join ArtVerse
+          <Link to="/" className="mb-1 inline-block font-serif text-sm font-semibold tracking-[0.22em] text-white/80">
+            ART UNIVERSE
+          </Link>
+          <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-white text-balance">
+            Create Your Account
           </h1>
           <div className="min-h-[2.25rem] flex items-center justify-center">
             <AnimatePresence mode="wait">
@@ -102,7 +132,7 @@ export const SignupPage: React.FC = () => {
                 animate={{ opacity: 1, y: 0 }}
                 exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: -3 }}
                 transition={{ duration: 0.15 }}
-                className="text-xs text-[#6B655E] max-w-sm"
+                className="max-w-sm text-xs text-white/75"
               >
                 {ROLE_DESCRIPTIONS[role]}
               </motion.p>
@@ -114,7 +144,7 @@ export const SignupPage: React.FC = () => {
         <div
           role="group"
           aria-label="Select membership role"
-          className="grid grid-cols-3 gap-1 p-1 bg-[#EFEAE0] rounded-xl relative"
+          className="grid grid-cols-3 gap-1 p-1 rounded-xl relative"
         >
           {(['artist', 'collector', 'art_lover'] as UserRole[]).map((item) => {
             const active = role === item;
@@ -125,15 +155,15 @@ export const SignupPage: React.FC = () => {
                 onClick={() => setRole(item)}
                 className={`relative py-2 px-1.5 sm:px-2 text-[11px] sm:text-xs font-medium rounded-lg transition-colors whitespace-nowrap truncate z-10 ${
                   active
-                    ? 'text-[#141312]'
-                    : 'text-[#5C554C] hover:text-[#141312]'
+                    ? 'text-white'
+                    : 'text-white/70 hover:text-white'
                 }`}
               >
                 {active && (
                   <motion.span
                     layoutId="signup-role-pill"
                     transition={{ type: 'spring', stiffness: 480, damping: 36 }}
-                    className="absolute inset-0 bg-white rounded-lg shadow-xs -z-10"
+                    className="absolute inset-0 rounded-lg bg-white/20 shadow-xs -z-10"
                   />
                 )}
                 {formatRoleLabel(item)}
@@ -147,17 +177,15 @@ export const SignupPage: React.FC = () => {
           disabled={loading}
           whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
           onClick={handleGoogleJoin}
-          className="w-full py-2.5 px-4 text-sm font-medium bg-[#141312] text-[#FAF8F3] rounded-xl hover:bg-[#2A2724] disabled:opacity-50 transition-colors whitespace-nowrap"
+          className="w-full rounded-xl border border-white/25 bg-black/55 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-black/70 disabled:opacity-50 whitespace-nowrap"
         >
           Join with Google as {formatRoleLabel(role)}
         </motion.button>
 
         <div className="relative flex items-center py-1">
-          <div className="flex-grow border-t border-[#E6DFD3]" />
-          <span className="shrink-0 mx-3 text-xs text-[#7A7267]">
-            or create a local demo profile
-          </span>
-          <div className="flex-grow border-t border-[#E6DFD3]" />
+          <div className="flex-grow border-t border-white/25" />
+          <span className="shrink-0 mx-3 text-xs text-white/75">or use email</span>
+          <div className="flex-grow border-t border-white/25" />
         </div>
 
         <form onSubmit={handleSignupSubmit} noValidate className="space-y-4">
@@ -165,7 +193,7 @@ export const SignupPage: React.FC = () => {
             <div className="space-y-1.5">
               <label
                 htmlFor="signup-name"
-                className="block text-xs font-medium text-[#3B352F]"
+                className="block text-xs font-medium text-white/90"
               >
                 Full Name or Studio *
               </label>
@@ -175,24 +203,24 @@ export const SignupPage: React.FC = () => {
                 value={fullName}
                 onChange={(e) => setFullName(e.target.value)}
                 placeholder="e.g., Camille Laurent"
-                className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
+                className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm text-white placeholder:text-white/55 focus:border-[#e3c783] focus:outline-none transition-colors"
               />
             </div>
 
             <div className="space-y-1.5">
               <label
                 htmlFor="signup-location"
-                className="block text-xs font-medium text-[#3B352F]"
+                className="block text-xs font-medium text-white/90"
               >
                 City & Country
               </label>
               <input
                 id="signup-location"
                 type="text"
-                value={location}
-                onChange={(e) => setLocation(e.target.value)}
+                value={locationInput}
+                onChange={(e) => setLocationInput(e.target.value)}
                 placeholder="e.g., Paris, France"
-                className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
+                className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm text-white placeholder:text-white/55 focus:border-[#e3c783] focus:outline-none transition-colors"
               />
             </div>
           </div>
@@ -200,7 +228,7 @@ export const SignupPage: React.FC = () => {
           <div className="space-y-1.5">
             <label
               htmlFor="signup-email"
-              className="block text-xs font-medium text-[#3B352F]"
+              className="block text-xs font-medium text-white/90"
             >
               Email Address *
             </label>
@@ -211,14 +239,14 @@ export const SignupPage: React.FC = () => {
               value={email}
               onChange={(e) => setEmail(e.target.value)}
               placeholder="studio@example.com"
-              className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
+              className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm text-white placeholder:text-white/55 focus:border-[#e3c783] focus:outline-none transition-colors"
             />
           </div>
 
           <div className="space-y-1.5">
             <label
               htmlFor="signup-password"
-              className="block text-xs font-medium text-[#3B352F]"
+              className="block text-xs font-medium text-white/90"
             >
               Password *
             </label>
@@ -230,13 +258,13 @@ export const SignupPage: React.FC = () => {
                 value={password}
                 onChange={(e) => setPassword(e.target.value)}
                 placeholder="At least 8 characters"
-                className="w-full pl-4 pr-10 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
+                className="w-full rounded-xl border border-white/25 bg-white/10 py-2.5 pl-4 pr-10 text-sm text-white placeholder:text-white/55 focus:border-[#e3c783] focus:outline-none transition-colors"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword((prev) => !prev)}
                 aria-label={showPassword ? 'Hide password' : 'Show password'}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-[#7A7267] hover:text-[#141312]"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-white/75 hover:text-white"
               >
                 {showPassword ? (
                   <EyeOff className="w-4 h-4" />
@@ -248,8 +276,13 @@ export const SignupPage: React.FC = () => {
           </div>
 
           {error && (
-            <p role="alert" className="text-xs font-medium text-[#992E24]">
+            <p role="alert" className="text-xs font-medium text-red-200">
               {error}
+            </p>
+          )}
+          {notice && (
+            <p role="status" className="text-xs font-medium text-emerald-100">
+              {notice}
             </p>
           )}
 
@@ -257,28 +290,32 @@ export const SignupPage: React.FC = () => {
             type="submit"
             disabled={loading}
             whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-            className="w-full py-2.5 px-4 text-sm font-medium bg-[#B38B40] text-[#141312] rounded-xl hover:bg-[#C69D4E] disabled:opacity-50 transition-colors"
+            className="w-full rounded-xl bg-[#d3b578] px-4 py-2.5 text-sm font-semibold text-[#211c13] transition-colors hover:bg-[#e4cb99] disabled:opacity-50"
           >
             {loading
-              ? 'Creating Profile...'
-              : `Start ${formatRoleLabel(role)} Demo Session`}
+              ? 'Creating Account...'
+              : `Create ${formatRoleLabel(role)} Account`}
           </motion.button>
 
-          <p className="text-[11px] text-[#7A7267] leading-relaxed text-center">
-            Joining with Google creates a permanent member profile. Demo registration
-            runs in client session state without storing credentials.
+          <p className="text-center text-[11px] leading-relaxed text-white/70">
+            Your account is managed by Supabase Auth. Email confirmation may be
+            required before your first sign-in.
           </p>
         </form>
 
-        <p className="text-center text-xs text-[#5C554C] pt-2 border-t border-[#ECE6DA]">
+        <p className="border-t border-white/20 pt-2 text-center text-xs text-white/80">
           Already a member?{' '}
           <Link
             to="/login"
-            className="font-medium text-[#8C6828] hover:text-[#141312] transition-colors"
+            className="font-medium text-[#f0d79f] hover:text-white transition-colors"
           >
             Sign in
           </Link>
         </p>
+        <Link to="/" className="block text-center text-xs text-white/70 transition-colors hover:text-white">
+          Back to home
+        </Link>
+        </GlassPanel>
       </motion.div>
     </div>
   );

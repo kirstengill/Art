@@ -1,9 +1,24 @@
+import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import * as dotenv from 'dotenv';
 import { createServer as createViteServer } from 'vite';
-import { optionalAuth, requireAuth, type AuthRequest } from './src/middleware/auth.ts';
+import {
+  optionalAuth,
+  requireAdmin,
+  requireAuth,
+  type AuthRequest,
+} from './src/middleware/auth.ts';
+import {
+  getAdminContent,
+  getAdminOrders,
+  getAdminOverview,
+  getAdminUsers,
+  type AdminArtworkFilter,
+  type AdminContentKind,
+  type AdminRoleFilter,
+  type AdminTimeframe,
+} from './src/db/adminRepository.ts';
 import {
   addCommentInDb,
   appendMessageToDb,
@@ -22,14 +37,18 @@ import {
   upsertArtworkListing,
 } from './src/db/repository.ts';
 
-dotenv.config();
-
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
 async function startServer() {
   const app = express();
-  const PORT = 3000;
+  const PORT = Number(process.env.PORT || 3000);
+
+  if (!process.env.ADMIN_UIDS?.split(',').some((uid) => uid.trim())) {
+    console.warn(
+      'ADMIN_UIDS is not configured; administrator endpoints will reject all requests.'
+    );
+  }
 
   app.use(express.json({ limit: '6mb' }));
 
@@ -60,6 +79,89 @@ async function startServer() {
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load catalog.';
       res.status(500).json({ error: message });
+    }
+  });
+
+  app.get('/api/admin/overview', requireAuth, requireAdmin, async (req, res) => {
+    const rawTimeframe = req.query.timeframe;
+    let timeframe: AdminTimeframe = 30;
+    if (rawTimeframe === '7') timeframe = 7;
+    else if (rawTimeframe === '30' || rawTimeframe === undefined) timeframe = 30;
+    else if (rawTimeframe === '90') timeframe = 90;
+    else if (rawTimeframe === 'all') timeframe = 'all';
+    else {
+      res.status(400).json({ error: 'Timeframe must be 7, 30, 90, or all.' });
+      return;
+    }
+    try {
+      res.json(await getAdminOverview(timeframe));
+    } catch {
+      console.error('Admin overview query failed.');
+      res.status(500).json({ error: 'Unable to load administrator overview.' });
+    }
+  });
+
+  app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
+    const role = typeof req.query.role === 'string' ? req.query.role : 'all';
+    if (!['all', 'artist', 'collector', 'art_lover'].includes(role)) {
+      res.status(400).json({ error: 'Invalid account type filter.' });
+      return;
+    }
+    try {
+      res.json(
+        await getAdminUsers({
+          page: req.query.page,
+          pageSize: req.query.pageSize,
+          role: role as AdminRoleFilter,
+          search: typeof req.query.search === 'string' ? req.query.search : '',
+        })
+      );
+    } catch {
+      console.error('Admin users query failed.');
+      res.status(500).json({ error: 'Unable to load administrator user records.' });
+    }
+  });
+
+  app.get('/api/admin/content', requireAuth, requireAdmin, async (req, res) => {
+    const kind = typeof req.query.kind === 'string' ? req.query.kind : 'artworks';
+    const artworkFilter =
+      typeof req.query.filter === 'string' ? req.query.filter : 'all';
+    if (!['artworks', 'community'].includes(kind)) {
+      res.status(400).json({ error: 'Invalid content type filter.' });
+      return;
+    }
+    if (!['all', 'direct'].includes(artworkFilter)) {
+      res.status(400).json({ error: 'Invalid artwork filter.' });
+      return;
+    }
+    try {
+      res.json(
+        await getAdminContent({
+          kind: kind as AdminContentKind,
+          page: req.query.page,
+          pageSize: req.query.pageSize,
+          search: typeof req.query.search === 'string' ? req.query.search : '',
+          artistName: typeof req.query.artistName === 'string' ? req.query.artistName : '',
+          artworkFilter: artworkFilter as AdminArtworkFilter,
+        })
+      );
+    } catch {
+      console.error('Admin content query failed.');
+      res.status(500).json({ error: 'Unable to load administrator content records.' });
+    }
+  });
+
+  app.get('/api/admin/orders', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      res.json(
+        await getAdminOrders({
+          page: req.query.page,
+          pageSize: req.query.pageSize,
+        })
+      );
+    } catch {
+      console.error('Admin orders query failed.');
+      res.status(500).json({ error: 'Unable to load purchase-intent records.' });
     }
   });
 

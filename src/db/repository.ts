@@ -183,6 +183,9 @@ export async function upsertArtworkListing(
     if (!validAvailability.includes(payload.availability)) {
       throw new Error('Invalid availability status.');
     }
+    if (payload.imageKey.startsWith('data:image/')) {
+      throw new Error('Artwork images must be uploaded to Supabase Storage before publishing.');
+    }
 
     if (payload.id) {
       const existing = await db

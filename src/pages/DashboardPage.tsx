@@ -13,6 +13,7 @@ import {
   formatSaleModeLabel,
 } from '../utils/formatters';
 import type { UserRole } from '../types/artverse';
+import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -101,7 +102,23 @@ export const DashboardPage: React.FC = () => {
   ];
 
   return (
-    <div className="w-full">
+    <div className="w-full relative isolate">
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          backgroundImage: `url("${atelierCover}")`,
+          backgroundSize: 'cover',
+          backgroundPosition: 'center',
+          backgroundAttachment: 'fixed',
+          opacity: 0.07,
+        }}
+      />
+      <div 
+        className="absolute inset-0 -z-10"
+        style={{
+          background: 'linear-gradient(to bottom, rgba(250, 248, 243, 0.94) 0%, rgba(247, 243, 237, 0.96) 100%)',
+        }}
+      />
       <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-8 sm:py-12 lg:py-16 space-y-10 sm:space-y-12">
         {/* Studio Header */}
         <motion.div

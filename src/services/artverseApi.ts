@@ -1,4 +1,4 @@
-import { getValidAuthToken } from '../lib/firebase';
+import { getSupabaseAccessToken } from '../lib/supabase';
 import type {
   Artwork,
   ArtworkInput,
@@ -11,9 +11,20 @@ import type {
   Profile,
   UserRole,
 } from '../types/artverse';
+import type {
+  AdminContentKind,
+  AdminContentRecord,
+  AdminOverview,
+  AdminOrderRecord,
+  AdminPageResult,
+  AdminRoleFilter,
+  AdminUserRecord,
+  AdminArtworkFilter,
+  AdminTimeframe,
+} from '../types/admin';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await getValidAuthToken();
+  const token = await getSupabaseAccessToken();
   const headers = new Headers(init?.headers || {});
   headers.set('Content-Type', 'application/json');
   if (token) {
@@ -166,4 +177,51 @@ export const artverseApi = {
       method: 'POST',
       body: JSON.stringify(payload),
     }),
+
+  fetchAdminOverview: (timeframe: AdminTimeframe) =>
+    apiFetch<AdminOverview>(
+      `/api/admin/overview?timeframe=${encodeURIComponent(timeframe)}`
+    ),
+
+  fetchAdminUsers: (options: {
+    page: number;
+    pageSize: number;
+    role: AdminRoleFilter;
+    search: string;
+  }) => {
+    const params = new URLSearchParams({
+      page: String(options.page),
+      pageSize: String(options.pageSize),
+      role: options.role,
+      search: options.search,
+    });
+    return apiFetch<AdminPageResult<AdminUserRecord>>(`/api/admin/users?${params}`);
+  },
+
+  fetchAdminContent: (options: {
+    kind: AdminContentKind;
+    page: number;
+    pageSize: number;
+    search: string;
+    artistName: string;
+    filter: AdminArtworkFilter;
+  }) => {
+    const params = new URLSearchParams({
+      kind: options.kind,
+      page: String(options.page),
+      pageSize: String(options.pageSize),
+      search: options.search,
+      artistName: options.artistName,
+      filter: options.filter,
+    });
+    return apiFetch<AdminPageResult<AdminContentRecord>>(`/api/admin/content?${params}`);
+  },
+
+  fetchAdminOrders: (page: number, pageSize: number) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return apiFetch<AdminPageResult<AdminOrderRecord>>(`/api/admin/orders?${params}`);
+  },
 };
