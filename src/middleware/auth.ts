@@ -8,6 +8,15 @@ interface AuthenticatedUser {
   user_metadata: Record<string, unknown>;
 }
 
+export function isAdminUid(uid: string | undefined): boolean {
+  if (!uid) return false;
+  return (process.env.ADMIN_UIDS || '')
+    .split(',')
+    .map((allowedUid) => allowedUid.trim())
+    .filter(Boolean)
+    .includes(uid);
+}
+
 export interface AuthRequest extends Request {
   user?: AuthenticatedUser;
 }
@@ -18,19 +27,14 @@ export const requireAdmin = (
   next: NextFunction
 ) => {
   res.setHeader('Cache-Control', 'no-store');
-  const adminUids = (process.env.ADMIN_UIDS || '')
-    .split(',')
-    .map((uid) => uid.trim())
-    .filter(Boolean);
-
-  if (adminUids.length === 0) {
+  if (!(process.env.ADMIN_UIDS || '').split(',').some((uid) => uid.trim())) {
     res.status(503).json({
       error: 'Administrator access is not configured on this server.',
     });
     return;
   }
 
-  if (!req.user?.uid || !adminUids.includes(req.user.uid)) {
+  if (!isAdminUid(req.user?.uid)) {
     res.status(403).json({ error: 'Administrator access is required.' });
     return;
   }

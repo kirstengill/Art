@@ -20,6 +20,7 @@ import { CommunityPage } from './pages/CommunityPage';
 import { MessagesPage } from './pages/MessagesPage';
 import { DashboardPage } from './pages/DashboardPage';
 import { AddArtworkPage } from './pages/AddArtworkPage';
+import { CollectedGalleryPage } from './pages/CollectedGalleryPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
@@ -70,11 +71,12 @@ const ScrollAndAnimateRoutes: React.FC = () => {
             <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
             <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
             <Route path="/add-artwork" element={<ProtectedRoute allowedRoles={['artist']}><AddArtworkPage /></ProtectedRoute>} />
+            <Route path="/collection" element={<ProtectedRoute allowedRoles={['collector']}><CollectedGalleryPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signin" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route path="/admin" element={<AdminPage />} />
+            <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </motion.main>

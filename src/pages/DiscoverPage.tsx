@@ -22,6 +22,7 @@ import heroArtwork from '../assets/images/hero_gilded_horizon_1792993235968.jpg'
 
 export const DiscoverPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
+  const navigate = useNavigate();
   const {
     artworks,
     profiles,
@@ -29,6 +30,7 @@ export const DiscoverPage: React.FC = () => {
     followedArtistIds,
     isLoadingCatalog,
     toggleFollowArtist,
+    currentUser,
   } = useArtVerse();
 
   const featuredWorks = artworks.filter((a) => a.featured).slice(0, 4);
@@ -106,7 +108,7 @@ export const DiscoverPage: React.FC = () => {
                 transition={{ duration: 0.32, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
                 className="text-base sm:text-lg text-[#575048] leading-relaxed max-w-xl"
               >
-                ArtVerse unites independent fine artists, discerning private
+                Art Universe unites independent fine artists, discerning private
                 collectors, and studio dialogue—pairing transparent gallery pricing
                 with live artwork-linked offer negotiation.
               </motion.p>
@@ -300,8 +302,7 @@ export const DiscoverPage: React.FC = () => {
                       <div className="absolute inset-x-0 bottom-0 bg-gradient-to-t from-black/85 via-black/40 to-transparent p-5 sm:p-8 text-[#FAF8F3] flex flex-wrap items-end justify-between gap-3 sm:gap-4">
                         <div>
                           <p className="text-xs text-[#DFD7C8]">
-                            Fig. 0{safeIndex + 1} — {heroWork.dimensions} · Demo
-                            Curatorial Highlight
+                            Fig. 0{safeIndex + 1} — {heroWork.dimensions} · Curatorial Highlight
                           </p>
                           <p className="font-serif text-2xl sm:text-3xl font-medium mt-0.5">
                             {heroWork.title}
@@ -389,6 +390,11 @@ export const DiscoverPage: React.FC = () => {
                 <ArtworkCard artwork={work} />
               </motion.div>
             ))}
+            {featuredWorks.length === 0 && (
+              <p className="col-span-full py-10 text-center text-sm text-[#6B655E]">
+                New featured works will appear here as artists publish their art.
+              </p>
+            )}
           </div>
         )}
       </section>
@@ -517,7 +523,11 @@ export const DiscoverPage: React.FC = () => {
           </motion.div>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
-            {artists.map((artist, idx) => {
+            {artists.length === 0 ? (
+              <p className="col-span-full py-10 text-center text-sm text-[#6B655E]">
+                Artist profiles will appear here as artists join Art Universe.
+              </p>
+            ) : artists.map((artist, idx) => {
               const isFollowing = followedArtistIds.includes(artist.id);
               const artistWorksCount = artworks.filter(
                 (a) => a.artistId === artist.id
@@ -575,7 +585,15 @@ export const DiscoverPage: React.FC = () => {
                     <motion.button
                       type="button"
                       whileTap={shouldReduceMotion ? undefined : { scale: 0.93 }}
-                      onClick={() => toggleFollowArtist(artist.id)}
+                      onClick={() => {
+                        if (!currentUser) {
+                          navigate('/login', {
+                            state: { from: { pathname: `/artists/${artist.id}` } },
+                          });
+                          return;
+                        }
+                        void toggleFollowArtist(artist.id);
+                      }}
                       className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
                         isFollowing
                           ? 'bg-[#141312] text-[#FAF8F3]'
@@ -618,7 +636,11 @@ export const DiscoverPage: React.FC = () => {
           </motion.div>
 
           <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-            {recentPosts.map((post, idx) => {
+            {recentPosts.length === 0 ? (
+              <p className="col-span-full py-10 text-center text-sm text-[#6B655E]">
+                Community dispatches will appear here as members share their work.
+              </p>
+            ) : recentPosts.map((post, idx) => {
               const author = profiles.find((p) => p.id === post.authorId);
               const linkedArtwork = post.artworkId
                 ? artworks.find((a) => a.id === post.artworkId)
@@ -639,7 +661,7 @@ export const DiscoverPage: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center gap-2.5 text-xs text-[#787066]">
                       <span className="font-medium text-[#141312]">
-                        {author?.fullName || 'ArtVerse Member'}
+                        {author?.fullName || 'Art Universe Member'}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatShortDate(post.createdAt)}</span>

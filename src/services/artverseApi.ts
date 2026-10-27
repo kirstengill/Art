@@ -9,6 +9,7 @@ import type {
   OrderIntent,
   PostComment,
   Profile,
+  Purchase,
   UserRole,
 } from '../types/artverse';
 import type {
@@ -65,6 +66,9 @@ export const artverseApi = {
 
   syncProfile: (payload: {
     fullName?: string;
+    firstName?: string;
+    lastName?: string;
+    phoneNumber?: string;
     role?: UserRole;
     bio?: string;
     location?: string;
@@ -224,4 +228,25 @@ export const artverseApi = {
     });
     return apiFetch<AdminPageResult<AdminOrderRecord>>(`/api/admin/orders?${params}`);
   },
+
+  // Purchase-related endpoints
+  completePurchase: (payload: {
+    orderId: string;
+    artworkId: string;
+    amount: number;
+    currency: string;
+  }) =>
+    apiFetch<{ order: OrderIntent; purchase: Purchase }>('/api/purchases/complete', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  fetchPurchases: () =>
+    apiFetch<{ purchases: Purchase[]; artworks: Artwork[] }>('/api/purchases'),
+
+  checkPurchase: (artworkId: string) =>
+    apiFetch<{ isPurchased: boolean }>(`/api/purchases/check/${artworkId}`),
+
+  fetchPurchasedArtworkIds: () =>
+    apiFetch<{ artworkIds: string[] }>('/api/purchases/artwork-ids'),
 };

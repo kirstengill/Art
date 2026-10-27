@@ -1,11 +1,12 @@
 import React from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useArtVerse } from '../../context/ArtVerseContext';
+import type { AccountRole } from '../../types/artverse';
 
 interface ProtectedRouteProps {
   children: React.ReactNode;
   requireAuth?: boolean;
-  allowedRoles?: Array<'artist' | 'collector' | 'art_lover' | 'admin'>;
+  allowedRoles?: AccountRole[];
 }
 
 export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
@@ -13,18 +14,14 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAuth = true,
   allowedRoles,
 }) => {
-  const { currentUser, authMode } = useArtVerse();
+  const { currentUser } = useArtVerse();
   const location = useLocation();
 
-  if (requireAuth && !currentUser && authMode !== 'demo') {
+  if (requireAuth && !currentUser) {
     return <Navigate to="/login" state={{ from: location }} replace />;
   }
 
-  if (allowedRoles && currentUser && !allowedRoles.includes(currentUser.role as any)) {
-    return <Navigate to="/" replace />;
-  }
-
-  if (allowedRoles && !currentUser && authMode === 'demo' && allowedRoles.includes('admin')) {
+  if (allowedRoles && currentUser && !allowedRoles.includes(currentUser.role)) {
     return <Navigate to="/" replace />;
   }
 

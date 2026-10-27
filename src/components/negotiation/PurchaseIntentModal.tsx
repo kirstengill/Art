@@ -17,6 +17,12 @@ interface PurchaseIntentModalProps {
     shippingCity: string;
     collectorNote: string;
   }) => Promise<OrderIntent>;
+  onCompletePurchase?: (params: {
+    orderId: string;
+    artworkId: string;
+    amount: number;
+    currency: string;
+  }) => Promise<{ order: OrderIntent; purchase: any }>;
 }
 
 export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
@@ -169,11 +175,45 @@ export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
                     </div>
                   </dl>
 
-                  <div className="flex justify-end pt-2">
+                  <div className="flex justify-end gap-3 pt-2">
+                    {onCompletePurchase && (
+                      <motion.button
+                        type="button"
+                        whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+                        onClick={async () => {
+                          if (!createdOrder) return;
+                          try {
+                            setSubmitting(true);
+                            await onCompletePurchase({
+                              orderId: createdOrder.id,
+                              artworkId: artwork.id,
+                              amount: createdOrder.amount,
+                              currency: createdOrder.currency,
+                            });
+                            onClose();
+                          } catch (err) {
+                            setError(
+                              err instanceof Error ? err.message : 'Failed to complete purchase.'
+                            );
+                          } finally {
+                            setSubmitting(false);
+                          }
+                        }}
+                        disabled={submitting}
+                        className="px-5 py-2.5 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
+                        style={{
+                          background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+                          color: '#FAF8F3',
+                          boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
+                        }}
+                      >
+                        {submitting ? 'Completing...' : 'Complete Purchase'}
+                      </motion.button>
+                    )}
                     <button
                       type="button"
                       onClick={onClose}
-                      className="px-5 py-2.5 text-sm font-medium bg-[#141312] text-[#FAF8F3] rounded-xl hover:bg-[#2A2724] transition-colors"
+                      className="px-5 py-2.5 text-sm font-medium bg-[#E6DFD3] text-[#141312] rounded-xl hover:bg-[#D8D0C4] transition-colors"
                     >
                       Return to Artwork
                     </button>

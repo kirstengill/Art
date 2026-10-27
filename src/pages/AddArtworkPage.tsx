@@ -231,7 +231,7 @@ export const AddArtworkPage: React.FC = () => {
           <p className="text-xs text-[#6B655E]">
             {authMode === 'authenticated'
               ? `Publishing to permanent catalogue as ${currentUser?.fullName}`
-              : 'Demo Mode: Listing is stored in current session state'}
+              : 'Sign in with an artist account to publish artwork.'}
           </p>
         </motion.div>
 

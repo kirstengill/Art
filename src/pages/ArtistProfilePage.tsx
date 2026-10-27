@@ -22,6 +22,7 @@ export const ArtistProfilePage: React.FC = () => {
     isLoadingCatalog,
     toggleFollowArtist,
     openOrCreateConversation,
+    currentUser,
   } = useArtVerse();
 
   const artist = id ? getProfileById(id) : undefined;
@@ -47,6 +48,10 @@ export const ArtistProfilePage: React.FC = () => {
   const isFollowing = followedArtistIds.includes(artist.id);
 
   const handleMessageArtist = async () => {
+    if (!currentUser) {
+      navigate('/login', { state: { from: { pathname: `/artists/${artist.id}` } } });
+      return;
+    }
     if (artistWorks.length > 0) {
       const conv = await openOrCreateConversation(artistWorks[0].id);
       navigate(`/messages?conv=${conv.id}`);
@@ -103,12 +108,6 @@ export const ArtistProfilePage: React.FC = () => {
                   <span>{artist.location}</span>
                   <span aria-hidden="true">·</span>
                   <span>{artist.discipline}</span>
-                  {artist.isDemo && (
-                    <>
-                      <span aria-hidden="true">·</span>
-                      <span>Demo Profile</span>
-                    </>
-                  )}
                 </div>
                 <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-[#141312] text-balance">
                   {artist.fullName}
@@ -121,7 +120,15 @@ export const ArtistProfilePage: React.FC = () => {
               <motion.button
                 type="button"
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
-                onClick={() => toggleFollowArtist(artist.id)}
+                onClick={() => {
+                  if (!currentUser) {
+                    navigate('/login', {
+                      state: { from: { pathname: `/artists/${artist.id}` } },
+                    });
+                    return;
+                  }
+                  void toggleFollowArtist(artist.id);
+                }}
                 className={`px-5 py-2.5 text-xs font-medium rounded-xl transition-colors whitespace-nowrap shrink-0 ${
                   isFollowing
                     ? 'bg-[#141312] text-[#FAF8F3]'
@@ -130,15 +137,19 @@ export const ArtistProfilePage: React.FC = () => {
               >
                 {isFollowing ? 'Following Studio' : 'Follow Artist'}
               </motion.button>
-              <motion.button
-                type="button"
-                whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
-                onClick={handleMessageArtist}
-                className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-medium bg-[#FAF8F3] border border-[#D8D0C1] text-[#141312] rounded-xl hover:border-[#B38B40] transition-colors whitespace-nowrap shrink-0"
-              >
-                <MessageSquare className="w-3.5 h-3.5" />
-                Message Studio
-              </motion.button>
+              {(!currentUser ||
+                currentUser.role === 'collector' ||
+                currentUser.role === 'art_lover') && (
+                <motion.button
+                  type="button"
+                  whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
+                  onClick={handleMessageArtist}
+                  className="inline-flex items-center gap-2 px-4 py-2.5 text-xs font-medium bg-[#FAF8F3] border border-[#D8D0C1] text-[#141312] rounded-xl hover:border-[#B38B40] transition-colors whitespace-nowrap shrink-0"
+                >
+                  <MessageSquare className="w-3.5 h-3.5" />
+                  Message Studio
+                </motion.button>
+              )}
             </div>
           </div>
 

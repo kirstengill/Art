@@ -6,7 +6,6 @@ import {
   ArrowUpRight,
   CheckCircle2,
   FileText,
-  Paperclip,
   RefreshCw,
   Search,
   Send,
@@ -28,12 +27,6 @@ import {
   formatTimeStamp,
 } from '../utils/formatters';
 
-const SAMPLE_ATTACHMENTS = [
-  'Studio_Condition_Report.pdf',
-  'Raking_Light_Detail_Plate.jpg',
-  'Museum_Crating_Dimensions.pdf',
-];
-
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 export const MessagesPage: React.FC = () => {
@@ -46,6 +39,7 @@ export const MessagesPage: React.FC = () => {
     currentUser,
     authMode,
     isLoadingThreads,
+    threadError,
     refreshConversations,
     getArtworkById,
     getProfileById,
@@ -65,14 +59,7 @@ export const MessagesPage: React.FC = () => {
   );
   const [mobileDossierOpen, setMobileDossierOpen] = useState(false);
 
-  // In demo mode, allow testing both Collector and Artist sides of an offer negotiation
-  const [demoPerspective, setDemoPerspective] = useState<'collector' | 'artist'>(
-    currentUser?.role === 'artist' ? 'artist' : 'collector'
-  );
-
   const [composerText, setComposerText] = useState('');
-  const [selectedAttachment, setSelectedAttachment] = useState<string | null>(null);
-  const [showAttachmentMenu, setShowAttachmentMenu] = useState(false);
 
   // Offer & Counteroffer inline forms
   const [offerFormMode, setOfferFormMode] = useState<'none' | 'new' | 'counter'>('none');
@@ -129,16 +116,7 @@ export const MessagesPage: React.FC = () => {
 
   const latestOffer = activeOffers[activeOffers.length - 1];
 
-  // Determine the active participant ID for message alignment and offer permissions
-  const effectiveViewerId = useMemo(() => {
-    if (!activeConv) return currentUser?.id || 'collector-julian-mercer';
-    if (authMode === 'authenticated' && !activeConv.isDemo && currentUser) {
-      return currentUser.id;
-    }
-    return demoPerspective === 'artist'
-      ? activeConv.artistId
-      : activeConv.collectorId;
-  }, [activeConv, authMode, currentUser, demoPerspective]);
+  const effectiveViewerId = currentUser?.id || '';
 
   useEffect(() => {
     const el = messageListRef.current;
@@ -178,18 +156,9 @@ export const MessagesPage: React.FC = () => {
 
   const handleSendMessage = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!activeConv || (!composerText.trim() && !selectedAttachment)) return;
-    const text =
-      composerText.trim() || `Shared attachment: ${selectedAttachment}`;
-    await sendMessage(
-      activeConv.id,
-      text,
-      selectedAttachment || undefined,
-      effectiveViewerId
-    );
+    if (!activeConv || !composerText.trim()) return;
+    await sendMessage(activeConv.id, composerText.trim());
     setComposerText('');
-    setSelectedAttachment(null);
-    setShowAttachmentMenu(false);
   };
 
   const openNewOfferForm = () => {
@@ -226,7 +195,6 @@ export const MessagesPage: React.FC = () => {
           action: 'counter',
           counterAmount: Math.round(numeric),
           note: offerNoteInput,
-          overrideActorId: effectiveViewerId,
         });
       } else {
         await makeOffer({
@@ -234,7 +202,6 @@ export const MessagesPage: React.FC = () => {
           amount: Math.round(numeric),
           currency: activeArtwork.currency,
           note: offerNoteInput,
-          overrideSenderId: effectiveViewerId,
         });
       }
       setOfferFormMode('none');
@@ -247,6 +214,8 @@ export const MessagesPage: React.FC = () => {
   };
 
   const canMakeNewOffer =
+    authMode === 'authenticated' &&
+    currentUser?.role === 'collector' &&
     activeArtwork &&
     activeArtwork.saleMode !== 'buy_now' &&
     (!latestOffer ||
@@ -318,55 +287,6 @@ export const MessagesPage: React.FC = () => {
           </dl>
         </div>
 
-        {/* Demo Role Switcher with gliding spring pill */}
-        {activeConv.isDemo && (
-          <div className="p-3.5 rounded-xl bg-[#F3EFE6] border border-[#E6DFD3] space-y-2.5">
-            <div className="flex items-center justify-between">
-              <span className="text-xs font-medium text-[#3B352F]">
-                Active Negotiation Perspective
-              </span>
-              <span className="text-[11px] text-[#7A7267]">Demo Preview</span>
-            </div>
-            <div className="grid grid-cols-2 gap-1 p-1 bg-[#E6DFD3]/80 rounded-lg relative">
-              {(['collector', 'artist'] as const).map((side) => {
-                const active = demoPerspective === side;
-                const firstName =
-                  side === 'collector'
-                    ? activeCollector?.fullName.split(' ')[0]
-                    : activeArtist?.fullName.split(' ')[0];
-                return (
-                  <button
-                    key={side}
-                    type="button"
-                    onClick={() => {
-                      setDemoPerspective(side);
-                      setOfferFormMode('none');
-                    }}
-                    className={`relative py-1.5 px-2 text-xs font-medium rounded-md transition-colors whitespace-nowrap z-10 ${
-                      active
-                        ? 'text-[#141312]'
-                        : 'text-[#5C554C] hover:text-[#141312]'
-                    }`}
-                  >
-                    {active && (
-                      <motion.span
-                        layoutId={`perspective-pill-${idScope}`}
-                        transition={{
-                          type: 'spring',
-                          stiffness: 480,
-                          damping: 36,
-                        }}
-                        className="absolute inset-0 bg-white rounded-md shadow-xs -z-10"
-                      />
-                    )}
-                    {side === 'collector' ? 'Collector' : 'Artist'} ({firstName})
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-        )}
-
         {/* Current Offer Status & Actions */}
         <div className="space-y-4">
           <div className="flex items-center justify-between">
@@ -437,14 +357,18 @@ export const MessagesPage: React.FC = () => {
                         preview to generate an acquisition intent.
                       </div>
                     </div>
-                    <motion.button
-                      type="button"
-                      whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                      onClick={() => setPurchaseModalOpen(true)}
-                      className="w-full py-2.5 px-3 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-lg hover:bg-[#2A2724] transition-colors whitespace-nowrap"
-                    >
-                      Open Settlement Checkout Preview
-                    </motion.button>
+                    {(authMode !== 'authenticated' ||
+                      (currentUser?.role === 'collector' &&
+                        activeConv.collectorId === currentUser.id)) && (
+                      <motion.button
+                        type="button"
+                        whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                        onClick={() => setPurchaseModalOpen(true)}
+                        className="w-full py-2.5 px-3 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-lg hover:bg-[#2A2724] transition-colors whitespace-nowrap"
+                      >
+                        Open Settlement Checkout Preview
+                      </motion.button>
+                    )}
                   </motion.div>
                 )}
 
@@ -459,7 +383,6 @@ export const MessagesPage: React.FC = () => {
                           respondToOffer({
                             offerId: latestOffer.id,
                             action: 'accept',
-                            overrideActorId: effectiveViewerId,
                           })
                         }
                         className="py-2 px-3 text-xs font-medium bg-[#B38B40] text-[#141312] rounded-lg hover:bg-[#C69D4E] transition-colors whitespace-nowrap"
@@ -481,7 +404,6 @@ export const MessagesPage: React.FC = () => {
                         respondToOffer({
                           offerId: latestOffer.id,
                           action: 'reject',
-                          overrideActorId: effectiveViewerId,
                         })
                       }
                       className="w-full py-2 px-3 text-xs font-medium bg-white border border-[#D8D0C1] text-[#5C554C] hover:text-[#992E24] hover:border-[#C99B95] rounded-lg transition-colors whitespace-nowrap"
@@ -504,7 +426,6 @@ export const MessagesPage: React.FC = () => {
                         respondToOffer({
                           offerId: latestOffer.id,
                           action: 'withdraw',
-                          overrideActorId: effectiveViewerId,
                         })
                       }
                       className="w-full py-2 px-3 text-xs font-medium bg-white border border-[#D8D0C1] text-[#3B352F] hover:border-[#B38B40] rounded-lg transition-colors whitespace-nowrap"
@@ -665,7 +586,6 @@ export const MessagesPage: React.FC = () => {
   return (
     <div className="w-full">
       <div className="max-w-[1400px] mx-auto px-3.5 sm:px-6 lg:px-8 py-4 sm:py-6 lg:py-8">
-        {/* Clear Demo Messaging Disclosure Banner */}
         <motion.div
           initial={shouldReduceMotion ? false : { opacity: 0, y: -6 }}
           animate={{ opacity: 1, y: 0 }}
@@ -674,8 +594,7 @@ export const MessagesPage: React.FC = () => {
         >
           <span>
             <strong className="text-[#141312]">Private Collector & Studio Desk:</strong>{' '}
-            Every thread is linked to a specific catalogue work. Sample threads are local
-            demo previews and are not transmitted to external people.
+            Every thread is linked to a specific catalogue work and is visible only to its participants.
           </span>
           <Link
             to="/gallery"
@@ -729,12 +648,28 @@ export const MessagesPage: React.FC = () => {
               </div>
             </div>
 
+            {threadError && (
+              <p role="alert" className="px-4 py-2 text-xs text-[#992E24] bg-[#FBECE9]">
+                {threadError}
+              </p>
+            )}
+
             <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain artverse-scroll">
               {isLoadingThreads ? (
                 <InboxThreadListSkeleton count={4} />
               ) : filteredConversations.length === 0 ? (
                 <div className="p-6 text-center text-xs text-[#7A7267]">
-                  No conversations match your search.
+                  {conversations.length
+                    ? 'No conversations match your search.'
+                    : 'No conversations yet. Browse the gallery to start an inquiry.'}
+                  {!currentUser && (
+                    <Link
+                      to="/login"
+                      className="block mt-3 font-medium text-[#8C6828] hover:text-[#141312]"
+                    >
+                      Sign in to message artists
+                    </Link>
+                  )}
                 </div>
               ) : (
                 <div className="p-2 space-y-1">
@@ -936,79 +871,7 @@ export const MessagesPage: React.FC = () => {
                   onSubmit={handleSendMessage}
                   className="p-3 sm:p-4 bg-white border-t border-[#E6DFD3] space-y-2.5 shrink-0"
                 >
-                  <AnimatePresence>
-                    {selectedAttachment && (
-                      <motion.div
-                        initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, y: 4 }}
-                        animate={{ opacity: 1, y: 0 }}
-                        exit={{ opacity: 0 }}
-                        transition={{ duration: 0.15 }}
-                        className="flex items-center justify-between px-3 py-1.5 rounded-lg bg-[#F3EFE6] text-xs text-[#3B352F]"
-                      >
-                        <span className="inline-flex items-center gap-1.5 truncate">
-                          <FileText className="w-3.5 h-3.5 text-[#B38B40]" />
-                          Attached: {selectedAttachment}
-                        </span>
-                        <button
-                          type="button"
-                          onClick={() => setSelectedAttachment(null)}
-                          aria-label="Remove attachment"
-                          className="text-[#7A7267] hover:text-[#141312]"
-                        >
-                          <X className="w-3.5 h-3.5" />
-                        </button>
-                      </motion.div>
-                    )}
-                  </AnimatePresence>
-
                   <div className="relative flex items-center gap-2">
-                    <div className="relative">
-                      <button
-                        type="button"
-                        onClick={() => setShowAttachmentMenu((prev) => !prev)}
-                        aria-label="Attach dossier or condition document"
-                        className="w-10 h-10 rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] flex items-center justify-center text-[#5C554C] hover:text-[#141312] hover:border-[#B38B40] transition-colors"
-                      >
-                        <Paperclip className="w-4 h-4" />
-                      </button>
-                      <AnimatePresence>
-                        {showAttachmentMenu && (
-                          <motion.div
-                            initial={
-                              shouldReduceMotion
-                                ? { opacity: 0 }
-                                : { opacity: 0, y: 6, scale: 0.97 }
-                            }
-                            animate={{ opacity: 1, y: 0, scale: 1 }}
-                            exit={
-                              shouldReduceMotion
-                                ? { opacity: 0 }
-                                : { opacity: 0, y: 4, scale: 0.97 }
-                            }
-                            transition={{ duration: 0.16, ease: EASE_OUT }}
-                            className="absolute bottom-12 left-0 w-64 bg-white border border-[#D8D0C1] rounded-xl shadow-lg p-2 z-20 space-y-1"
-                          >
-                            <p className="px-2.5 py-1 text-[11px] font-medium text-[#7A7267]">
-                              Attach Studio Document
-                            </p>
-                            {SAMPLE_ATTACHMENTS.map((file) => (
-                              <button
-                                key={file}
-                                type="button"
-                                onClick={() => {
-                                  setSelectedAttachment(file);
-                                  setShowAttachmentMenu(false);
-                                }}
-                                className="w-full text-left px-2.5 py-2 text-xs text-[#141312] hover:bg-[#F3EFE6] rounded-lg transition-colors truncate"
-                              >
-                                {file}
-                              </button>
-                            ))}
-                          </motion.div>
-                        )}
-                      </AnimatePresence>
-                    </div>
-
                     <label htmlFor="message-composer-input" className="sr-only">
                       Write message
                     </label>
@@ -1017,6 +880,7 @@ export const MessagesPage: React.FC = () => {
                       type="text"
                       value={composerText}
                       onChange={(e) => setComposerText(e.target.value)}
+                      disabled={!currentUser}
                       placeholder={`Write to ${
                         effectiveViewerId === activeConv.collectorId
                           ? activeArtist?.fullName
@@ -1027,6 +891,7 @@ export const MessagesPage: React.FC = () => {
 
                     <motion.button
                       type="submit"
+                      disabled={!currentUser || !composerText.trim()}
                       whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
                       aria-label="Send message"
                       className="inline-flex items-center gap-1.5 px-4 py-2.5 bg-[#141312] text-[#FAF8F3] text-xs font-medium rounded-xl hover:bg-[#2A2724] transition-colors whitespace-nowrap shrink-0"
@@ -1035,6 +900,14 @@ export const MessagesPage: React.FC = () => {
                       Send
                     </motion.button>
                   </div>
+                  {!currentUser && (
+                    <p className="text-xs text-[#7A7267]">
+                      <Link to="/login" className="font-medium text-[#8C6828]">
+                        Sign in
+                      </Link>{' '}
+                      to send a message.
+                    </p>
+                  )}
                 </form>
               </>
             ) : (

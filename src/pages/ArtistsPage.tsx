@@ -1,5 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowUpRight, Search } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
@@ -11,7 +11,14 @@ const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 export const ArtistsPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
-  const { profiles, artworks, followedArtistIds, toggleFollowArtist } = useArtVerse();
+  const navigate = useNavigate();
+  const {
+    profiles,
+    artworks,
+    followedArtistIds,
+    toggleFollowArtist,
+    currentUser,
+  } = useArtVerse();
   const [search, setSearch] = useState('');
 
   const artists = useMemo(() => {
@@ -82,18 +89,31 @@ export const ArtistsPage: React.FC = () => {
         {artists.length === 0 ? (
           <div className="mt-10 p-12 bg-white border border-[#E6DFD3] rounded-2xl text-center space-y-3">
             <h2 className="font-serif text-2xl font-semibold text-[#141312]">
-              No matching ateliers found
+              {profiles.some((profile) => profile.role === 'artist')
+                ? 'No matching ateliers found'
+                : 'No artist profiles yet'}
             </h2>
             <p className="text-sm text-[#5C554C]">
-              Try clearing your search filter to view all represented studio artists.
+              {profiles.some((profile) => profile.role === 'artist')
+                ? 'Try clearing your search filter to view all studio artists.'
+                : 'Artist profiles will appear here as artists join Art Universe.'}
             </p>
-            <button
-              type="button"
-              onClick={() => setSearch('')}
-              className="px-4 py-2 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-lg hover:bg-[#2A2724] transition-colors"
-            >
-              Reset Search
-            </button>
+            {profiles.some((profile) => profile.role === 'artist') ? (
+              <button
+                type="button"
+                onClick={() => setSearch('')}
+                className="px-4 py-2 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-lg hover:bg-[#2A2724] transition-colors"
+              >
+                Reset Search
+              </button>
+            ) : (
+              <Link
+                to="/signup"
+                className="inline-flex px-4 py-2 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-lg hover:bg-[#2A2724] transition-colors"
+              >
+                Join as an Artist
+              </Link>
+            )}
           </div>
         ) : (
           <motion.div
@@ -136,12 +156,6 @@ export const ArtistsPage: React.FC = () => {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-xs text-[#7A7267]">
                               <span className="truncate">{artist.location}</span>
-                              {artist.isDemo && (
-                                <>
-                                  <span aria-hidden="true">·</span>
-                                  <span className="shrink-0">Demo Atelier</span>
-                                </>
-                              )}
                             </div>
                             <h2 className="font-serif text-2xl sm:text-[26px] font-semibold text-[#141312] truncate">
                               <Link
@@ -160,7 +174,15 @@ export const ArtistsPage: React.FC = () => {
                         <motion.button
                           type="button"
                           whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
-                          onClick={() => toggleFollowArtist(artist.id)}
+                          onClick={() => {
+                            if (!currentUser) {
+                              navigate('/login', {
+                                state: { from: { pathname: `/artists/${artist.id}` } },
+                              });
+                              return;
+                            }
+                            void toggleFollowArtist(artist.id);
+                          }}
                           className={`px-4 py-2 text-xs font-medium rounded-xl transition-colors whitespace-nowrap shrink-0 ${
                             isFollowing
                               ? 'bg-[#141312] text-[#FAF8F3]'

@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowUpRight, Check, Heart, MessageCircle, Share2 } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
@@ -15,6 +15,7 @@ const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
 export const CommunityPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
+  const navigate = useNavigate();
   const {
     posts,
     comments,
@@ -36,14 +37,17 @@ export const CommunityPage: React.FC = () => {
   const [composerError, setComposerError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
-  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({
-    'post-studio-gold-leaf': true,
-  });
+  const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
 
   const handlePublishPost = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!currentUser) {
+      setComposerError('Sign in to publish to the community.');
+      navigate('/login', { state: { from: { pathname: '/community' } } });
+      return;
+    }
     if (!body.trim()) {
       setComposerError('Please share a studio reflection, curatorial note, or question.');
       return;
@@ -72,6 +76,10 @@ export const CommunityPage: React.FC = () => {
 
   const handleCommentSubmit = async (e: React.FormEvent, postId: string) => {
     e.preventDefault();
+    if (!currentUser) {
+      navigate('/login', { state: { from: { pathname: '/community' } } });
+      return;
+    }
     const draft = (commentDrafts[postId] || '').trim();
     if (!draft) return;
     await addComment(postId, draft);
@@ -145,7 +153,7 @@ export const CommunityPage: React.FC = () => {
                 <span className="text-xs text-[#7A7267]">
                   {authMode === 'authenticated'
                     ? `Posting as ${currentUser?.fullName}`
-                    : 'Demo Session Preview'}
+                    : 'Sign in to publish'}
                 </span>
               </div>
 
@@ -261,7 +269,7 @@ export const CommunityPage: React.FC = () => {
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3.5 min-w-0">
                               <ProfileAvatar
-                                name={author?.fullName || 'ArtVerse Member'}
+                                name={author?.fullName || 'Art Universe Member'}
                                 avatarKey={author?.avatarUrl}
                                 sizeClass="w-11 h-11 text-sm"
                               />
@@ -276,14 +284,13 @@ export const CommunityPage: React.FC = () => {
                                     </Link>
                                   ) : (
                                     <span className="text-sm font-medium text-[#141312] truncate">
-                                      {author?.fullName || 'ArtVerse Member'}
+                                      {author?.fullName || 'Art Universe Member'}
                                     </span>
                                   )}
                                 </div>
                                 <p className="text-xs text-[#7A7267]">
                                   {author ? formatRoleLabel(author.role) : 'Member'} ·{' '}
                                   {formatShortDate(post.createdAt)}
-                                  {post.isDemo ? ' · Demo Post' : ''}
                                 </p>
                               </div>
                             </div>
@@ -294,7 +301,15 @@ export const CommunityPage: React.FC = () => {
                                 whileTap={
                                   shouldReduceMotion ? undefined : { scale: 0.95 }
                                 }
-                                onClick={() => toggleFollowArtist(author.id)}
+                                onClick={() => {
+                                  if (!currentUser) {
+                                    navigate('/login', {
+                                      state: { from: { pathname: '/community' } },
+                                    });
+                                    return;
+                                  }
+                                  void toggleFollowArtist(author.id);
+                                }}
                                 className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
                                   isFollowingAuthor
                                     ? 'bg-[#141312] text-[#FAF8F3]'
@@ -359,7 +374,15 @@ export const CommunityPage: React.FC = () => {
                             <motion.button
                               type="button"
                               whileTap={shouldReduceMotion ? undefined : { scale: 0.9 }}
-                              onClick={() => toggleLikePost(post.id)}
+                              onClick={() => {
+                                if (!currentUser) {
+                                  navigate('/login', {
+                                    state: { from: { pathname: '/community' } },
+                                  });
+                                  return;
+                                }
+                                void toggleLikePost(post.id);
+                              }}
                               aria-pressed={isLiked}
                               className={`inline-flex items-center gap-1.5 font-medium transition-colors whitespace-nowrap ${
                                 isLiked ? 'text-[#8C6828]' : 'hover:text-[#141312]'
@@ -569,7 +592,15 @@ export const CommunityPage: React.FC = () => {
                         <motion.button
                           type="button"
                           whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
-                          onClick={() => toggleFollowArtist(artist.id)}
+                          onClick={() => {
+                            if (!currentUser) {
+                              navigate('/login', {
+                                state: { from: { pathname: '/community' } },
+                              });
+                              return;
+                            }
+                            void toggleFollowArtist(artist.id);
+                          }}
                           className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
                             following
                               ? 'bg-[#141312] text-[#FAF8F3]'

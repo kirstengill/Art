@@ -14,6 +14,7 @@ import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
 import { MakeOfferModal } from '../components/negotiation/MakeOfferModal';
 import { PurchaseIntentModal } from '../components/negotiation/PurchaseIntentModal';
 import { ArtworkCard } from '../components/artwork/ArtworkCard';
+import { ROLE_PERMISSIONS } from '../types/artverse';
 import {
   formatAvailabilityLabel,
   formatCategoryLabel,
@@ -38,6 +39,7 @@ export const ArtworkDetailPage: React.FC = () => {
     openOrCreateConversation,
     makeOffer,
     createOrderIntent,
+    completePurchase,
     currentUser,
   } = useArtVerse();
 
@@ -82,12 +84,21 @@ export const ArtworkDetailPage: React.FC = () => {
     artwork.availability !== 'sold' &&
     (artwork.saleMode === 'negotiation_only' ||
       artwork.saleMode === 'buy_now_and_negotiation');
+  
+  const permissions = currentUser ? ROLE_PERMISSIONS[currentUser.role] : { canPurchase: false, canUploadArtwork: false };
+  const canAcquire = permissions.canPurchase && canBuyNow;
+  const canContactArtist = !currentUser || (currentUser.role === 'collector' || currentUser.role === 'art_lover');
+  const canMakeOffer = permissions.canMakeOffers && canNegotiate;
 
   const moreFromGallery = artworks
     .filter((a) => a.id !== artwork.id)
     .slice(0, 3);
 
   const handleContactArtist = async () => {
+    if (!currentUser) {
+      navigate('/login', { state: { from: location } });
+      return;
+    }
     const conv = await openOrCreateConversation(artwork.id);
     navigate(`/messages?conv=${conv.id}`);
   };
@@ -261,12 +272,6 @@ export const ArtworkDetailPage: React.FC = () => {
                 <span>{formatCategoryLabel(artwork.category)}</span>
                 <span aria-hidden="true">·</span>
                 <span>{artwork.year}</span>
-                {artwork.isDemo && (
-                  <>
-                    <span aria-hidden="true">·</span>
-                    <span>Demo Catalogue Entry</span>
-                  </>
-                )}
               </div>
 
               <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-[#141312]">
@@ -294,7 +299,13 @@ export const ArtworkDetailPage: React.FC = () => {
                   <motion.button
                     type="button"
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.94 }}
-                    onClick={() => toggleFollowArtist(artist.id)}
+                    onClick={() => {
+                      if (!currentUser) {
+                        navigate('/login', { state: { from: location } });
+                        return;
+                      }
+                      void toggleFollowArtist(artist.id);
+                    }}
                     className={`px-3.5 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 ${
                       isFollowing
                         ? 'bg-[#141312] text-[#FAF8F3]'
@@ -330,7 +341,7 @@ export const ArtworkDetailPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                {canBuyNow && (
+                {canAcquire && canBuyNow && (
                   <motion.button
                     type="button"
                     whileHover={shouldReduceMotion ? undefined : { y: -2, scale: 1.02 }}
@@ -353,24 +364,55 @@ export const ArtworkDetailPage: React.FC = () => {
                   </motion.button>
                 )}
 
-                {canNegotiate && (
+                {canMakeOffer && (
                   <motion.button
                     type="button"
                     whileHover={shouldReduceMotion ? undefined : { y: -1 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                    onClick={() => setOfferModalOpen(true)}
+                    onClick={() => {
+                      if (!currentUser) {
+                        navigate('/login', { state: { from: location } });
+                        return;
+                      }
+                      setOfferModalOpen(true);
+                    }}
                     className="flex-1 px-5 py-3 text-sm font-medium bg-[#B38B40] text-[#141312] rounded-xl hover:bg-[#C69D4E] transition-colors whitespace-nowrap"
                   >
                     Make an Offer
                   </motion.button>
                 )}
+                {!canAcquire && !canMakeOffer && currentUser && (
+                  <motion.button
+                    type="button"
+                    whileHover={shouldReduceMotion ? undefined : { y: -1 }}
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+                    onClick={() => {
+                      navigate('/signup', { state: { role: 'collector', from: location } });
+                    }}
+                    className="flex-1 px-5 py-3 text-sm font-medium bg-[#B38B40] text-[#FAF8F3] rounded-xl hover:bg-[#C69D4E] transition-colors whitespace-nowrap"
+                  >
+                    Become a Collector to Buy
+                  </motion.button>
+                )}
               </div>
+
+              {currentUser && !canAcquire && !canMakeOffer && (
+                <p className="text-xs text-[#787066]">
+                  Purchase and offer actions are available to Collector accounts.
+                </p>
+              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 pt-1">
                 <motion.button
                   type="button"
                   whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
-                  onClick={() => toggleSaveArtwork(artwork.id)}
+                  onClick={() => {
+                    if (!currentUser) {
+                      navigate('/login', { state: { from: location } });
+                      return;
+                    }
+                    void toggleSaveArtwork(artwork.id);
+                  }}
                   className={`inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium rounded-xl border transition-colors whitespace-nowrap ${
                     isSaved
                       ? 'bg-[#F5EFE2] border-[#C9B07A] text-[#141312]'
@@ -385,15 +427,17 @@ export const ArtworkDetailPage: React.FC = () => {
                   {isSaved ? 'Saved in Collection' : 'Save to Collection'}
                 </motion.button>
 
-                <motion.button
-                  type="button"
-                  whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
-                  onClick={handleContactArtist}
-                  className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium rounded-xl border border-[#DED6C6] bg-[#FAF8F3] text-[#3B352F] hover:border-[#B38B40] transition-colors whitespace-nowrap"
-                >
-                  <MessageSquare className="w-3.5 h-3.5" />
-                  Contact Artist
-                </motion.button>
+                {canContactArtist && (
+                  <motion.button
+                    type="button"
+                    whileTap={shouldReduceMotion ? undefined : { scale: 0.96 }}
+                    onClick={handleContactArtist}
+                    className="inline-flex items-center justify-center gap-2 px-4 py-2.5 text-xs font-medium rounded-xl border border-[#DED6C6] bg-[#FAF8F3] text-[#3B352F] hover:border-[#B38B40] transition-colors whitespace-nowrap"
+                  >
+                    <MessageSquare className="w-3.5 h-3.5" />
+                    Contact Artist
+                  </motion.button>
+                )}
               </div>
 
               <p className="text-xs text-[#787066] leading-relaxed">
@@ -530,6 +574,7 @@ export const ArtworkDetailPage: React.FC = () => {
         isOpen={purchaseModalOpen}
         onClose={() => setPurchaseModalOpen(false)}
         onCreateIntent={createOrderIntent}
+        onCompletePurchase={completePurchase}
       />
       </div>
     </div>

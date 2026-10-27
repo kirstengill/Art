@@ -12,7 +12,6 @@ import {
   formatRoleLabel,
   formatSaleModeLabel,
 } from '../utils/formatters';
-import type { UserRole } from '../types/artverse';
 import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -26,7 +25,6 @@ export const DashboardPage: React.FC = () => {
     savedArtworkIds,
     currentUser,
     authMode,
-    switchRole,
     logout,
     deleteArtwork,
     getArtworkById,
@@ -36,18 +34,10 @@ export const DashboardPage: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
 
-  // Show user's own listings when signed in via Google, or Clara Vance's + user's demo works in Demo/Guest mode
-  const managedOwnerId =
-    authMode === 'authenticated' && currentUser
-      ? currentUser.id
-      : currentUser?.role === 'artist'
-      ? currentUser.id
-      : 'artist-clara-vance';
+  const managedOwnerId = currentUser?.id;
 
   const managedListings = artworks.filter(
-    (art) =>
-      art.artistId === managedOwnerId ||
-      (authMode !== 'authenticated' && art.id.startsWith('art-demo-'))
+    (art) => Boolean(managedOwnerId) && art.artistId === managedOwnerId
   );
 
   const incomingOffers = offers.filter(
@@ -77,10 +67,7 @@ export const DashboardPage: React.FC = () => {
     {
       label: 'Managed Studio Listings',
       value: String(managedListings.length),
-      sub:
-        authMode === 'authenticated'
-          ? 'Saved to your permanent member portfolio'
-          : 'Editable in active session state',
+      sub: 'Saved to your permanent member portfolio',
     },
     {
       label: 'Catalogue Asking Value',
@@ -129,17 +116,15 @@ export const DashboardPage: React.FC = () => {
         >
           <div className="flex items-center gap-4 min-w-0">
             <ProfileAvatar
-              name={currentUser?.fullName || 'Clara Vance (Demo Studio)'}
-              avatarKey={currentUser?.avatarUrl || 'hero_gilded_horizon'}
+              name={currentUser?.fullName || 'Art Universe Member'}
+              avatarKey={currentUser?.avatarUrl}
               sizeClass="w-12 h-12 sm:w-14 sm:h-14 text-base sm:text-lg"
             />
             <div className="min-w-0">
               <p className="text-xs font-medium tracking-wide text-[#8C6828]">
-                {authMode === 'authenticated'
-                  ? `Member Account · ${formatRoleLabel(currentUser!.role)}`
-                  : authMode === 'demo'
-                  ? `Demo Session · ${formatRoleLabel(currentUser!.role)}`
-                  : 'Curatorial Demo Studio Preview'}
+                {currentUser
+                  ? `Member Account · ${formatRoleLabel(currentUser.role)}`
+                  : 'Member Dashboard'}
               </p>
               <h1 className="font-serif text-2xl sm:text-4xl font-semibold text-[#141312] mt-0.5 text-balance truncate">
                 {currentUser
@@ -150,46 +135,15 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 min-w-0">
-            {currentUser && (
-              <div className="flex items-center gap-1 p-1 bg-[#EFEAE0] rounded-xl relative max-w-full overflow-x-auto no-scrollbar">
-                {(['artist', 'collector', 'art_lover'] as UserRole[]).map((role) => {
-                  const active = currentUser.role === role;
-                  return (
-                    <button
-                      key={role}
-                      type="button"
-                      onClick={() => switchRole(role)}
-                      className={`relative px-3 py-1.5 text-xs font-medium rounded-lg transition-colors whitespace-nowrap shrink-0 z-10 ${
-                        active
-                          ? 'text-[#141312]'
-                          : 'text-[#5C554C] hover:text-[#141312]'
-                      }`}
-                    >
-                      {active && (
-                        <motion.span
-                          layoutId="dashboard-role-pill"
-                          transition={{
-                            type: 'spring',
-                            stiffness: 480,
-                            damping: 36,
-                          }}
-                          className="absolute inset-0 bg-white rounded-lg shadow-xs -z-10"
-                        />
-                      )}
-                      {formatRoleLabel(role)}
-                    </button>
-                  );
-                })}
-              </div>
+            {currentUser?.role === 'artist' && (
+              <Link
+                to="/add-artwork"
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs font-medium bg-[#B38B40] text-[#141312] rounded-xl hover:bg-[#C69D4E] transition-colors whitespace-nowrap shrink-0"
+              >
+                <Plus className="w-4 h-4" />
+                Publish New Artwork
+              </Link>
             )}
-
-            <Link
-              to="/add-artwork"
-              className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs font-medium bg-[#B38B40] text-[#141312] rounded-xl hover:bg-[#C69D4E] transition-colors whitespace-nowrap shrink-0"
-            >
-              <Plus className="w-4 h-4" />
-              Publish New Artwork
-            </Link>
 
             {currentUser ? (
               <button
@@ -392,7 +346,6 @@ export const DashboardPage: React.FC = () => {
                                 </Link>
                                 <p className="text-xs text-[#7A7267] tabular-nums">
                                   {art.dimensions} · {art.year}
-                                  {art.isDemo ? ' · Demo' : ''}
                                 </p>
                               </div>
                             </div>

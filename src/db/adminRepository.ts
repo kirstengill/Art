@@ -16,7 +16,7 @@ import { artworks, orders, posts, profiles, users } from './schema.ts';
 export type AdminTimeframe = 7 | 30 | 90 | 'all';
 export type AdminContentKind = 'artworks' | 'community';
 export type AdminArtworkFilter = 'all' | 'direct';
-export type AdminRoleFilter = 'artist' | 'collector' | 'art_lover' | 'all';
+export type AdminRoleFilter = 'admin' | 'artist' | 'collector' | 'art_lover' | 'all';
 
 function getPageParams(pageValue: unknown, pageSizeValue: unknown) {
   const page = Math.max(1, Math.floor(Number(pageValue) || 1));
@@ -55,6 +55,8 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
     [userCount],
     [artistCount],
     [collectorCount],
+    [artLoverCount],
+    [adminCount],
     [artworkCount],
     [communityPostCount],
     [orderSummary],
@@ -74,6 +76,16 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.uid))
       .where(and(eq(profiles.role, 'collector'), eq(profiles.isDemo, false))),
+    db
+      .select({ value: count() })
+      .from(users)
+      .innerJoin(profiles, eq(profiles.id, users.uid))
+      .where(and(eq(profiles.role, 'art_lover'), eq(profiles.isDemo, false))),
+    db
+      .select({ value: count() })
+      .from(users)
+      .innerJoin(profiles, eq(profiles.id, users.uid))
+      .where(and(eq(profiles.role, 'admin'), eq(profiles.isDemo, false))),
     db
       .select({ value: count() })
       .from(artworks)
@@ -153,8 +165,10 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
       purchaseIntents: orderSeries,
       confirmedPayments: [],
       roleDistribution: [
+        { role: 'admin', count: adminCount.value },
         { role: 'artist', count: artistCount.value },
         { role: 'collector', count: collectorCount.value },
+        { role: 'art_lover', count: artLoverCount.value },
       ],
     },
   };

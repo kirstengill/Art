@@ -87,25 +87,46 @@ export const Navbar: React.FC = () => {
             );
           })}
           {currentUser && (
-            <Link
-              to="/dashboard"
-              className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
-                isActive('/dashboard')
-                  ? 'text-[#FAF8F3]'
-                  : 'text-[#C8C1B6] hover:text-[#FAF8F3] hover:bg-white/5'
-              }`}
-            >
-              {isActive('/dashboard') && (
-                <motion.span
-                  layoutId={shouldReduceMotion ? undefined : 'nav-active'}
-                  className="absolute inset-0 rounded-lg bg-white/10"
-                  transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                />
+            <>
+              {currentUser.role === 'collector' && (
+                <Link
+                  to="/collection"
+                  className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
+                    isActive('/collection')
+                      ? 'text-[#FAF8F3]'
+                      : 'text-[#C8C1B6] hover:text-[#FAF8F3] hover:bg-white/5'
+                  }`}
+                >
+                  {isActive('/collection') && (
+                    <motion.span
+                      layoutId={shouldReduceMotion ? undefined : 'nav-active'}
+                      className="absolute inset-0 rounded-lg bg-white/10"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">My Collection</span>
+                </Link>
               )}
-              <span className="relative z-10">
-                {currentUser.role === 'artist' ? 'My Studio' : 'Dashboard'}
-              </span>
-            </Link>
+              <Link
+                to="/dashboard"
+                className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
+                  isActive('/dashboard')
+                    ? 'text-[#FAF8F3]'
+                    : 'text-[#C8C1B6] hover:text-[#FAF8F3] hover:bg-white/5'
+                }`}
+              >
+                {isActive('/dashboard') && (
+                  <motion.span
+                    layoutId={shouldReduceMotion ? undefined : 'nav-active'}
+                    className="absolute inset-0 rounded-lg bg-white/10"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">
+                  {currentUser.role === 'artist' ? 'My Studio' : 'Dashboard'}
+                </span>
+              </Link>
+            </>
           )}
         </nav>
 
@@ -214,6 +235,19 @@ export const Navbar: React.FC = () => {
               ))}
               {currentUser ? (
                 <>
+                  {currentUser.role === 'collector' && (
+                    <Link
+                      to="/collection"
+                      onClick={() => setMobileOpen(false)}
+                      className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive('/collection')
+                          ? 'bg-white/10 text-[#FAF8F3]'
+                          : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
+                      }`}
+                    >
+                      My Collection
+                    </Link>
+                  )}
                   <Link
                     to="/dashboard"
                     onClick={() => setMobileOpen(false)}

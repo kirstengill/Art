@@ -1,20 +1,33 @@
--- ArtVerse Reference PostgreSQL & Row-Level Security (RLS) Schema for Supabase deployments
--- Mirrors the 14 core relational tables used by ArtVerse with strict participant & owner RLS.
+-- Art Universe reference PostgreSQL & Row-Level Security (RLS) schema for Supabase deployments
+-- Mirrors the core relational tables used by Art Universe with strict participant & owner RLS.
 
 CREATE TABLE IF NOT EXISTS public.profiles (
   id text PRIMARY KEY,
   email text NOT NULL,
   full_name text NOT NULL,
   handle text NOT NULL,
-  role text NOT NULL DEFAULT 'collector' CHECK (role IN ('artist', 'collector', 'art_lover')),
+  role text NOT NULL DEFAULT 'collector' CHECK (role IN ('admin', 'artist', 'collector', 'art_lover')),
   avatar_url text,
   cover_url text,
   bio text NOT NULL DEFAULT '',
   location text NOT NULL DEFAULT '',
   discipline text NOT NULL DEFAULT 'Contemporary Fine Art',
   verified boolean NOT NULL DEFAULT false,
-  is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
+  updated_at timestamptz NOT NULL DEFAULT now()
+);
+
+ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
+ALTER TABLE public.profiles
+  ADD CONSTRAINT profiles_role_check
+  CHECK (role IN ('admin', 'artist', 'collector', 'art_lover'));
+
+CREATE TABLE IF NOT EXISTS public.user_account_details (
+  user_id text PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
+  first_name text NOT NULL,
+  last_name text NOT NULL,
+  phone_number text NOT NULL,
+  location text,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -37,7 +50,6 @@ CREATE TABLE IF NOT EXISTS public.artworks (
   edition_info text NOT NULL DEFAULT 'Unique 1 of 1 original work',
   featured boolean NOT NULL DEFAULT false,
   likes_count integer NOT NULL DEFAULT 0,
-  is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -51,7 +63,6 @@ CREATE TABLE IF NOT EXISTS public.posts (
   image_key text,
   likes_count integer NOT NULL DEFAULT 0,
   comments_count integer NOT NULL DEFAULT 0,
-  is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -103,7 +114,6 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   artist_id text NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   last_message_preview text NOT NULL DEFAULT '',
   last_message_at timestamptz NOT NULL DEFAULT now(),
-  is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -150,10 +160,22 @@ CREATE TABLE IF NOT EXISTS public.orders (
   offer_id text REFERENCES public.artwork_offers(id) ON DELETE SET NULL,
   amount integer NOT NULL CHECK (amount > 0),
   currency text NOT NULL DEFAULT 'USD',
-  status text NOT NULL DEFAULT 'intent_created' CHECK (status IN ('intent_created', 'awaiting_payment', 'cancelled')),
+  status text NOT NULL DEFAULT 'intent_created' CHECK (status IN ('intent_created', 'awaiting_payment', 'cancelled', 'completed')),
   shipping_city text NOT NULL DEFAULT '',
   collector_note text NOT NULL DEFAULT '',
   created_at timestamptz NOT NULL DEFAULT now()
+);
+
+-- Purchases table: Tracks which collectors have purchased which artworks
+CREATE TABLE IF NOT EXISTS public.purchases (
+  id text PRIMARY KEY,
+  artwork_id text NOT NULL REFERENCES public.artworks(id) ON DELETE CASCADE,
+  collector_id text NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
+  order_id text NOT NULL REFERENCES public.orders(id) ON DELETE CASCADE,
+  purchase_price integer NOT NULL CHECK (purchase_price > 0),
+  currency text NOT NULL DEFAULT 'USD',
+  purchased_at timestamptz NOT NULL DEFAULT now(),
+  UNIQUE (artwork_id, collector_id)
 );
 
 CREATE TABLE IF NOT EXISTS public.notifications (
@@ -169,6 +191,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_account_details ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.artworks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.collections ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.collection_items ENABLE ROW LEVEL SECURITY;
@@ -178,6 +201,7 @@ ALTER TABLE public.messages ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.artwork_offers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
 
 -- Artwork images are public so artwork listings render for every visitor.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -251,3 +275,22 @@ CREATE POLICY "Only authorized participants may create offers"
 CREATE POLICY "Only authorized participants may respond to offers"
   ON public.artwork_offers FOR UPDATE
   USING (auth.uid()::text = sender_id OR auth.uid()::text = recipient_id);
+
+-- Purchase policies: Collectors can view their own purchases
+CREATE POLICY "Collectors can view their own purchases"
+  ON public.purchases FOR SELECT
+  USING (auth.uid()::text = collector_id);
+
+-- Order policies: Users can view their own orders
+CREATE POLICY "Users can view their own orders as buyer"
+  ON public.orders FOR SELECT
+  USING (auth.uid()::text = buyer_id);
+
+CREATE POLICY "Users can view their own orders as seller"
+  ON public.orders FOR SELECT
+  USING (auth.uid()::text = seller_id);
+
+-- Combined order view policy
+CREATE POLICY "Users can view orders they are part of"
+  ON public.orders FOR SELECT
+  USING (auth.uid()::text = buyer_id OR auth.uid()::text = seller_id);

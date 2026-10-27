@@ -1,9 +1,9 @@
 import type {
+  AccountRole,
   ArtworkCategory,
   AvailabilityStatus,
   OfferStatus,
   SaleMode,
-  UserRole,
 } from '../types/artverse';
 
 export function formatMoney(amount: number, currency = 'USD'): string {
@@ -59,11 +59,12 @@ export function formatOfferStatusLabel(status: OfferStatus): string {
   return map[status] || status;
 }
 
-export function formatRoleLabel(role: UserRole): string {
-  const map: Record<UserRole, string> = {
+export function formatRoleLabel(role: AccountRole): string {
+  const map: Record<AccountRole, string> = {
     artist: 'Artist',
     collector: 'Collector',
     art_lover: 'Art Lover',
+    admin: 'Admin',
   };
   return map[role] || role;
 }

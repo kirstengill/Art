@@ -28,6 +28,7 @@ export const GalleryPage: React.FC = () => {
     getProfileById,
     savedArtworkIds,
     isLoadingCatalog,
+    catalogError,
     refreshCatalog,
   } = useArtVerse();
 
@@ -130,8 +131,7 @@ export const GalleryPage: React.FC = () => {
           </h1>
           <p className="text-sm sm:text-base text-[#575048] mt-3 leading-relaxed">
             Explore works available for direct studio acquisition or private
-            collector offer negotiation. Sample catalogue entries are marked as
-            Demo Listings.
+            collector offer negotiation.
           </p>
         </motion.div>
 
@@ -312,6 +312,20 @@ export const GalleryPage: React.FC = () => {
                 }
               />
             </div>
+          ) : catalogError ? (
+            <div role="alert" className="py-20 text-center max-w-md mx-auto space-y-4">
+              <h2 className="font-serif text-2xl font-semibold text-[#141312]">
+                Catalogue could not be loaded
+              </h2>
+              <p className="text-sm text-[#575048]">{catalogError}</p>
+              <button
+                type="button"
+                onClick={() => void refreshCatalog()}
+                className="px-5 py-2.5 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-xl hover:bg-[#292623] transition-colors"
+              >
+                Try Again
+              </button>
+            </div>
           ) : filteredArtworks.length === 0 ? (
           <motion.div
             initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
@@ -319,19 +333,24 @@ export const GalleryPage: React.FC = () => {
             className="py-20 text-center max-w-md mx-auto space-y-4"
           >
             <h2 className="font-serif text-2xl font-semibold text-[#141312]">
-              No matching works in this view
+              {artworks.length === 0
+                ? 'No artworks have been published yet'
+                : 'No matching works in this view'}
             </h2>
             <p className="text-sm text-[#575048]">
-              Try adjusting your search query, category filter, or saved
-              shortlist selection to explore more works in the catalogue.
+              {artworks.length === 0
+                ? 'Check back soon to discover new work from Art Universe artists.'
+                : 'Try adjusting your search query, category filter, or saved shortlist selection to explore more works in the catalogue.'}
             </p>
-            <button
-              type="button"
-              onClick={resetFilters}
-              className="px-5 py-2.5 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-xl hover:bg-[#292623] transition-colors"
-            >
-              Show All Works
-            </button>
+            {artworks.length > 0 && (
+              <button
+                type="button"
+                onClick={resetFilters}
+                className="px-5 py-2.5 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-xl hover:bg-[#292623] transition-colors"
+              >
+                Show All Works
+              </button>
+            )}
           </motion.div>
         ) : (
           <motion.div

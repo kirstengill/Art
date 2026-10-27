@@ -7,6 +7,7 @@ import {
   optionalAuth,
   requireAdmin,
   requireAuth,
+  isAdminUid,
   type AuthRequest,
 } from './src/middleware/auth.ts';
 import {
@@ -22,12 +23,16 @@ import {
 import {
   addCommentInDb,
   appendMessageToDb,
+  checkArtworkPurchased,
+  completePurchaseInDb,
   createOfferInDb,
   createPostInDb,
   createPurchaseIntentInDb,
   getConversationsForParticipant,
   getOrCreateArtworkConversation,
   getPublicCatalog,
+  getPurchasesForCollector,
+  getPurchasedArtworkIds,
   removeArtworkListing,
   syncUserProfile,
   toggleFollowInDb,
@@ -56,14 +61,19 @@ async function startServer() {
     try {
       const uid = req.user!.uid;
       const email = req.user!.email || `${uid}@artverse.user`;
-      const { fullName, role, bio, location } = req.body || {};
+      const { fullName, firstName, lastName, phoneNumber, role, bio, location } =
+        req.body || {};
       const profile = await syncUserProfile({
         uid,
         email,
         fullName: fullName || req.user!.name,
+        firstName,
+        lastName,
+        phoneNumber,
         role,
         bio,
         location,
+        isAdmin: isAdminUid(uid),
       });
       res.json({ profile });
     } catch (error: unknown) {
@@ -103,7 +113,7 @@ async function startServer() {
 
   app.get('/api/admin/users', requireAuth, requireAdmin, async (req, res) => {
     const role = typeof req.query.role === 'string' ? req.query.role : 'all';
-    if (!['all', 'artist', 'collector', 'art_lover'].includes(role)) {
+    if (!['all', 'admin', 'artist', 'collector', 'art_lover'].includes(role)) {
       res.status(400).json({ error: 'Invalid account type filter.' });
       return;
     }
@@ -276,7 +286,8 @@ async function startServer() {
       res.status(201).json({ conversation });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to open conversation.';
-      res.status(400).json({ error: message });
+      const status = message.startsWith('Forbidden:') ? 403 : 400;
+      res.status(status).json({ error: message });
     }
   });
 
@@ -342,7 +353,60 @@ async function startServer() {
       res.status(201).json({ order });
     } catch (error: unknown) {
       const errMessage = error instanceof Error ? error.message : 'Failed to create order intent.';
-      res.status(400).json({ error: errMessage });
+      const status = errMessage.startsWith('Forbidden:') ? 403 : 400;
+      res.status(status).json({ error: errMessage });
+    }
+  });
+
+  // Complete a purchase and record ownership
+  app.post('/api/purchases/complete', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const { orderId, artworkId, amount, currency } = req.body;
+      const result = await completePurchaseInDb({
+        orderId,
+        artworkId,
+        collectorId: req.user!.uid,
+        amount: Number(amount),
+        currency: currency || 'USD',
+      });
+      res.status(201).json(result);
+    } catch (error: unknown) {
+      const errMessage = error instanceof Error ? error.message : 'Failed to complete purchase.';
+      const status = errMessage.startsWith('Forbidden:') ? 403 : 400;
+      res.status(status).json({ error: errMessage });
+    }
+  });
+
+  // Get all purchases for a collector
+  app.get('/api/purchases', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const data = await getPurchasesForCollector(req.user!.uid);
+      res.json(data);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load purchases.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // Check if a specific artwork has been purchased by the current user
+  app.get('/api/purchases/check/:artworkId', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const isPurchased = await checkArtworkPurchased(req.params.artworkId, req.user!.uid);
+      res.json({ isPurchased });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to check purchase status.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // Get list of purchased artwork IDs for a collector
+  app.get('/api/purchases/artwork-ids', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      const artworkIds = await getPurchasedArtworkIds(req.user!.uid);
+      res.json({ artworkIds });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load purchased artwork IDs.';
+      res.status(500).json({ error: message });
     }
   });
 

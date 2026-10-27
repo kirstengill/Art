@@ -1,4 +1,4 @@
-import { and, desc, eq, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, or } from 'drizzle-orm';
 import { db } from './index.ts';
 import {
   artworkOffers,
@@ -14,7 +14,9 @@ import {
   orders,
   posts,
   profiles,
+  purchases,
   users,
+  userAccountDetails,
 } from './schema.ts';
 
 function sanitizeHandle(input: string): string {
@@ -25,17 +27,52 @@ function sanitizeHandle(input: string): string {
   return cleaned || 'collector';
 }
 
+async function savePrivateAccountDetails(params: {
+  uid: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  location?: string;
+}) {
+  if (!params.firstName || !params.lastName || !params.phoneNumber) return;
+  await db
+    .insert(userAccountDetails)
+    .values({
+      userId: params.uid,
+      firstName: params.firstName.trim(),
+      lastName: params.lastName.trim(),
+      phoneNumber: params.phoneNumber.trim(),
+      location: params.location?.trim() || null,
+      updatedAt: new Date(),
+    })
+    .onConflictDoUpdate({
+      target: userAccountDetails.userId,
+      set: {
+        firstName: params.firstName.trim(),
+        lastName: params.lastName.trim(),
+        phoneNumber: params.phoneNumber.trim(),
+        location: params.location?.trim() || null,
+        updatedAt: new Date(),
+      },
+    });
+}
+
 export async function syncUserProfile(params: {
   uid: string;
   email: string;
   fullName?: string;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
   role?: string;
   bio?: string;
   location?: string;
+  isAdmin?: boolean;
 }) {
   try {
     const validRoles = ['artist', 'collector', 'art_lover'];
     const safeRole = params.role && validRoles.includes(params.role) ? params.role : undefined;
+    const accountRole = params.isAdmin ? 'admin' : safeRole;
 
     await db
       .insert(users)
@@ -60,13 +97,19 @@ export async function syncUserProfile(params: {
         .set({
           email: params.email,
           fullName: params.fullName?.trim() || current.fullName,
-          role: safeRole || current.role,
+          role: params.isAdmin ? 'admin' : current.role,
           bio: params.bio !== undefined ? params.bio : current.bio,
-          location: params.location !== undefined ? params.location : current.location,
+          location:
+            current.role === 'artist' && params.location !== undefined
+              ? params.location
+              : current.role === 'artist'
+                ? current.location
+                : '',
           updatedAt: new Date(),
         })
         .where(eq(profiles.id, params.uid))
         .returning();
+      await savePrivateAccountDetails(params);
       return updated[0];
     }
 
@@ -80,9 +123,9 @@ export async function syncUserProfile(params: {
         email: params.email,
         fullName: defaultName,
         handle: sanitizeHandle(defaultName),
-        role: safeRole || 'collector',
-        bio: params.bio || 'Member of the ArtVerse collecting community.',
-        location: params.location || 'International',
+        role: accountRole || 'collector',
+        bio: params.bio || 'Member of the Art Universe collecting community.',
+        location: safeRole === 'artist' ? params.location || 'International' : '',
         discipline: safeRole === 'artist' ? 'Contemporary Fine Art' : 'Private Collection',
         verified: false,
         isDemo: false,
@@ -92,6 +135,8 @@ export async function syncUserProfile(params: {
         set: { email: params.email, updatedAt: new Date() },
       })
       .returning();
+
+    await savePrivateAccountDetails(params);
 
     return inserted[0];
   } catch (error) {
@@ -135,14 +180,33 @@ export async function getPublicCatalog(viewerUid?: string) {
       savedArtworkIds = items.map((item) => item.artworkId);
     }
 
+    const visibleProfiles = allProfiles.filter((profile) => !profile.isDemo);
+    const visibleProfileIds = new Set(visibleProfiles.map((profile) => profile.id));
+    const visibleArtworks = allArtworks.filter(
+      (artwork) => !artwork.isDemo && visibleProfileIds.has(artwork.artistId)
+    );
+    const visibleArtworkIds = new Set(visibleArtworks.map((artwork) => artwork.id));
+    const visiblePosts = allPosts.filter(
+      (post) => !post.isDemo && visibleProfileIds.has(post.authorId)
+    );
+    const visiblePostIds = new Set(visiblePosts.map((post) => post.id));
+
     return {
-      profiles: allProfiles,
-      artworks: allArtworks,
-      posts: allPosts,
-      comments: allComments,
-      followedArtistIds: allFollows.map((f) => f.followingId),
-      likedPostIds: allLikes.map((l) => l.postId),
-      savedArtworkIds,
+      profiles: visibleProfiles.map((profile) => ({ ...profile, email: '' })),
+      artworks: visibleArtworks,
+      posts: visiblePosts,
+      comments: allComments.filter(
+        (comment) =>
+          visiblePostIds.has(comment.postId) &&
+          visibleProfileIds.has(comment.authorId)
+      ),
+      followedArtistIds: allFollows
+        .filter((follow) => visibleProfileIds.has(follow.followingId))
+        .map((follow) => follow.followingId),
+      likedPostIds: allLikes
+        .filter((like) => visiblePostIds.has(like.postId))
+        .map((like) => like.postId),
+      savedArtworkIds: savedArtworkIds.filter((id) => visibleArtworkIds.has(id)),
     };
   } catch (error) {
     console.error('Database getPublicCatalog failed:', error);
@@ -170,6 +234,14 @@ export async function upsertArtworkListing(
   }
 ) {
   try {
+    const [ownerProfile] = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.id, ownerUid));
+    if (ownerProfile?.role !== 'artist') {
+      throw new Error('Forbidden: Only artist accounts may publish artwork.');
+    }
+
     const validCategories = ['painting', 'photography', 'sculpture', 'drawing', 'digital_art'];
     const validSaleModes = ['buy_now', 'negotiation_only', 'buy_now_and_negotiation'];
     const validAvailability = ['available', 'reserved', 'sold'];
@@ -221,12 +293,6 @@ export async function upsertArtworkListing(
         .returning();
       return updated[0];
     }
-
-    // Ensure artist role is reflected on profile when publishing
-    await db
-      .update(profiles)
-      .set({ role: 'artist', updatedAt: new Date() })
-      .where(eq(profiles.id, ownerUid));
 
     const newId = `art-${Date.now().toString(36)}`;
     const accessionNumber = `AV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
@@ -456,11 +522,12 @@ export async function getConversationsForParticipant(uid: string) {
       .where(or(eq(conversations.collectorId, uid), eq(conversations.artistId, uid)))
       .orderBy(desc(conversations.lastMessageAt));
 
-    if (userConvs.length === 0) {
+    const visibleConversations = userConvs.filter((conversation) => !conversation.isDemo);
+    if (visibleConversations.length === 0) {
       return { conversations: [], messages: [], offers: [] };
     }
 
-    const convIds = userConvs.map((c) => c.id);
+    const convIds = visibleConversations.map((c) => c.id);
     const allMsgs = await db.select().from(messages).orderBy(messages.createdAt);
     const allOffers = await db
       .select()
@@ -468,7 +535,7 @@ export async function getConversationsForParticipant(uid: string) {
       .orderBy(artworkOffers.createdAt);
 
     return {
-      conversations: userConvs,
+      conversations: visibleConversations,
       messages: allMsgs.filter((m) => convIds.includes(m.conversationId)),
       offers: allOffers.filter((o) => convIds.includes(o.conversationId)),
     };
@@ -483,6 +550,14 @@ export async function getOrCreateArtworkConversation(
   artworkId: string
 ) {
   try {
+    const [collectorProfile] = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.id, collectorUid));
+    if (!collectorProfile || !['collector', 'art_lover'].includes(collectorProfile.role)) {
+      throw new Error('Forbidden: A collector or art lover account is required.');
+    }
+
     const targetArt = await db
       .select()
       .from(artworks)
@@ -530,6 +605,9 @@ export async function getOrCreateArtworkConversation(
     return created[0];
   } catch (error) {
     console.error('Database getOrCreateArtworkConversation failed:', error);
+    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
+      throw error;
+    }
     throw new Error('Unable to open artwork inquiry.', { cause: error });
   }
 }
@@ -602,6 +680,14 @@ export async function createOfferInDb(params: {
     const conv = convRows[0];
     if (conv.collectorId !== params.senderUid && conv.artistId !== params.senderUid) {
       throw new Error('Forbidden: Only authorized participants may submit offers.');
+    }
+
+    const [senderProfile] = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.id, params.senderUid));
+    if (senderProfile?.role !== 'collector' || conv.collectorId !== params.senderUid) {
+      throw new Error('Forbidden: Only collector accounts may submit new offers.');
     }
 
     const artRows = await db
@@ -812,6 +898,14 @@ export async function createPurchaseIntentInDb(params: {
   collectorNote: string;
 }) {
   try {
+    const [buyerProfile] = await db
+      .select()
+      .from(profiles)
+      .where(eq(profiles.id, params.buyerUid));
+    if (!buyerProfile || buyerProfile.role !== 'collector') {
+      throw new Error('Forbidden: A collector account is required to create a purchase intent.');
+    }
+
     const artRows = await db
       .select()
       .from(artworks)
@@ -859,5 +953,143 @@ export async function createPurchaseIntentInDb(params: {
       error instanceof Error ? error.message : 'Unable to register acquisition intent.',
       { cause: error }
     );
+  }
+}
+
+export async function completePurchaseInDb(params: {
+  orderId: string;
+  artworkId: string;
+  collectorId: string;
+  amount: number;
+  currency: string;
+}) {
+  try {
+    const orderRows = await db
+      .select()
+      .from(orders)
+      .where(eq(orders.id, params.orderId));
+    if (orderRows.length === 0) {
+      throw new Error('Order not found.');
+    }
+    const order = orderRows[0];
+
+    // Verify the order belongs to the collector
+    if (order.buyerId !== params.collectorId) {
+      throw new Error('Forbidden: Only the order owner can complete this purchase.');
+    }
+
+    // Verify the artwork exists and is available
+    const artRows = await db
+      .select()
+      .from(artworks)
+      .where(eq(artworks.id, params.artworkId));
+    if (artRows.length === 0) {
+      throw new Error('Artwork not found.');
+    }
+    const art = artRows[0];
+
+    if (art.availability !== 'available' && art.availability !== 'reserved') {
+      throw new Error('This artwork is no longer available for purchase.');
+    }
+
+    // Mark order as completed
+    const updatedOrder = await db
+      .update(orders)
+      .set({ status: 'completed' })
+      .where(eq(orders.id, params.orderId))
+      .returning();
+
+    // Record the purchase
+    const purchaseId = `purchase-${Date.now().toString(36)}`;
+    const purchase = await db
+      .insert(purchases)
+      .values({
+        id: purchaseId,
+        artworkId: params.artworkId,
+        collectorId: params.collectorId,
+        orderId: params.orderId,
+        purchasePrice: params.amount,
+        currency: params.currency,
+      })
+      .returning();
+
+    // Mark artwork as sold
+    await db
+      .update(artworks)
+      .set({ availability: 'sold', updatedAt: new Date() })
+      .where(eq(artworks.id, params.artworkId));
+
+    return { order: updatedOrder[0], purchase: purchase[0] };
+  } catch (error) {
+    console.error('Database completePurchaseInDb failed:', error);
+    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
+      throw error;
+    }
+    throw new Error(
+      error instanceof Error ? error.message : 'Unable to complete purchase.',
+      { cause: error }
+    );
+  }
+}
+
+export async function getPurchasesForCollector(collectorId: string) {
+  try {
+    const purchaseRows = await db
+      .select()
+      .from(purchases)
+      .where(eq(purchases.collectorId, collectorId))
+      .orderBy(desc(purchases.purchasedAt));
+
+    if (purchaseRows.length === 0) {
+      return { purchases: [], artworks: [] };
+    }
+
+    const artworkIds = purchaseRows.map((p) => p.artworkId);
+    const artworksRows = await db
+      .select()
+      .from(artworks)
+      .where(inArray(artworks.id, artworkIds));
+
+    return {
+      purchases: purchaseRows,
+      artworks: artworksRows,
+    };
+  } catch (error) {
+    console.error('Database getPurchasesForCollector failed:', error);
+    throw new Error('Unable to load purchased artworks.', { cause: error });
+  }
+}
+
+export async function getPurchasedArtworkIds(collectorId: string): Promise<string[]> {
+  try {
+    const purchaseRows = await db
+      .select({ artworkId: purchases.artworkId })
+      .from(purchases)
+      .where(eq(purchases.collectorId, collectorId));
+    return purchaseRows.map((p) => p.artworkId);
+  } catch (error) {
+    console.error('Database getPurchasedArtworkIds failed:', error);
+    throw new Error('Unable to load purchased artwork IDs.', { cause: error });
+  }
+}
+
+export async function checkArtworkPurchased(
+  artworkId: string,
+  collectorId: string
+): Promise<boolean> {
+  try {
+    const result = await db
+      .select()
+      .from(purchases)
+      .where(
+        and(
+          eq(purchases.artworkId, artworkId),
+          eq(purchases.collectorId, collectorId)
+        )
+      );
+    return result.length > 0;
+  } catch (error) {
+    console.error('Database checkArtworkPurchased failed:', error);
+    return false;
   }
 }

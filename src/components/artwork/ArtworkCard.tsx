@@ -1,4 +1,4 @@
-import React, { useRef } from 'react';
+import React, { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   motion,
@@ -7,8 +7,9 @@ import {
   useReducedMotion,
   useSpring,
   useTransform,
+  AnimatePresence,
 } from 'motion/react';
-import { ArrowUpRight, Bookmark, ShoppingBag, Eye } from 'lucide-react';
+import { ArrowUpRight, Bookmark, ShoppingBag, Eye, AlertCircle, X } from 'lucide-react';
 import type { Artwork } from '../../types/artverse';
 import { useArtVerse } from '../../context/ArtVerseContext';
 import { ArtworkImage } from '../../data/artworkImages';
@@ -17,6 +18,7 @@ import {
   formatCategoryLabel,
   formatMoney,
 } from '../../utils/formatters';
+import { ROLE_PERMISSIONS } from '../../types/artverse';
 
 interface ArtworkCardProps {
   artwork: Artwork;
@@ -62,6 +64,11 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
 
   const canPurchase = artwork.availability !== 'sold' && 
     (artwork.saleMode === 'buy_now' || artwork.saleMode === 'buy_now_and_negotiation');
+  
+  const permissions = currentUser ? ROLE_PERMISSIONS[currentUser.role] : { canPurchase: false, canUploadArtwork: false };
+  const userCanPurchase = permissions.canPurchase && canPurchase;
+  const isForSale = canPurchase && artwork.availability === 'available';
+  const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
 
   const handlePurchase = (e: React.MouseEvent) => {
     e.preventDefault();
@@ -70,10 +77,25 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
       navigate('/login', { state: { from: { pathname: `/artwork/${artwork.id}` } } });
       return;
     }
+    
+    // Check if user has permission to purchase
+    if (!permissions.canPurchase) {
+      // User is an art_lover - show upgrade prompt
+      setShowUpgradePrompt(true);
+      return;
+    }
+    
     navigate(`/artwork/${artwork.id}`);
   };
 
-  const isForSale = canPurchase && artwork.availability === 'available';
+  const handleCloseUpgradePrompt = () => {
+    setShowUpgradePrompt(false);
+  };
+
+  const handleUpgradeToCollector = () => {
+    setShowUpgradePrompt(false);
+    navigate('/signup', { state: { role: 'collector', from: { pathname: `/artwork/${artwork.id}` } } });
+  };
 
   return (
     <motion.article
@@ -135,7 +157,13 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
           whileTap={shouldReduceMotion ? undefined : { scale: 0.9 }}
           onClick={(e) => {
             e.preventDefault();
-            toggleSaveArtwork(artwork.id);
+            if (!currentUser) {
+              navigate('/login', {
+                state: { from: { pathname: `/artwork/${artwork.id}` } },
+              });
+              return;
+            }
+            void toggleSaveArtwork(artwork.id);
           }}
           aria-label={isSaved ? 'Remove from saved collection' : 'Save to collection'}
           aria-pressed={isSaved}
@@ -177,12 +205,6 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
             <span>{formatCategoryLabel(artwork.category)}</span>
             <span aria-hidden="true">·</span>
             <span>{artwork.year}</span>
-            {artwork.isDemo && (
-              <>
-                <span aria-hidden="true">·</span>
-                <span>Demo</span>
-              </>
-            )}
           </div>
 
           <h3 className="font-serif text-xl sm:text-[1.4rem] font-semibold text-[#141312] leading-snug">
@@ -231,7 +253,7 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
             <Eye className="w-4 h-4" />
             <span>View Artwork</span>
           </Link>
-          {isForSale && (
+          {isForSale && userCanPurchase && (
             <motion.button
               type="button"
               whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }}
@@ -249,8 +271,96 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
               <span>Buy Artwork</span>
             </motion.button>
           )}
+          {isForSale && !userCanPurchase && currentUser && currentUser.role === 'art_lover' && (
+            <motion.button
+              type="button"
+              whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }}
+              whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
+              onClick={handlePurchase}
+              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
+              style={{
+                background: 'rgba(179, 139, 64, 0.2)',
+                color: '#141312',
+                border: '1px solid rgba(179, 139, 64, 0.5)',
+              }}
+            >
+              <ShoppingBag className="w-4 h-4" />
+              <span>Buy Artwork</span>
+            </motion.button>
+          )}
         </div>
       </div>
+
+      {/* Upgrade to Collector Prompt Modal */}
+      <AnimatePresence>
+        {showUpgradePrompt && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            onClick={handleCloseUpgradePrompt}
+            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+          >
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              onClick={(e) => e.stopPropagation()}
+              className="bg-[#FAF8F3] rounded-2xl p-6 max-w-md w-full"
+            >
+              <motion.button
+                whileHover={{ scale: 1.05 }}
+                whileTap={{ scale: 0.95 }}
+                onClick={handleCloseUpgradePrompt}
+                className="float-right -m-1 p-1 rounded-full text-[#575048] hover:text-[#141312] hover:bg-[#E6DFD3]"
+              >
+                <X className="w-4 h-4" />
+              </motion.button>
+              
+              <div className="text-center space-y-4">
+                <div className="w-12 h-12 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
+                  <AlertCircle className="w-6 h-6 text-amber-600" />
+                </div>
+                
+                <h3 className="font-serif text-xl font-semibold text-[#141312]">
+                  Create a Collector Account
+                </h3>
+                
+                <p className="text-sm text-[#575048] leading-relaxed">
+                  To purchase artwork, you'll need a Collector account. 
+                  As an Art Lover, you can browse and view all artwork, but Collectors 
+                  can purchase pieces and maintain a personal collection gallery.
+                </p>
+                
+                <div className="flex gap-3 pt-2">
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleUpgradeToCollector}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"
+                    style={{
+                      background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+                      color: '#FAF8F3',
+                      boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
+                    }}
+                  >
+                    Become a Collector
+                  </motion.button>
+                  
+                  <motion.button
+                    whileHover={{ scale: 1.02 }}
+                    whileTap={{ scale: 0.98 }}
+                    onClick={handleCloseUpgradePrompt}
+                    className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-[#E6DFD3] text-[#141312] hover:bg-[#D8D0C4] transition-colors"
+                  >
+                    Continue Browsing
+                  </motion.button>
+                </div>
+              </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
     </motion.article>
   );
 };

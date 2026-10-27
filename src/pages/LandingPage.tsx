@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react';
@@ -9,9 +9,43 @@ const NAV_LINKS = [
   { to: '/gallery', label: 'Explore' },
 ];
 
+const HERO_WORDS = ['art', 'artists', 'possibilities'];
+
 export const LandingPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const [menuOpen, setMenuOpen] = useState(false);
+  const [wordIndex, setWordIndex] = useState(0);
+  const [typedWord, setTypedWord] = useState('');
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  useEffect(() => {
+    if (shouldReduceMotion) {
+      setTypedWord(HERO_WORDS[0]);
+      return;
+    }
+
+    const word = HERO_WORDS[wordIndex];
+    const wordIsComplete = typedWord === word;
+    const wordIsEmpty = typedWord.length === 0;
+    const delay = wordIsComplete ? 1400 : isDeleting ? 45 : 95;
+
+    const timer = window.setTimeout(() => {
+      if (!isDeleting) {
+        if (wordIsComplete) {
+          setIsDeleting(true);
+        } else {
+          setTypedWord(word.slice(0, typedWord.length + 1));
+        }
+      } else if (wordIsEmpty) {
+        setIsDeleting(false);
+        setWordIndex((current) => (current + 1) % HERO_WORDS.length);
+      } else {
+        setTypedWord(word.slice(0, -1));
+      }
+    }, delay);
+
+    return () => window.clearTimeout(timer);
+  }, [isDeleting, shouldReduceMotion, typedWord, wordIndex]);
 
   return (
     <section className="art-universe-landing relative isolate min-h-dvh w-full overflow-hidden text-white">
@@ -108,10 +142,19 @@ export const LandingPage: React.FC = () => {
           <p className="mb-5 text-xs font-medium uppercase tracking-[0.32em] text-[#ead8b2] sm:text-sm">
             A contemporary art destination
           </p>
-          <h1 className="max-w-3xl font-serif text-5xl font-medium uppercase leading-[0.98] tracking-[0.035em] text-white sm:text-7xl lg:text-8xl">
-            Welcome to
+          <h1
+            aria-label="A universe of art"
+            className="max-w-3xl font-serif text-5xl font-medium uppercase leading-[0.98] tracking-[0.035em] text-white sm:text-7xl lg:text-8xl"
+          >
+            A universe of
             <br />
-            <span className="italic font-normal">the Universe</span>
+            <span aria-hidden="true" className="neon-type-word italic font-normal">
+              {shouldReduceMotion ? HERO_WORDS[0] : typedWord}
+              {!shouldReduceMotion && (
+                <span className="neon-type-cursor ml-1 inline-block h-[0.8em] w-[2px] translate-y-[0.08em]" />
+              )}
+            </span>
+            <span className="sr-only">art</span>
           </h1>
           <p className="mt-7 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">
             Discover extraordinary art. Explore creative minds. Find a piece that speaks to you.

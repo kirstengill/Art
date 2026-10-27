@@ -1,5 +1,5 @@
 export type AdminTimeframe = 7 | 30 | 90 | 'all';
-export type AdminRoleFilter = 'all' | 'artist' | 'collector' | 'art_lover';
+export type AdminRoleFilter = 'all' | 'admin' | 'artist' | 'collector' | 'art_lover';
 export type AdminContentKind = 'artworks' | 'community';
 export type AdminArtworkFilter = 'all' | 'direct';
 
@@ -33,7 +33,7 @@ export interface AdminOverview {
     communityPosts: AdminSeriesPoint[];
     purchaseIntents: Array<AdminSeriesPoint & { intents: number; pending: number }>;
     confirmedPayments: AdminSeriesPoint[];
-    roleDistribution: Array<{ role: 'artist' | 'collector'; count: number }>;
+    roleDistribution: Array<{ role: 'admin' | 'artist' | 'collector' | 'art_lover'; count: number }>;
   };
 }
 

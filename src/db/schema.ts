@@ -24,7 +24,7 @@ export const profiles = pgTable(
     email: text('email').notNull(),
     fullName: text('full_name').notNull(),
     handle: text('handle').notNull(),
-    role: text('role').notNull().default('collector'), // 'artist' | 'collector' | 'art_lover'
+    role: text('role').notNull().default('collector'), // 'admin' | 'artist' | 'collector' | 'art_lover'
     avatarUrl: text('avatar_url'),
     coverUrl: text('cover_url'),
     bio: text('bio').notNull().default(''),
@@ -37,6 +37,17 @@ export const profiles = pgTable(
   },
   (table) => [index('profiles_role_idx').on(table.role)]
 );
+
+export const userAccountDetails = pgTable('user_account_details', {
+  userId: text('user_id')
+    .primaryKey()
+    .references(() => profiles.id, { onDelete: 'cascade' }),
+  firstName: text('first_name').notNull(),
+  lastName: text('last_name').notNull(),
+  phoneNumber: text('phone_number').notNull(),
+  location: text('location'),
+  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+});
 
 export const artworks = pgTable(
   'artworks',
@@ -274,12 +285,36 @@ export const orders = pgTable(
     offerId: text('offer_id').references(() => artworkOffers.id, { onDelete: 'set null' }),
     amount: integer('amount').notNull(),
     currency: text('currency').notNull().default('USD'),
-    status: text('status').notNull().default('intent_created'), // 'intent_created' | 'awaiting_payment' | 'cancelled'
+    status: text('status').notNull().default('intent_created'), // 'intent_created' | 'awaiting_payment' | 'cancelled' | 'completed'
     shippingCity: text('shipping_city').notNull().default(''),
     collectorNote: text('collector_note').notNull().default(''),
     createdAt: timestamp('created_at').defaultNow().notNull(),
   },
   (table) => [index('orders_buyer_idx').on(table.buyerId)]
+);
+
+export const purchases = pgTable(
+  'purchases',
+  {
+    id: text('id').primaryKey(),
+    artworkId: text('artwork_id')
+      .references(() => artworks.id, { onDelete: 'cascade' })
+      .notNull(),
+    collectorId: text('collector_id')
+      .references(() => profiles.id, { onDelete: 'cascade' })
+      .notNull(),
+    orderId: text('order_id')
+      .references(() => orders.id, { onDelete: 'cascade' })
+      .notNull(),
+    purchasePrice: integer('purchase_price').notNull(),
+    currency: text('currency').notNull().default('USD'),
+    purchasedAt: timestamp('purchased_at').defaultNow().notNull(),
+  },
+  (table) => [
+    index('purchases_collector_idx').on(table.collectorId),
+    index('purchases_artwork_idx').on(table.artworkId),
+    uniqueIndex('purchases_unique').on(table.artworkId, table.collectorId),
+  ]
 );
 
 export const notifications = pgTable(

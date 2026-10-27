@@ -1,5 +1,38 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
+import { MessageCircle, ShoppingBag, Twitter } from 'lucide-react';
+
+const HELPLINE_LINKS = [
+  {
+    label: 'WhatsApp',
+    href: import.meta.env.VITE_HELPLINE_WHATSAPP_URL,
+    icon: MessageCircle,
+    domains: ['wa.me', 'whatsapp.com'],
+  },
+  {
+    label: 'X / Twitter',
+    href: import.meta.env.VITE_HELPLINE_X_URL,
+    icon: Twitter,
+    domains: ['x.com', 'twitter.com'],
+  },
+  {
+    label: 'Etsy',
+    href: import.meta.env.VITE_HELPLINE_ETSY_URL,
+    icon: ShoppingBag,
+    domains: ['etsy.com'],
+  },
+].flatMap(({ href, domains, ...link }) => {
+  if (!href) return [];
+  try {
+    const url = new URL(href);
+    const isApprovedHost = domains.some(
+      (domain) => url.hostname === domain || url.hostname.endsWith(`.${domain}`)
+    );
+    return url.protocol === 'https:' && isApprovedHost ? [{ ...link, href }] : [];
+  } catch {
+    return [];
+  }
+});
 
 export const Footer: React.FC = () => {
   return (
@@ -11,15 +44,11 @@ export const Footer: React.FC = () => {
               to="/"
               className="font-serif text-2xl font-semibold text-[#141312] tracking-wide inline-block hover:text-[#B38B40] transition-colors"
             >
-              ArtVerse
+              Art Universe
             </Link>
             <p className="text-sm leading-relaxed max-w-md text-[#5C554C]">
               A contemporary digital fine-art gallery and collector community connecting
               independent ateliers, private collectors, and curatorial voices.
-            </p>
-            <p className="text-xs text-[#7A7267]">
-              Sample artworks, studio profiles, and sample negotiations are labeled as
-              curatorial demo content for review.
             </p>
           </div>
 
@@ -81,10 +110,41 @@ export const Footer: React.FC = () => {
               </li>
             </ul>
           </div>
+
+          <div className="space-y-2.5 text-sm">
+            <h3 className="font-serif text-base font-semibold text-[#141312]">
+              Helpline
+            </h3>
+            <p className="text-xs leading-relaxed">
+              Connect with Art Universe through our configured social channels.
+            </p>
+            <div className="flex flex-wrap gap-2">
+              {HELPLINE_LINKS.map(({ label, href, icon: Icon }) => (
+                <a
+                  key={label}
+                  href={href}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`Open Art Universe on ${label}`}
+                  title={label}
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D0C1] text-[#5C554C] transition-colors hover:border-[#B38B40] hover:bg-white hover:text-[#141312] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B38B40]"
+                >
+                  <Icon aria-hidden="true" className="h-4 w-4" />
+                </a>
+              ))}
+            </div>
+            {HELPLINE_LINKS.length < 3 && (
+              <p className="text-[11px] text-[#7A7267]">
+                {HELPLINE_LINKS.length === 0
+                  ? 'Social links will appear when configured.'
+                  : 'Some social links are not configured yet.'}
+              </p>
+            )}
+          </div>
         </div>
 
         <div className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-[#7A7267]">
-          <p>© {new Date().getFullYear()} ArtVerse Fine Art Platform. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} Art Universe Fine Art Platform. All rights reserved.</p>
           <p>Antwerp · Pietrasanta · Stockholm · London · Zurich</p>
         </div>
       </div>

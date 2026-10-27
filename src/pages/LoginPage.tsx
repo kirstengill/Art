@@ -12,13 +12,12 @@ export const LoginPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
   const location = useLocation();
-  const { signInWithGoogle, signInWithEmail, currentUser } = useArtVerse();
+  const { signInWithEmail, currentUser } = useArtVerse();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [loadingGoogle, setLoadingGoogle] = useState(false);
   const [loading, setLoading] = useState(false);
 
   const locationState = location.state as { from?: { pathname?: unknown } } | null;
@@ -30,22 +29,6 @@ export const LoginPage: React.FC = () => {
   useEffect(() => {
     if (currentUser) navigate(destination, { replace: true });
   }, [currentUser, destination, navigate]);
-
-  const handleGoogleSignIn = async () => {
-    setError(null);
-    setLoadingGoogle(true);
-    try {
-      await signInWithGoogle(undefined, destination);
-    } catch (err) {
-      setError(
-        err instanceof Error
-          ? err.message
-          : 'Unable to start Google sign-in.'
-      );
-    } finally {
-      setLoadingGoogle(false);
-    }
-  };
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -97,21 +80,9 @@ export const LoginPage: React.FC = () => {
           </p>
         </div>
 
-        <motion.button
-          type="button"
-          disabled={loadingGoogle || loading}
-          whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-          onClick={handleGoogleSignIn}
-          className="w-full rounded-xl border border-white/25 bg-black/55 px-4 py-2.5 text-sm font-medium text-white transition-colors hover:bg-black/70 disabled:opacity-50 whitespace-nowrap"
-        >
-          {loadingGoogle ? 'Connecting with Google...' : 'Continue with Google'}
-        </motion.button>
-
         <div className="relative flex items-center py-1">
           <div className="flex-grow border-t border-white/25" />
-          <span className="shrink-0 mx-3 text-xs text-white/75">
-            or sign in with your email
-          </span>
+          <span className="shrink-0 mx-3 text-xs text-white/75">Sign in with email</span>
           <div className="flex-grow border-t border-white/25" />
         </div>
 
@@ -129,7 +100,7 @@ export const LoginPage: React.FC = () => {
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="collector@artverse.gallery"
+              placeholder="collector@example.com"
               className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm text-white placeholder:text-white/55 focus:border-[#e3c783] focus:outline-none transition-colors"
             />
           </div>
@@ -174,7 +145,7 @@ export const LoginPage: React.FC = () => {
 
           <motion.button
             type="submit"
-            disabled={loading || loadingGoogle}
+            disabled={loading}
             whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
             className="w-full rounded-xl bg-[#d3b578] px-4 py-2.5 text-sm font-semibold text-[#211c13] transition-colors hover:bg-[#e4cb99] disabled:opacity-50"
           >

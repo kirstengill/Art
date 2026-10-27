@@ -402,10 +402,10 @@ export const AdminPage: React.FC = () => {
             <div className="space-y-7">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
                 <StatCard label="Registered users" value={overview.counts.users.toLocaleString()} detail="Supabase accounts synced to PostgreSQL" icon={Users} />
-                <StatCard label="Artists" value={overview.counts.artists.toLocaleString()} detail="Non-demo artist profiles" icon={Brush} />
-                <StatCard label="Collectors" value={overview.counts.collectors.toLocaleString()} detail="Non-demo collector profiles" icon={Users} />
+                <StatCard label="Artists" value={overview.counts.artists.toLocaleString()} detail="Registered artist profiles" icon={Brush} />
+                <StatCard label="Collectors" value={overview.counts.collectors.toLocaleString()} detail="Registered collector profiles" icon={Users} />
                 <StatCard label="Artwork listings" value={overview.counts.artworks.toLocaleString()} detail="Published catalogue artwork records" icon={Image} />
-                <StatCard label="Community posts" value={overview.counts.communityPosts.toLocaleString()} detail="Published non-demo posts" icon={Activity} />
+                <StatCard label="Community posts" value={overview.counts.communityPosts.toLocaleString()} detail="Published community posts" icon={Activity} />
                 <StatCard label="Purchase intents" value={overview.counts.purchaseIntents.toLocaleString()} detail={`${overview.counts.pendingPaymentIntents} awaiting payment · ${overview.counts.cancelledIntents} cancelled`} icon={CreditCard} />
               </div>
 
@@ -422,10 +422,10 @@ export const AdminPage: React.FC = () => {
 
               <div className="grid gap-4 lg:grid-cols-2">
                 <section className="rounded-2xl border border-white/15 bg-white/[0.07] p-5">
-                  <h2 className="font-serif text-xl">Artist & collector accounts</h2>
+                  <h2 className="font-serif text-xl">Accounts by role</h2>
                   <div className="mt-4 space-y-4">
                     {overview.series.roleDistribution.map(({ role, count: roleCount }) => {
-                      const total = Math.max(1, overview.counts.artists + overview.counts.collectors);
+                      const total = Math.max(1, overview.counts.users);
                       return (
                         <div key={role}>
                           <div className="mb-1 flex justify-between text-xs text-white/75">
@@ -471,6 +471,7 @@ export const AdminPage: React.FC = () => {
                     className="rounded-xl border border-white/15 bg-[#262420] px-3 text-sm text-white"
                   >
                     <option value="all">All account types</option>
+                    <option value="admin">Admins</option>
                     <option value="artist">Artists</option>
                     <option value="collector">Collectors</option>
                     <option value="art_lover">Art lovers</option>
@@ -487,7 +488,7 @@ export const AdminPage: React.FC = () => {
                       {users.records.map((user, index) => (
                         <tr key={`${user.profileId || 'unlinked'}-${index}`} className="text-white/80">
                           <td className="px-4 py-3"><span className="block">{user.fullName || 'Profile not synced'}</span><span className="text-xs text-white/45">{user.handle ? `@${user.handle}` : ''}</span></td>
-                          <td className="px-4 py-3">{user.role ? formatRoleLabel(user.role as 'artist' | 'collector' | 'art_lover') : '—'}</td>
+                          <td className="px-4 py-3">{user.role ? formatRoleLabel(user.role as 'admin' | 'artist' | 'collector' | 'art_lover') : '—'}</td>
                           <td className="px-4 py-3">{formatShortDate(user.createdAt)}</td>
                           <td className="px-4 py-3 text-right tabular-nums">{user.artworkCount}</td>
                           {section === 'artists' && <><td className="px-4 py-3 text-right tabular-nums">{user.availableArtworkCount}</td><td className="px-4 py-3 text-right tabular-nums">{user.purchaseIntentCount}</td></>}

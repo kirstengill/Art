@@ -1,10 +1,10 @@
 import { createClient, type RealtimeChannel, type SupabaseClient } from '@supabase/supabase-js';
 import type {
+  AccountRole,
   ArtworkCategory,
   AvailabilityStatus,
   OfferStatus,
   SaleMode,
-  UserRole,
 } from '../types/artverse';
 
 export const ARTWORK_IMAGE_BUCKET = 'artwork-images';
@@ -18,14 +18,13 @@ export interface SupabaseDatabase {
           email: string;
           full_name: string;
           handle: string;
-          role: UserRole;
+          role: AccountRole;
           avatar_url: string | null;
           cover_url: string | null;
           bio: string;
           location: string;
           discipline: string;
           verified: boolean;
-          is_demo: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -50,7 +49,6 @@ export interface SupabaseDatabase {
           edition_info: string;
           featured: boolean;
           likes_count: number;
-          is_demo: boolean;
           created_at: string;
           updated_at: string;
         };
@@ -63,7 +61,6 @@ export interface SupabaseDatabase {
           artist_id: string;
           last_message_preview: string;
           last_message_at: string;
-          is_demo: boolean;
           created_at: string;
         };
       };
