@@ -2,14 +2,10 @@ import React, { useRef, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import {
   motion,
-  useMotionTemplate,
-  useMotionValue,
   useReducedMotion,
-  useSpring,
-  useTransform,
   AnimatePresence,
 } from 'motion/react';
-import { ArrowUpRight, Bookmark, ShoppingBag, Eye, AlertCircle, X } from 'lucide-react';
+import { Bookmark, ShoppingCart, Eye, AlertCircle, X } from 'lucide-react';
 import type { Artwork } from '../../types/artverse';
 import { useArtVerse } from '../../context/ArtVerseContext';
 import { ArtworkImage } from '../../data/artworkImages';
@@ -35,33 +31,6 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
   const artist = getProfileById(artwork.artistId);
   const isSaved = savedArtworkIds.includes(artwork.id);
 
-  const cardRef = useRef<HTMLElement | null>(null);
-  const mouseX = useMotionValue(0.5);
-  const mouseY = useMotionValue(0.5);
-
-  const smoothX = useSpring(mouseX, { stiffness: 260, damping: 26 });
-  const smoothY = useSpring(mouseY, { stiffness: 260, damping: 26 });
-
-  const rotateX = useTransform(smoothY, [0, 1], [2, -2]);
-  const rotateY = useTransform(smoothX, [0, 1], [-2, 2]);
-  const sheenX = useTransform(smoothX, [0, 1], ['0%', '100%']);
-  const sheenY = useTransform(smoothY, [0, 1], ['0%', '100%']);
-  const sheenBg = useMotionTemplate`radial-gradient(400px circle at ${sheenX} ${sheenY}, rgba(255, 250, 240, 0.25), transparent 70%)`;
-
-  const handlePointerMove = (e: React.PointerEvent<HTMLElement>) => {
-    if (shouldReduceMotion || !cardRef.current) return;
-    const rect = cardRef.current.getBoundingClientRect();
-    const nx = (e.clientX - rect.left) / rect.width;
-    const ny = (e.clientY - rect.top) / rect.height;
-    mouseX.set(Math.max(0, Math.min(1, nx)));
-    mouseY.set(Math.max(0, Math.min(1, ny)));
-  };
-
-  const handlePointerLeave = () => {
-    mouseX.set(0.5);
-    mouseY.set(0.5);
-  };
-
   const canPurchase = artwork.availability !== 'sold' && 
     (artwork.saleMode === 'buy_now' || artwork.saleMode === 'buy_now_and_negotiation');
   
@@ -69,8 +38,9 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
   const userCanPurchase = permissions.canPurchase && canPurchase;
   const isForSale = canPurchase && artwork.availability === 'available';
   const [showUpgradePrompt, setShowUpgradePrompt] = useState(false);
+  const [showPurchaseModal, setShowPurchaseModal] = useState(false);
 
-  const handlePurchase = (e: React.MouseEvent) => {
+  const handlePurchaseClick = (e: React.MouseEvent) => {
     e.preventDefault();
     e.stopPropagation();
     if (!currentUser) {
@@ -85,6 +55,12 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
       return;
     }
     
+    // Show purchase modal
+    setShowPurchaseModal(true);
+  };
+
+  const handleProceedToPurchase = () => {
+    setShowPurchaseModal(false);
     navigate(`/artwork/${artwork.id}`);
   };
 
@@ -97,270 +73,323 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
     navigate('/signup', { state: { role: 'collector', from: { pathname: `/artwork/${artwork.id}` } } });
   };
 
+  const handleToggleSave = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    void toggleSaveArtwork(artwork.id);
+  };
+
   return (
-    <motion.article
-      ref={cardRef}
-      onPointerMove={handlePointerMove}
-      onPointerLeave={handlePointerLeave}
-      whileHover={shouldReduceMotion ? undefined : { y: -6 }}
-      transition={{ duration: 0.25, ease: [0.16, 1, 0.3, 1] }}
-      style={
-        shouldReduceMotion
-          ? {
-              background: 'rgba(255, 255, 255, 0.7)',
-              backdropFilter: 'blur(12px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(12px) saturate(180%)',
-              border: '1px solid rgba(255, 255, 255, 0.4)',
-              boxShadow: '0 8px 32px rgba(20, 19, 18, 0.08)',
-            }
-          : {
-              rotateX,
-              rotateY,
-              transformPerspective: 1200,
-              background: 'rgba(255, 255, 255, 0.7)',
-              backdropFilter: 'blur(12px) saturate(180%)',
-              WebkitBackdropFilter: 'blur(12px) saturate(180%)',
-              border: '1px solid rgba(255, 255, 255, 0.4)',
-              boxShadow: '0 8px 32px rgba(20, 19, 18, 0.08)',
-            }
-      }
-      className="group relative flex flex-col rounded-2xl overflow-hidden transition-all duration-300 hover:shadow-[0_24px_60px_-20px_rgba(20,19,18,0.18)]"
-    >
-      {/* Sheen effect */}
-      {!shouldReduceMotion && (
-        <motion.div
-          aria-hidden="true"
-          style={{ background: sheenBg }}
-          className="pointer-events-none absolute inset-0 z-10 opacity-0 group-hover:opacity-100 transition-opacity duration-400"
-        />
-      )}
-
-      <div className={`relative ${aspectClass} overflow-hidden bg-[#F1ECE2]`}>
-        <Link
-          to={`/artwork/${artwork.id}`}
-          aria-label={`View details for ${artwork.title}`}
-          className="block w-full h-full focus-visible:outline-2 focus-visible:outline-offset-[-4px] focus-visible:outline-[#9E7B3B]"
-        >
-          <div
-            className={`w-full h-full transition-transform duration-700 ease-[cubic-bezier(0.16,1,0.3,1)] ${
-              shouldReduceMotion ? '' : 'group-hover:scale-[1.08]'
-            }`}
-          >
-            <ArtworkImage imageKey={artwork.imageKey} alt={artwork.title} />
-          </div>
-        </Link>
-
-        {/* Save button */}
-        <motion.button
-          type="button"
-          whileHover={shouldReduceMotion ? undefined : { scale: 1.08 }}
-          whileTap={shouldReduceMotion ? undefined : { scale: 0.9 }}
-          onClick={(e) => {
-            e.preventDefault();
-            if (!currentUser) {
-              navigate('/login', {
-                state: { from: { pathname: `/artwork/${artwork.id}` } },
-              });
-              return;
-            }
-            void toggleSaveArtwork(artwork.id);
-          }}
-          aria-label={isSaved ? 'Remove from saved collection' : 'Save to collection'}
-          aria-pressed={isSaved}
-          className="absolute top-3.5 right-3.5 z-20 w-10 h-10 rounded-full flex items-center justify-center backdrop-blur-md transition-all duration-200 focus-visible:outline-2 focus-visible:outline-[#9E7B3B]"
-          style={{
-            background: isSaved ? 'rgba(20, 19, 18, 0.9)' : 'rgba(250, 248, 243, 0.9)',
-            color: isSaved ? '#E6C98F' : '#141312',
-            border: '1px solid rgba(255, 255, 255, 0.3)',
-          }}
-        >
-          <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-[#E6C98F]' : ''}`} />
-        </motion.button>
-
-        {/* Availability badge */}
-        <div className="absolute top-3.5 left-3.5 z-20">
-          {artwork.availability === 'sold' ? (
-            <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-red-500/90 text-white border border-white/30">
-              Sold
-            </span>
-          ) : artwork.availability === 'reserved' ? (
-            <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-amber-500/90 text-white border border-white/30">
-              Reserved
-            </span>
-          ) : isForSale ? (
-            <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-emerald-500/90 text-white border border-white/30">
-              For Sale
-            </span>
-          ) : (
-            <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-[#141312]/80 text-[#FAF8F3] border border-white/30">
-              Community Artwork
-            </span>
-          )}
-        </div>
-      </div>
-
-      <div className="p-5 flex-1 flex flex-col justify-between gap-4 relative z-10">
-        <div className="space-y-2">
-          <div className="flex items-center gap-1.5 text-xs text-[#787066]">
-            <span>{formatCategoryLabel(artwork.category)}</span>
-            <span aria-hidden="true">·</span>
-            <span>{artwork.year}</span>
-          </div>
-
-          <h3 className="font-serif text-xl sm:text-[1.4rem] font-semibold text-[#141312] leading-snug">
-            <Link
-              to={`/artwork/${artwork.id}`}
-              className="hover:text-[#9E7B3B] transition-colors focus-visible:outline-2 focus-visible:outline-[#9E7B3B]"
-            >
-              {artwork.title}
-            </Link>
-          </h3>
-
-          {artist && (
-            <p className="text-sm text-[#575048]">
-              <Link
-                to={`/artists/${artist.id}`}
-                className="hover:text-[#141312] transition-colors"
-              >
-                By {artist.fullName}
-              </Link>
-            </p>
-          )}
-
-          {isForSale && (
-            <p className="font-mono text-lg font-semibold text-[#141312] tabular-nums pt-1">
-              {formatMoney(artwork.price, artwork.currency)}
-            </p>
-          )}
-          {!isForSale && artwork.availability !== 'sold' && (
-            <p className="text-sm font-medium text-[#787066] italic">
-              Not for Sale
-            </p>
-          )}
-        </div>
-
-        <div className="flex items-center gap-2 pt-2">
+    <>
+      <motion.article
+        whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.02 }}
+        transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
+        className="group relative flex flex-col bg-[#141312] border border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#B38B40] hover:shadow-[0_20px_60px_-20px_rgba(179,139,64,0.15)]"
+      >
+        {/* Artwork Image */}
+        <div className={`relative ${aspectClass} overflow-hidden bg-[#1E1C1A]`}>
           <Link
             to={`/artwork/${artwork.id}`}
-            className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
-            style={{
-              background: 'rgba(255, 255, 255, 0.8)',
-              backdropFilter: 'blur(8px)',
-              border: '1px solid rgba(209, 196, 171, 0.6)',
-              color: '#141312',
-            }}
-          >
-            <Eye className="w-4 h-4" />
-            <span>View Artwork</span>
-          </Link>
-          {isForSale && userCanPurchase && (
-            <motion.button
-              type="button"
-              whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }}
-              whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-              onClick={handlePurchase}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
-              style={{
-                background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
-                color: '#FAF8F3',
-                border: '1px solid rgba(179, 139, 64, 0.5)',
-                boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
-              }}
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>Buy Artwork</span>
-            </motion.button>
-          )}
-          {isForSale && !userCanPurchase && currentUser && currentUser.role === 'art_lover' && (
-            <motion.button
-              type="button"
-              whileHover={shouldReduceMotion ? undefined : { scale: 1.02 }}
-              whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-              onClick={handlePurchase}
-              className="flex-1 inline-flex items-center justify-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
-              style={{
-                background: 'rgba(179, 139, 64, 0.2)',
-                color: '#141312',
-                border: '1px solid rgba(179, 139, 64, 0.5)',
-              }}
-            >
-              <ShoppingBag className="w-4 h-4" />
-              <span>Buy Artwork</span>
-            </motion.button>
-          )}
-        </div>
-      </div>
-
-      {/* Upgrade to Collector Prompt Modal */}
-      <AnimatePresence>
-        {showUpgradePrompt && (
-          <motion.div
-            initial={{ opacity: 0 }}
-            animate={{ opacity: 1 }}
-            exit={{ opacity: 0 }}
-            onClick={handleCloseUpgradePrompt}
-            className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4"
+            className="block w-full h-full"
           >
             <motion.div
-              initial={{ opacity: 0, scale: 0.95, y: 10 }}
-              animate={{ opacity: 1, scale: 1, y: 0 }}
-              exit={{ opacity: 0, scale: 0.95, y: 10 }}
-              onClick={(e) => e.stopPropagation()}
-              className="bg-[#FAF8F3] rounded-2xl p-6 max-w-md w-full"
+              whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+              transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
+              className="w-full h-full"
             >
-              <motion.button
-                whileHover={{ scale: 1.05 }}
-                whileTap={{ scale: 0.95 }}
-                onClick={handleCloseUpgradePrompt}
-                className="float-right -m-1 p-1 rounded-full text-[#575048] hover:text-[#141312] hover:bg-[#E6DFD3]"
-              >
-                <X className="w-4 h-4" />
-              </motion.button>
-              
-              <div className="text-center space-y-4">
-                <div className="w-12 h-12 mx-auto rounded-full bg-amber-100 flex items-center justify-center">
-                  <AlertCircle className="w-6 h-6 text-amber-600" />
-                </div>
-                
-                <h3 className="font-serif text-xl font-semibold text-[#141312]">
-                  Create a Collector Account
-                </h3>
-                
-                <p className="text-sm text-[#575048] leading-relaxed">
-                  To purchase artwork, you'll need a Collector account. 
-                  As an Art Lover, you can browse and view all artwork, but Collectors 
-                  can purchase pieces and maintain a personal collection gallery.
-                </p>
-                
-                <div className="flex gap-3 pt-2">
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleUpgradeToCollector}
-                    className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"
-                    style={{
-                      background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
-                      color: '#FAF8F3',
-                      boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
-                    }}
-                  >
-                    Become a Collector
-                  </motion.button>
-                  
-                  <motion.button
-                    whileHover={{ scale: 1.02 }}
-                    whileTap={{ scale: 0.98 }}
-                    onClick={handleCloseUpgradePrompt}
-                    className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-[#E6DFD3] text-[#141312] hover:bg-[#D8D0C4] transition-colors"
-                  >
-                    Continue Browsing
-                  </motion.button>
-                </div>
-              </div>
+              <ArtworkImage imageKey={artwork.imageKey} alt={artwork.title} />
             </motion.div>
-          </motion.div>
-        )}
-      </AnimatePresence>
-    </motion.article>
+          </Link>
+
+          {/* Save Button */}
+          <motion.button
+            type="button"
+            whileHover={shouldReduceMotion ? undefined : { scale: 1.1 }}
+            whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+            onClick={handleToggleSave}
+            aria-label={isSaved ? 'Remove from saved collection' : 'Save to collection'}
+            aria-pressed={isSaved}
+            className="absolute top-3.5 right-3.5 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200"
+            style={{
+              background: isSaved ? 'rgba(179, 139, 64, 0.95)' : 'rgba(255, 255, 255, 0.15)',
+              color: isSaved ? '#141312' : '#FAF8F3',
+              border: '1px solid rgba(255, 255, 255, 0.2)',
+            }}
+          >
+            <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-[#141312]' : ''}`} />
+          </motion.button>
+
+          {/* Status Badge */}
+          <div className="absolute top-3.5 left-3.5 z-20">
+            {isForSale ? (
+              <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-[#B38B40] text-[#141312] border border-white/30">
+                For Sale
+              </span>
+            ) : artwork.availability === 'sold' ? (
+              <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-red-500/90 text-white border border-white/30">
+                Sold
+              </span>
+            ) : (
+              <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-[#8B5CF6] text-white border border-white/30">
+                Community
+              </span>
+            )}
+          </div>
+        </div>
+
+        {/* Artwork Details */}
+        <div className="p-5 flex-1 flex flex-col gap-4 bg-[#1E1C1A]">
+          <div className="space-y-2">
+            <div className="flex items-center gap-1.5 text-xs text-[#B38B40]">
+              <span>{formatCategoryLabel(artwork.category)}</span>
+              <span aria-hidden="true">·</span>
+              <span>{artwork.year}</span>
+            </div>
+
+            <h3 className="font-serif text-xl sm:text-2xl font-semibold text-[#FAF8F3] leading-snug group-hover:text-[#B38B40] transition-colors">
+              <Link
+                to={`/artwork/${artwork.id}`}
+                className="hover:text-[#B38B40] transition-colors"
+              >
+                {artwork.title}
+              </Link>
+            </h3>
+
+            {artist && (
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20">
+                  {artist.avatarUrl ? (
+                    <img
+                      src={artist.avatarUrl}
+                      alt={artist.fullName}
+                      className="w-full h-full object-cover"
+                    />
+                  ) : (
+                    <div className="w-full h-full flex items-center justify-center bg-[#2A2724] text-white text-xs font-bold">
+                      {artist.fullName.charAt(0)}
+                    </div>
+                  )}
+                </div>
+                <span className="text-sm text-[#C8C1B6]">{artist.fullName}</span>
+              </div>
+            )}
+          </div>
+
+          <div className="flex items-center justify-between pt-2 border-t border-white/10">
+            <p className="font-mono text-lg font-semibold text-[#B38B40] tabular-nums">
+              {formatMoney(artwork.price, artwork.currency)}
+            </p>
+            
+            {isForSale && userCanPurchase && (
+              <motion.button
+                type="button"
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+                onClick={handlePurchaseClick}
+                className="flex items-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
+                style={{
+                  background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+                  color: '#FAF8F3',
+                  border: '1px solid rgba(179, 139, 64, 0.5)',
+                  boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
+                }}
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>Buy Now</span>
+              </motion.button>
+            )}
+            
+            {isForSale && !userCanPurchase && currentUser && currentUser.role === 'art_lover' && (
+              <motion.button
+                type="button"
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+                onClick={handlePurchaseClick}
+                className="flex items-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
+                style={{
+                  background: 'rgba(179, 139, 64, 0.2)',
+                  color: '#FAF8F3',
+                  border: '1px solid rgba(179, 139, 64, 0.5)',
+                }}
+              >
+                <ShoppingCart className="w-4 h-4" />
+                <span>Buy Now</span>
+              </motion.button>
+            )}
+            
+            {!isForSale && artwork.availability !== 'sold' && (
+              <motion.button
+                type="button"
+                whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
+                whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
+                onClick={() => navigate(`/artwork/${artwork.id}`)}
+                className="flex items-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
+                style={{
+                  background: 'rgba(255, 255, 255, 0.1)',
+                  color: '#FAF8F3',
+                  border: '1px solid rgba(255, 255, 255, 0.2)',
+                }}
+              >
+                <Eye className="w-4 h-4" />
+                <span>View Details</span>
+              </motion.button>
+            )}
+          </div>
+        </div>
+
+        {/* Purchase Modal */}
+        <AnimatePresence>
+          {showPurchaseModal && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-[#141312]/80 backdrop-blur-[3px]"
+            >
+              <motion.div
+                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[88dvh] flex flex-col bg-[#1E1C1A] border border-[#DFD8CA]/20 rounded-2xl shadow-xl overflow-hidden my-auto"
+              >
+                <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-[#E6DFD3]/20 shrink-0">
+                  <h2 className="font-serif text-xl sm:text-2xl font-semibold text-[#FAF8F3]">
+                    Confirm Purchase
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={() => setShowPurchaseModal(false)}
+                    aria-label="Close"
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-[#B38B40] hover:bg-[#2A2724] hover:text-[#FAF8F3] transition-colors shrink-0"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-5 sm:p-6 space-y-5 flex-1 min-h-0 overflow-y-auto overscroll-contain artverse-scroll">
+                  <div className="flex items-start gap-4">
+                    <div className="w-20 h-20 rounded-xl overflow-hidden shrink-0 border border-[#E6DFD3]/30">
+                      <ArtworkImage imageKey={artwork.imageKey} alt={artwork.title} />
+                    </div>
+                    <div className="min-w-0">
+                      <h3 className="font-serif text-lg font-semibold text-[#FAF8F3] truncate">
+                        {artwork.title}
+                      </h3>
+                      {artist && (
+                        <p className="text-sm text-[#C8C1B6] mt-0.5">{artist.fullName}</p>
+                      )}
+                      <p className="font-mono text-lg font-semibold text-[#B38B40] tabular-nums mt-1">
+                        {formatMoney(artwork.price, artwork.currency)}
+                      </p>
+                    </div>
+                  </div>
+
+                  <p className="text-sm text-[#C8C1B6] leading-relaxed">
+                    {artwork.description.slice(0, 150)}{artwork.description.length > 150 ? '...' : ''}
+                  </p>
+
+                  <div className="flex justify-end gap-3 pt-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowPurchaseModal(false)}
+                      className="px-5 py-2.5 text-sm font-medium bg-[#2A2724] text-[#C8C1B6] rounded-xl hover:bg-[#3A352F] transition-colors"
+                    >
+                      Cancel
+                    </button>
+                    <motion.button
+                      type="button"
+                      whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
+                      onClick={handleProceedToPurchase}
+                      className="px-5 py-2.5 text-sm font-medium rounded-xl transition-colors"
+                      style={{
+                        background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+                        color: '#141312',
+                        boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
+                      }}
+                    >
+                      Proceed to Purchase
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+
+        {/* Upgrade to Collector Prompt Modal */}
+        <AnimatePresence>
+          {showUpgradePrompt && (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.16 }}
+              className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 overflow-y-auto bg-[#141312]/80 backdrop-blur-[3px]"
+            >
+              <motion.div
+                initial={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 10 }}
+                animate={{ opacity: 1, scale: 1, y: 0 }}
+                exit={shouldReduceMotion ? { opacity: 0 } : { opacity: 0, scale: 0.96, y: 8 }}
+                transition={{ duration: 0.18, ease: [0.16, 1, 0.3, 1] }}
+                className="w-full max-w-md max-h-[calc(100dvh-1.5rem)] sm:max-h-[88dvh] flex flex-col bg-[#1E1C1A] border border-[#DFD8CA]/20 rounded-2xl shadow-xl overflow-hidden my-auto"
+              >
+                <div className="flex items-center justify-between gap-3 px-5 sm:px-6 py-4 border-b border-[#E6DFD3]/20 shrink-0">
+                  <h2 className="font-serif text-xl sm:text-2xl font-semibold text-[#FAF8F3]">
+                    Create a Collector Account
+                  </h2>
+                  <button
+                    type="button"
+                    onClick={handleCloseUpgradePrompt}
+                    aria-label="Close"
+                    className="w-9 h-9 rounded-lg flex items-center justify-center text-[#B38B40] hover:bg-[#2A2724] hover:text-[#FAF8F3] transition-colors shrink-0"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                </div>
+
+                <div className="p-5 sm:p-6 space-y-5 flex-1 min-h-0 overflow-y-auto overscroll-contain artverse-scroll">
+                  <div className="text-center space-y-4">
+                    <div className="w-12 h-12 mx-auto rounded-full bg-[#B38B40]/10 flex items-center justify-center">
+                      <AlertCircle className="w-6 h-6 text-[#B38B40]" />
+                    </div>
+                    
+                    <p className="text-sm text-[#C8C1B6] leading-relaxed">
+                      To purchase artwork, you'll need a Collector account. As an Art Lover, you can browse and view all artwork, but Collectors can purchase pieces and maintain a personal collection gallery.
+                    </p>
+                  </div>
+
+                  <div className="flex gap-3 pt-2">
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleUpgradeToCollector}
+                      className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl transition-colors"
+                      style={{
+                        background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+                        color: '#141312',
+                        boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
+                      }}
+                    >
+                      Become a Collector
+                    </motion.button>
+                    
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleCloseUpgradePrompt}
+                      className="flex-1 px-4 py-2.5 text-sm font-medium rounded-xl bg-[#2A2724] text-[#C8C1B6] hover:bg-[#3A352F] transition-colors"
+                    >
+                      Continue Browsing
+                    </motion.button>
+                  </div>
+                </div>
+              </motion.div>
+            </motion.div>
+          )}
+        </AnimatePresence>
+      </motion.article>
+    </>
   );
 };
