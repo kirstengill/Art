@@ -104,6 +104,25 @@ export interface Profile {
   updatedAt?: string;
 }
 
+export type ArtistProfile = Pick<
+  Profile,
+  | 'id'
+  | 'fullName'
+  | 'handle'
+  | 'username'
+  | 'role'
+  | 'accountStatus'
+  | 'registrationDate'
+  | 'avatarUrl'
+  | 'coverUrl'
+  | 'bio'
+  | 'location'
+  | 'discipline'
+  | 'verified'
+  | 'createdAt'
+  | 'updatedAt'
+>;
+
 export interface Artwork {
   id: string;
   artistId: string;

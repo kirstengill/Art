@@ -3,6 +3,7 @@ import type {
   Artwork,
   ArtworkInput,
   ArtworkOffer,
+  ArtistProfile,
   CommunityPost,
   Conversation,
   ConversationMessage,
@@ -61,8 +62,13 @@ export interface CatalogResponse {
   savedArtworkIds: string[];
 }
 
+export interface ArtistsResponse {
+  artists: ArtistProfile[];
+}
+
 export const artverseApi = {
   fetchCatalog: () => apiFetch<CatalogResponse>('/api/catalog'),
+  fetchArtists: () => apiFetch<ArtistsResponse>('/api/artists'),
 
   syncProfile: (payload: {
     fullName?: string;

@@ -43,6 +43,9 @@ Adds additional fields to existing tables:
 - **user_account_details**: address, city, country, postalCode, dateOfBirth
 - **storage.buckets**: Updates artwork-images bucket with 10MB limit and support for GIF format
 
+### 4. `20241027000003_fix_profiles_rls.sql`
+Restricts public profile reads to active, non-demo artist accounts and grants access only to public profile columns. Email and phone details remain private.
+
 ## Running Migrations
 
 ### Local Development
@@ -77,6 +80,7 @@ Migrations must be applied in numerical order:
 1. `20241027000000_initial_schema.sql` - Base schema
 2. `20241027000001_rls_policies.sql` - Security policies
 3. `20241027000002_add_user_fields.sql` - Additional fields
+4. `20241027000003_fix_profiles_rls.sql` - Safe public artist profile access
 
 ## Database Schema Summary
 

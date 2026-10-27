@@ -1,11 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowUpRight, Search } from 'lucide-react';
+import { ArrowUpRight, RefreshCw, Search } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
+import { artverseApi } from '../services/artverseApi';
 import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
-import { formatMoney } from '../utils/formatters';
+import { formatMoney, formatShortDate } from '../utils/formatters';
 import nocturneArtwork from '../assets/images/art_nocturne_study_1792993239582.jpg';
+import type { ArtistProfile } from '../types/artverse';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 
@@ -13,27 +15,58 @@ export const ArtistsPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
   const {
-    profiles,
     artworks,
     followedArtistIds,
     toggleFollowArtist,
     currentUser,
   } = useArtVerse();
   const [search, setSearch] = useState('');
+  const [artists, setArtists] = useState<ArtistProfile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [refreshKey, setRefreshKey] = useState(0);
 
-  const artists = useMemo(() => {
+  useEffect(() => {
+    let active = true;
+    const fetchArtists = async () => {
+      setIsLoading(true);
+      setError(null);
+      try {
+        const { artists: fetchedArtists } = await artverseApi.fetchArtists();
+        if (active) setArtists(fetchedArtists);
+      } catch (err) {
+        if (active) {
+          setError(err instanceof Error ? err.message : 'Unable to load artists.');
+          console.error('Failed to fetch artists:', err);
+        }
+      } finally {
+        if (active) setIsLoading(false);
+      }
+    };
+
+    void fetchArtists();
+    return () => {
+      active = false;
+    };
+  }, [refreshKey]);
+
+  const displayArtists = useMemo(() => {
     const q = search.trim().toLowerCase();
-    return profiles
-      .filter((p) => p.role === 'artist')
-      .filter((p) => {
-        if (!q) return true;
-        return (
-          p.fullName.toLowerCase().includes(q) ||
-          p.location.toLowerCase().includes(q) ||
-          p.discipline.toLowerCase().includes(q)
-        );
-      });
-  }, [profiles, search]);
+    if (!q) return artists;
+    return artists.filter((artist) =>
+      [
+        artist.fullName,
+        artist.username,
+        artist.handle,
+        artist.location,
+        artist.discipline,
+        artist.bio,
+      ]
+        .join(' ')
+        .toLowerCase()
+        .includes(q)
+    );
+  }, [artists, search]);
 
   return (
     <div className="w-full relative isolate">
@@ -86,33 +119,51 @@ export const ArtistsPage: React.FC = () => {
           </div>
         </motion.div>
 
-        {artists.length === 0 ? (
+        {isLoading ? (
+          <div className="mt-10 grid grid-cols-1 md:grid-cols-2 gap-8">
+            {[1, 2, 3, 4].map((idx) => (
+              <motion.div
+                key={idx}
+                initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
+                animate={{ opacity: 1, y: 0 }}
+                transition={{ duration: 0.24, delay: idx * 0.1 }}
+                className="bg-white border border-[#E6DFD3] rounded-2xl h-64 animate-pulse"
+              />
+            ))}
+          </div>
+        ) : error ? (
+          <div className="mt-10 p-12 bg-white border border-[#E6DFD3] rounded-2xl text-center space-y-4">
+            <h2 className="font-serif text-2xl font-semibold text-[#141312]">
+              Unable to load artists
+            </h2>
+            <p className="text-sm text-[#5C554C]">{error}</p>
+            <button
+              type="button"
+              onClick={() => setRefreshKey((k) => k + 1)}
+              className="inline-flex items-center gap-2 px-4 py-2 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-lg hover:bg-[#2A2724] transition-colors"
+            >
+              <RefreshCw className="w-3 h-3" />
+              Retry
+            </button>
+          </div>
+        ) : displayArtists.length === 0 ? (
           <div className="mt-10 p-12 bg-white border border-[#E6DFD3] rounded-2xl text-center space-y-3">
             <h2 className="font-serif text-2xl font-semibold text-[#141312]">
-              {profiles.some((profile) => profile.role === 'artist')
-                ? 'No matching ateliers found'
-                : 'No artist profiles yet'}
+              {artists.length === 0 ? 'No artist profiles yet' : 'No matching ateliers found'}
             </h2>
             <p className="text-sm text-[#5C554C]">
-              {profiles.some((profile) => profile.role === 'artist')
-                ? 'Try clearing your search filter to view all studio artists.'
-                : 'Artist profiles will appear here as artists join ARTIVORA.'}
+              {artists.length === 0
+                ? 'Artist profiles will appear here as artists join Artivora.'
+                : 'Try a different search or clear the current filter.'}
             </p>
-            {profiles.some((profile) => profile.role === 'artist') ? (
+            {artists.length > 0 && (
               <button
                 type="button"
                 onClick={() => setSearch('')}
                 className="px-4 py-2 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-lg hover:bg-[#2A2724] transition-colors"
               >
-                Reset Search
+                Clear Search
               </button>
-            ) : (
-              <Link
-                to="/signup"
-                className="inline-flex px-4 py-2 text-xs font-medium bg-[#141312] text-[#FAF8F3] rounded-lg hover:bg-[#2A2724] transition-colors"
-              >
-                Join as an Artist
-              </Link>
             )}
           </div>
         ) : (
@@ -121,7 +172,7 @@ export const ArtistsPage: React.FC = () => {
             className="grid grid-cols-1 lg:grid-cols-2 gap-8 pt-10"
           >
             <AnimatePresence mode="popLayout">
-              {artists.map((artist, idx) => {
+              {displayArtists.map((artist, idx) => {
                 const artistWorks = artworks.filter((a) => a.artistId === artist.id);
                 const isFollowing = followedArtistIds.includes(artist.id);
                 const primaryWork = artistWorks[0];
@@ -156,6 +207,9 @@ export const ArtistsPage: React.FC = () => {
                           <div className="min-w-0">
                             <div className="flex items-center gap-2 text-xs text-[#7A7267]">
                               <span className="truncate">{artist.location}</span>
+                              <span className="px-2 py-0.5 rounded-full bg-[#F3EFE6] text-[#8C6828] font-medium">
+                                Artist
+                              </span>
                             </div>
                             <h2 className="font-serif text-2xl sm:text-[26px] font-semibold text-[#141312] truncate">
                               <Link
@@ -168,6 +222,11 @@ export const ArtistsPage: React.FC = () => {
                             <p className="text-xs text-[#6B655E] truncate">
                               {artist.discipline}
                             </p>
+                            {(artist.username || artist.handle) && (
+                              <p className="text-xs text-[#7A7267] truncate">
+                                @{artist.username || artist.handle}
+                              </p>
+                            )}
                           </div>
                         </div>
 
@@ -193,9 +252,11 @@ export const ArtistsPage: React.FC = () => {
                         </motion.button>
                       </div>
 
-                      <p className="text-sm text-[#5C554C] leading-relaxed">
-                        {artist.bio}
-                      </p>
+                      {artist.bio?.trim() && (
+                        <p className="text-sm text-[#5C554C] leading-relaxed line-clamp-3">
+                          {artist.bio}
+                        </p>
+                      )}
 
                       {primaryWork && (
                         <Link
@@ -228,6 +289,9 @@ export const ArtistsPage: React.FC = () => {
                       <span className="text-[#6B655E] tabular-nums">
                         {artistWorks.length} available or archived catalogue{' '}
                         {artistWorks.length === 1 ? 'work' : 'works'}
+                      </span>
+                      <span className="text-[#6B655E]">
+                        Joined {formatShortDate(artist.registrationDate || artist.createdAt)}
                       </span>
                       <Link
                         to={`/artists/${artist.id}`}

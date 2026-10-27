@@ -94,6 +94,7 @@ export async function syncUserProfile(params: {
       const current = existing[0];
       const defaultName = params.fullName?.trim() || current.fullName;
       const username = sanitizeHandle(defaultName);
+      const role = params.isAdmin ? 'admin' : safeRole || current.role;
       
       const updated = await db
         .update(profiles)
@@ -102,14 +103,14 @@ export async function syncUserProfile(params: {
           fullName: defaultName,
           handle: sanitizeHandle(defaultName),
           username: username,
-          role: params.isAdmin ? 'admin' : current.role,
+          role,
           accountStatus: 'active',
           registrationDate: current.registrationDate || current.createdAt,
           bio: params.bio !== undefined ? params.bio : current.bio,
           location:
-            current.role === 'artist' && params.location !== undefined
+            role === 'artist' && params.location !== undefined
               ? params.location
-              : current.role === 'artist'
+              : role === 'artist'
                 ? current.location
                 : '',
           updatedAt: new Date(),
@@ -160,6 +161,42 @@ export async function syncUserProfile(params: {
   } catch (error) {
     console.error('Database syncUserProfile failed:', error);
     throw new Error('Unable to synchronize user profile at this time.', { cause: error });
+  }
+}
+
+export async function getArtists() {
+  try {
+    const artists = await db
+      .select({
+        id: profiles.id,
+        fullName: profiles.fullName,
+        handle: profiles.handle,
+        username: profiles.username,
+        role: profiles.role,
+        accountStatus: profiles.accountStatus,
+        registrationDate: profiles.registrationDate,
+        avatarUrl: profiles.avatarUrl,
+        coverUrl: profiles.coverUrl,
+        bio: profiles.bio,
+        location: profiles.location,
+        discipline: profiles.discipline,
+        verified: profiles.verified,
+        createdAt: profiles.createdAt,
+        updatedAt: profiles.updatedAt,
+      })
+      .from(profiles)
+      .where(
+        and(
+          eq(profiles.role, 'artist'),
+          eq(profiles.accountStatus, 'active'),
+          eq(profiles.isDemo, false)
+        )
+      )
+      .orderBy(desc(profiles.createdAt));
+    return artists;
+  } catch (error) {
+    console.error('Database getArtists failed:', error);
+    throw new Error('Unable to load artists.', { cause: error });
   }
 }
 

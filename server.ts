@@ -28,6 +28,7 @@ import {
   createOfferInDb,
   createPostInDb,
   createPurchaseIntentInDb,
+  getArtists,
   getConversationsForParticipant,
   getOrCreateArtworkConversation,
   getPublicCatalog,
@@ -61,8 +62,14 @@ async function startServer() {
     try {
       const uid = req.user!.uid;
       const email = req.user!.email || `${uid}@artverse.user`;
-      const { fullName, firstName, lastName, phoneNumber, role, bio, location } =
-        req.body || {};
+      const { fullName, firstName, lastName, phoneNumber, bio, location } = req.body || {};
+      const metadataRole = req.user!.user_metadata.role;
+      const role =
+        metadataRole === 'artist' ||
+        metadataRole === 'collector' ||
+        metadataRole === 'art_lover'
+          ? metadataRole
+          : undefined;
       const profile = await syncUserProfile({
         uid,
         email,
@@ -88,6 +95,16 @@ async function startServer() {
       res.json(catalog);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load catalog.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.get('/api/artists', optionalAuth, async (req: AuthRequest, res) => {
+    try {
+      const artists = await getArtists();
+      res.json({ artists });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load artists.';
       res.status(500).json({ error: message });
     }
   });
