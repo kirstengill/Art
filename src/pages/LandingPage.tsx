@@ -50,7 +50,7 @@ export const LandingPage: React.FC = () => {
 
   return (
     <section className="art-universe-landing relative isolate min-h-dvh w-full overflow-hidden text-white">
-      {/* Video Background */}
+      {/* Video Background - Art Exhibition Walkthrough */}
       <div className="absolute inset-0 -z-20">
         <video
           autoPlay
@@ -61,13 +61,13 @@ export const LandingPage: React.FC = () => {
           className="w-full h-full object-cover"
         >
           <source
-            src="https://videos.pexels.com/video-files/4447124/4447124-hd_1920_1080_25fps.mp4"
+            src="https://videos.pexels.com/video-files/3772494/3772494-hd_1920_1080_25fps.mp4"
             type="video/mp4"
           />
           {/* Fallback for when video fails or is not supported */}
           <img
             src={lapisArtwork}
-            alt="Art background"
+            alt="Art exhibition background"
             className="absolute inset-0 w-full h-full object-cover"
           />
         </video>
