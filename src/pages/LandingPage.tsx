@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react';
@@ -10,7 +10,7 @@ const NAV_LINKS = [
   { to: '/gallery', label: 'Explore' },
 ];
 
-const HERO_WORDS = ['art', 'artists', 'possibilities'];
+const HERO_WORDS = ['Tells a Story', 'Inspires Souls', 'Creates Magic'];
 
 export const LandingPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
@@ -50,11 +50,30 @@ export const LandingPage: React.FC = () => {
 
   return (
     <section className="art-universe-landing relative isolate min-h-dvh w-full overflow-hidden text-white">
-      <div
-        aria-hidden="true"
-        className="absolute inset-0 -z-20 bg-cover bg-center"
-        style={{ backgroundImage: `url("${lapisArtwork}")` }}
-      />
+      {/* Video Background */}
+      <div className="absolute inset-0 -z-20">
+        <video
+          autoPlay
+          loop
+          muted
+          playsInline
+          preload="auto"
+          className="w-full h-full object-cover"
+        >
+          <source
+            src="https://videos.pexels.com/video-files/4447124/4447124-hd_1920_1080_25fps.mp4"
+            type="video/mp4"
+          />
+          {/* Fallback for when video fails or is not supported */}
+          <img
+            src={lapisArtwork}
+            alt="Art background"
+            className="absolute inset-0 w-full h-full object-cover"
+          />
+        </video>
+      </div>
+      
+      {/* Dark overlay for readability */}
       <div
         aria-hidden="true"
         className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(12,11,10,0.78)_0%,rgba(12,11,10,0.48)_48%,rgba(12,11,10,0.12)_100%)]"
@@ -69,7 +88,7 @@ export const LandingPage: React.FC = () => {
           to="/"
           className="flex items-center justify-center gap-2"
         >
-          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-10 sm:h-12 w-auto mix-blend-mode-lighten" />
+          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-10 sm:h-12 w-auto mix-blend-mode-normal background-transparent" />
         </Link>
 
         <nav aria-label="Main navigation" className="hidden items-center gap-8 md:flex">
@@ -141,13 +160,13 @@ export const LandingPage: React.FC = () => {
           className="max-w-3xl"
         >
           <p className="mb-5 text-xs font-medium uppercase tracking-[0.32em] text-[#ead8b2] sm:text-sm">
-            A contemporary art destination
+            Discover Art. Own Inspiration.
           </p>
           <h1
-            aria-label="A universe of art"
+            aria-label="Every Masterpiece Tells a Story"
             className="max-w-3xl font-serif text-5xl font-medium uppercase leading-[0.98] tracking-[0.035em] text-white sm:text-7xl lg:text-8xl"
           >
-            A universe of
+            Every Masterpiece
             <br />
             <span aria-hidden="true" className="neon-type-word italic font-normal">
               {shouldReduceMotion ? HERO_WORDS[0] : typedWord}
@@ -155,10 +174,10 @@ export const LandingPage: React.FC = () => {
                 <span className="neon-type-cursor ml-1 inline-block h-[0.8em] w-[2px] translate-y-[0.08em]" />
               )}
             </span>
-            <span className="sr-only">art</span>
+            <span className="sr-only">Every Masterpiece Tells a Story</span>
           </h1>
           <p className="mt-7 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">
-            Discover extraordinary art. Explore creative minds. Find a piece that speaks to you.
+            Explore extraordinary artwork, discover talented artists, and celebrate creativity. Whether you're an artist, collector, or art lover, <strong className="text-white">ARTIVORA</strong> brings you closer to the beauty of art.
           </p>
           <div className="mt-9 flex flex-col gap-3 sm:flex-row">
             <Link
