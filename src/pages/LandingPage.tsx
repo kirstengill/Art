@@ -1,4 +1,4 @@
-import React, { useEffect, useState, useRef } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react';
@@ -50,30 +50,11 @@ export const LandingPage: React.FC = () => {
 
   return (
     <section className="art-universe-landing relative isolate min-h-dvh w-full overflow-hidden text-white">
-      {/* Video Background - Art Exhibition Walkthrough */}
-      <div className="absolute inset-0 -z-20">
-        <video
-          autoPlay
-          loop
-          muted
-          playsInline
-          preload="auto"
-          className="w-full h-full object-cover"
-        >
-          <source
-            src="https://videos.pexels.com/video-files/3772494/3772494-hd_1920_1080_25fps.mp4"
-            type="video/mp4"
-          />
-          {/* Fallback for when video fails or is not supported */}
-          <img
-            src={lapisArtwork}
-            alt="Art exhibition background"
-            className="absolute inset-0 w-full h-full object-cover"
-          />
-        </video>
-      </div>
-      
-      {/* Dark overlay for readability */}
+      <div
+        aria-hidden="true"
+        className="absolute inset-0 -z-20 bg-cover bg-center"
+        style={{ backgroundImage: `url("${lapisArtwork}")` }}
+      />
       <div
         aria-hidden="true"
         className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(12,11,10,0.78)_0%,rgba(12,11,10,0.48)_48%,rgba(12,11,10,0.12)_100%)]"
