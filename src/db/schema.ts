@@ -1,6 +1,7 @@
 import { relations } from 'drizzle-orm';
 import {
   boolean,
+  date,
   index,
   integer,
   pgTable,
@@ -14,7 +15,7 @@ export const users = pgTable('users', {
   id: serial('id').primaryKey(),
   uid: text('uid').notNull().unique(),
   email: text('email').notNull(),
-  createdAt: timestamp('created_at').defaultNow().notNull(),
+  createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const profiles = pgTable(
@@ -27,7 +28,7 @@ export const profiles = pgTable(
     username: text('username').notNull().unique(),
     role: text('role').notNull().default('collector'), // 'admin' | 'artist' | 'collector' | 'art_lover'
     accountStatus: text('account_status').notNull().default('active'),
-    registrationDate: timestamp('registration_date').defaultNow().notNull(),
+    registrationDate: timestamp('registration_date', { withTimezone: true }).defaultNow().notNull(),
     avatarUrl: text('avatar_url'),
     coverUrl: text('cover_url'),
     bio: text('bio').notNull().default(''),
@@ -35,8 +36,8 @@ export const profiles = pgTable(
     discipline: text('discipline').notNull().default('Contemporary Fine Art'),
     verified: boolean('verified').notNull().default(false),
     isDemo: boolean('is_demo').notNull().default(false),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index('profiles_role_idx').on(table.role), index('profiles_account_status_idx').on(table.accountStatus)]
 );
@@ -53,9 +54,9 @@ export const userAccountDetails = pgTable('user_account_details', {
   country: text('country'),
   postalCode: text('postal_code'),
   dateOfBirth: date('date_of_birth'),
-  registrationDate: timestamp('registration_date').defaultNow().notNull(),
+  registrationDate: timestamp('registration_date', { withTimezone: true }).defaultNow().notNull(),
   location: text('location'),
-  updatedAt: timestamp('updated_at').defaultNow().notNull(),
+  updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
 });
 
 export const artworks = pgTable(
@@ -82,8 +83,8 @@ export const artworks = pgTable(
     featured: boolean('featured').notNull().default(false),
     likesCount: integer('likes_count').notNull().default(0),
     isDemo: boolean('is_demo').notNull().default(false),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('artworks_artist_idx').on(table.artistId),
@@ -105,7 +106,7 @@ export const posts = pgTable(
     likesCount: integer('likes_count').notNull().default(0),
     commentsCount: integer('comments_count').notNull().default(0),
     isDemo: boolean('is_demo').notNull().default(false),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index('posts_author_idx').on(table.authorId)]
 );
@@ -121,7 +122,7 @@ export const comments = pgTable(
       .references(() => profiles.id, { onDelete: 'cascade' })
       .notNull(),
     body: text('body').notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index('comments_post_idx').on(table.postId)]
 );
@@ -136,7 +137,7 @@ export const likes = pgTable(
     userId: text('user_id')
       .references(() => profiles.id, { onDelete: 'cascade' })
       .notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex('likes_post_user_unique').on(table.postId, table.userId)]
 );
@@ -151,7 +152,7 @@ export const follows = pgTable(
     followingId: text('following_id')
       .references(() => profiles.id, { onDelete: 'cascade' })
       .notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex('follows_pair_unique').on(table.followerId, table.followingId)]
 );
@@ -166,7 +167,7 @@ export const collections = pgTable(
     title: text('title').notNull(),
     description: text('description').notNull().default(''),
     isPublic: boolean('is_public').notNull().default(false),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index('collections_owner_idx').on(table.ownerId)]
 );
@@ -181,7 +182,7 @@ export const collectionItems = pgTable(
     artworkId: text('artwork_id')
       .references(() => artworks.id, { onDelete: 'cascade' })
       .notNull(),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [uniqueIndex('collection_item_unique').on(table.collectionId, table.artworkId)]
 );
@@ -200,9 +201,9 @@ export const conversations = pgTable(
       .references(() => profiles.id, { onDelete: 'cascade' })
       .notNull(),
     lastMessagePreview: text('last_message_preview').notNull().default(''),
-    lastMessageAt: timestamp('last_message_at').defaultNow().notNull(),
+    lastMessageAt: timestamp('last_message_at', { withTimezone: true }).defaultNow().notNull(),
     isDemo: boolean('is_demo').notNull().default(false),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('conversations_artwork_idx').on(table.artworkId),
@@ -222,7 +223,7 @@ export const conversationParticipants = pgTable(
       .references(() => profiles.id, { onDelete: 'cascade' })
       .notNull(),
     unreadCount: integer('unread_count').notNull().default(0),
-    joinedAt: timestamp('joined_at').defaultNow().notNull(),
+    joinedAt: timestamp('joined_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     uniqueIndex('conv_participant_unique').on(table.conversationId, table.profileId),
@@ -242,7 +243,7 @@ export const messages = pgTable(
     body: text('body').notNull(),
     attachmentName: text('attachment_name'),
     messageType: text('message_type').notNull().default('text'), // 'text' | 'offer_event' | 'system'
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index('messages_conversation_idx').on(table.conversationId)]
 );
@@ -268,9 +269,9 @@ export const artworkOffers = pgTable(
     status: text('status').notNull().default('pending'), // 'pending' | 'accepted' | 'rejected' | 'countered' | 'withdrawn' | 'expired'
     note: text('note').notNull().default(''),
     parentOfferId: text('parent_offer_id'),
-    expiresAt: timestamp('expires_at'),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
-    updatedAt: timestamp('updated_at').defaultNow().notNull(),
+    expiresAt: timestamp('expires_at', { withTimezone: true }),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
+    updatedAt: timestamp('updated_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('offers_conversation_idx').on(table.conversationId),
@@ -297,7 +298,7 @@ export const orders = pgTable(
     status: text('status').notNull().default('intent_created'), // 'intent_created' | 'awaiting_payment' | 'cancelled' | 'completed'
     shippingCity: text('shipping_city').notNull().default(''),
     collectorNote: text('collector_note').notNull().default(''),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index('orders_buyer_idx').on(table.buyerId)]
 );
@@ -317,7 +318,7 @@ export const purchases = pgTable(
       .notNull(),
     purchasePrice: integer('purchase_price').notNull(),
     currency: text('currency').notNull().default('USD'),
-    purchasedAt: timestamp('purchased_at').defaultNow().notNull(),
+    purchasedAt: timestamp('purchased_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [
     index('purchases_collector_idx').on(table.collectorId),
@@ -338,7 +339,7 @@ export const notifications = pgTable(
     body: text('body').notNull(),
     linkUrl: text('link_url').notNull().default('/'),
     isRead: boolean('is_read').notNull().default(false),
-    createdAt: timestamp('created_at').defaultNow().notNull(),
+    createdAt: timestamp('created_at', { withTimezone: true }).defaultNow().notNull(),
   },
   (table) => [index('notifications_recipient_idx').on(table.recipientId)]
 );

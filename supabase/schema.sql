@@ -5,14 +5,18 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   id text PRIMARY KEY,
   email text NOT NULL,
   full_name text NOT NULL,
-  handle text NOT NULL,
+  handle text NOT NULL UNIQUE,
+  username text NOT NULL UNIQUE,
   role text NOT NULL DEFAULT 'collector' CHECK (role IN ('admin', 'artist', 'collector', 'art_lover')),
+  account_status text NOT NULL DEFAULT 'active' CHECK (account_status IN ('active', 'pending', 'suspended', 'deleted')),
+  registration_date timestamptz NOT NULL DEFAULT now(),
   avatar_url text,
   cover_url text,
   bio text NOT NULL DEFAULT '',
   location text NOT NULL DEFAULT '',
   discipline text NOT NULL DEFAULT 'Contemporary Fine Art',
   verified boolean NOT NULL DEFAULT false,
+  is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -22,11 +26,27 @@ ALTER TABLE public.profiles
   ADD CONSTRAINT profiles_role_check
   CHECK (role IN ('admin', 'artist', 'collector', 'art_lover'));
 
+CREATE TABLE IF NOT EXISTS public.users (
+  id serial PRIMARY KEY,
+  uid text NOT NULL,
+  email text NOT NULL,
+  created_at timestamptz NOT NULL DEFAULT now()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS users_uid_unique
+  ON public.users (uid);
+
 CREATE TABLE IF NOT EXISTS public.user_account_details (
   user_id text PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
   first_name text NOT NULL,
   last_name text NOT NULL,
   phone_number text NOT NULL,
+  address text,
+  city text,
+  country text,
+  postal_code text,
+  date_of_birth date,
+  registration_date timestamptz NOT NULL DEFAULT now(),
   location text,
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -191,6 +211,7 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_account_details ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.artworks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.collections ENABLE ROW LEVEL SECURITY;
@@ -202,6 +223,7 @@ ALTER TABLE public.artwork_offers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
+REVOKE ALL ON TABLE public.users FROM PUBLIC, anon, authenticated;
 
 -- Artwork images are public so artwork listings render for every visitor.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)

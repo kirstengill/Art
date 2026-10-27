@@ -9,6 +9,21 @@ declare global {
 
 export const createPool = () => {
   if (!global._postgresPool) {
+    const requiredVariables = [
+      'SQL_HOST',
+      'SQL_DB_NAME',
+      'SQL_USER',
+      'SQL_PASSWORD',
+    ] as const;
+    const missingVariables = requiredVariables.filter(
+      (name) => !process.env[name]?.trim()
+    );
+    if (missingVariables.length > 0) {
+      throw new Error(
+        `PostgreSQL runtime configuration is incomplete. Set: ${missingVariables.join(', ')}.`
+      );
+    }
+
     global._postgresPool = new Pool({
       host: process.env.SQL_HOST,
       user: process.env.SQL_USER,
@@ -19,7 +34,13 @@ export const createPool = () => {
     });
 
     global._postgresPool.on('error', (err) => {
-      console.error('Unexpected error on idle SQL pool client:', err);
+      const errorFields = err as Error & { code?: string };
+      console.error('Unexpected error on idle PostgreSQL client:', {
+        code: errorFields.code,
+        message: err.message
+          .replace(/'(?:[^']|'')*'|"[^"]*"/g, '[redacted]')
+          .replace(/[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi, '[redacted]'),
+      });
     });
   }
   return global._postgresPool;

@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, or } from 'drizzle-orm';
+import { and, desc, eq, inArray, ne, or } from 'drizzle-orm';
 import { db } from './index.ts';
 import {
   artworkOffers,
@@ -18,149 +18,136 @@ import {
   users,
   userAccountDetails,
 } from './schema.ts';
+import {
+  syncProfileWithOperations,
+  type SyncProfileValues,
+  type SyncUserProfileParams,
+} from './profileSync.ts';
+import { getDatabaseErrorDiagnostics } from './databaseDiagnostics.ts';
 
-function sanitizeHandle(input: string): string {
-  const cleaned = input
-    .toLowerCase()
-    .replace(/[^a-z0-9_]/g, '')
-    .slice(0, 28);
-  return cleaned || 'collector';
-}
+export async function syncUserProfile(params: SyncUserProfileParams) {
+  if (typeof params.uid !== 'string' || !params.uid.trim()) {
+    throw new Error('An authenticated user ID is required to synchronize a profile.');
+  }
 
-async function savePrivateAccountDetails(params: {
-  uid: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  location?: string;
-}) {
-  if (!params.firstName || !params.lastName || !params.phoneNumber) return;
-  await db
-    .insert(userAccountDetails)
-    .values({
-      userId: params.uid,
-      firstName: params.firstName.trim(),
-      lastName: params.lastName.trim(),
-      phoneNumber: params.phoneNumber.trim(),
-      location: params.location?.trim() || null,
-      updatedAt: new Date(),
-    })
-    .onConflictDoUpdate({
-      target: userAccountDetails.userId,
-      set: {
-        firstName: params.firstName.trim(),
-        lastName: params.lastName.trim(),
-        phoneNumber: params.phoneNumber.trim(),
-        location: params.location?.trim() || null,
-        updatedAt: new Date(),
-      },
-    });
-}
-
-export async function syncUserProfile(params: {
-  uid: string;
-  email: string;
-  fullName?: string;
-  firstName?: string;
-  lastName?: string;
-  phoneNumber?: string;
-  role?: string;
-  bio?: string;
-  location?: string;
-  isAdmin?: boolean;
-}) {
+  let stage = 'profile transaction';
   try {
-    const validRoles = ['artist', 'collector', 'art_lover'];
-    const safeRole = params.role && validRoles.includes(params.role) ? params.role : undefined;
-    const accountRole = params.isAdmin ? 'admin' : safeRole;
-
-    await db
-      .insert(users)
-      .values({
-        uid: params.uid,
-        email: params.email,
-      })
-      .onConflictDoUpdate({
-        target: users.uid,
-        set: { email: params.email },
-      });
-
-    const existing = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.id, params.uid));
-
-    if (existing.length > 0) {
-      const current = existing[0];
-      const defaultName = params.fullName?.trim() || current.fullName;
-      const username = sanitizeHandle(defaultName);
-      const role = params.isAdmin ? 'admin' : safeRole || current.role;
-      
-      const updated = await db
-        .update(profiles)
-        .set({
-          email: params.email,
-          fullName: defaultName,
-          handle: sanitizeHandle(defaultName),
-          username: username,
-          role,
-          accountStatus: 'active',
-          registrationDate: current.registrationDate || current.createdAt,
-          bio: params.bio !== undefined ? params.bio : current.bio,
-          location:
-            role === 'artist' && params.location !== undefined
-              ? params.location
-              : role === 'artist'
-                ? current.location
-                : '',
-          updatedAt: new Date(),
-        })
-        .where(eq(profiles.id, params.uid))
-        .returning();
-      await savePrivateAccountDetails(params);
-      return updated[0];
+    for (let attempt = 0; ; attempt += 1) {
+      stage = 'profile transaction';
+      try {
+        return await db.transaction(async (tx) =>
+          syncProfileWithOperations(params, {
+            upsertUser: async (uid, email) => {
+              stage = 'user record upsert';
+              const insert = tx.insert(users).values({
+                uid,
+                email: email || `${uid}@artverse.user`,
+              });
+              if (email) {
+                await insert.onConflictDoUpdate({
+                  target: users.uid,
+                  set: { email },
+                });
+              } else {
+                await insert.onConflictDoNothing({ target: users.uid });
+              }
+            },
+            getProfile: async (uid) => {
+              stage = 'profile lookup';
+              const [profile] = await tx
+                .select()
+                .from(profiles)
+                .where(eq(profiles.id, uid))
+                .limit(1);
+              return profile;
+            },
+            isHandleTaken: async (handle, exceptUid) => {
+              stage = 'username collision check';
+              const [profile] = await tx
+                .select({ id: profiles.id })
+                .from(profiles)
+                .where(
+                  and(
+                    or(eq(profiles.handle, handle), eq(profiles.username, handle)),
+                    ne(profiles.id, exceptUid)
+                  )
+                )
+                .limit(1);
+              return Boolean(profile);
+            },
+            insertProfile: async (values: SyncProfileValues) => {
+              stage = 'profile insert';
+              const [profile] = await tx
+                .insert(profiles)
+                .values(values)
+                .onConflictDoUpdate({
+                  target: profiles.id,
+                  set: {
+                    email: values.email,
+                    fullName: values.fullName,
+                    handle: values.handle,
+                    username: values.username,
+                    role: values.role,
+                    updatedAt: new Date(),
+                  },
+                })
+                .returning();
+              return profile;
+            },
+            updateProfile: async (uid, values) => {
+              stage = 'profile update';
+              const [profile] = await tx
+                .update(profiles)
+                .set({ ...values, updatedAt: new Date() })
+                .where(eq(profiles.id, uid))
+                .returning();
+              if (!profile) throw new Error('Profile disappeared during synchronization.');
+              return profile;
+            },
+            saveAccountDetails: async (details) => {
+              stage = 'private account details upsert';
+              await tx
+                .insert(userAccountDetails)
+                .values({
+                  userId: details.uid,
+                  firstName: details.firstName,
+                  lastName: details.lastName,
+                  phoneNumber: details.phoneNumber,
+                  location: details.location || null,
+                  updatedAt: new Date(),
+                })
+                .onConflictDoUpdate({
+                  target: userAccountDetails.userId,
+                  set: {
+                    firstName: details.firstName,
+                    lastName: details.lastName,
+                    phoneNumber: details.phoneNumber,
+                    location: details.location || null,
+                    updatedAt: new Date(),
+                  },
+                });
+            },
+          })
+        );
+      } catch (error) {
+        if (
+          attempt < 2 &&
+          getDatabaseErrorDiagnostics(error).code === '23505'
+        ) {
+          continue;
+        }
+        throw error;
+      }
     }
-
-    const defaultName =
-      params.fullName?.trim() ||
-      params.email.split('@')[0].replace(/[._-]/g, ' ');
-    const username = sanitizeHandle(defaultName);
-    
-    const inserted = await db
-      .insert(profiles)
-      .values({
-        id: params.uid,
-        email: params.email,
-        fullName: defaultName,
-        handle: sanitizeHandle(defaultName),
-        username: username,
-        role: accountRole || 'collector',
-        accountStatus: 'active',
-        registrationDate: new Date(),
-        bio: params.bio || 'Member of the ARTIVORA collecting community.',
-        location: safeRole === 'artist' ? params.location || 'International' : '',
-        discipline: safeRole === 'artist' ? 'Contemporary Fine Art' : 'Private Collection',
-        verified: false,
-        isDemo: false,
-      })
-      .onConflictDoUpdate({
-        target: profiles.id,
-        set: { 
-          email: params.email, 
-          fullName: defaultName,
-          handle: sanitizeHandle(defaultName),
-          username: username,
-          updatedAt: new Date() 
-        },
-      })
-      .returning();
-
-    await savePrivateAccountDetails(params);
-
-    return inserted[0];
   } catch (error) {
-    console.error('Database syncUserProfile failed:', error);
-    throw new Error('Unable to synchronize user profile at this time.', { cause: error });
+    console.error('Database syncUserProfile failed:', {
+      stage,
+      ...getDatabaseErrorDiagnostics(error),
+    });
+    throw new Error(
+      'Unable to synchronize your profile. Please retry. If the problem continues, contact support.',
+      { cause: error }
+    );
   }
 }
 

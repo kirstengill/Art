@@ -14,6 +14,7 @@ import {
   uploadArtworkImage,
 } from '../lib/supabase';
 import { artverseApi } from '../services/artverseApi';
+import { publishArtworkWithSynchronizedProfile } from '../services/artworkPublishing';
 import type {
   Artwork,
   ArtworkInput,
@@ -571,13 +572,30 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       if (currentUser.role !== 'artist') {
         throw new Error('An artist account is required to publish artwork.');
       }
-      const isUploadedImage = input.imageKey.startsWith('data:image/');
-      let imageKey = input.imageKey;
-      if (isUploadedImage) {
-        imageKey = await uploadArtworkImage(input.imageKey, currentUser.id);
-      }
-
-      const { artwork } = await artverseApi.saveArtwork({ ...input, imageKey });
+      const artwork = await publishArtworkWithSynchronizedProfile(
+        input.imageKey,
+        async () => {
+          const { profile } = await artverseApi.syncProfile({
+            fullName: currentUser.fullName,
+            role: 'artist',
+            bio: currentUser.bio,
+            location: currentUser.location,
+          });
+          if (profile.role !== 'artist') {
+            throw new Error(
+              'Your saved account is not registered as an artist. Please contact support before publishing.'
+            );
+          }
+        },
+        (dataUrl) => uploadArtworkImage(dataUrl, currentUser.id),
+        async (imageKey) => {
+          const { artwork: savedArtwork } = await artverseApi.saveArtwork({
+            ...input,
+            imageKey,
+          });
+          return savedArtwork;
+        }
+      );
       setArtworks((prev) => mergeById([artwork], prev));
       return artwork;
     },

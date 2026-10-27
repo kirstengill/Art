@@ -61,7 +61,7 @@ async function startServer() {
   app.post('/api/auth/sync', requireAuth, async (req: AuthRequest, res) => {
     try {
       const uid = req.user!.uid;
-      const email = req.user!.email || `${uid}@artverse.user`;
+      const email = req.user!.email;
       const { fullName, firstName, lastName, phoneNumber, bio, location } = req.body || {};
       const metadataRole = req.user!.user_metadata.role;
       const role =
@@ -195,11 +195,6 @@ async function startServer() {
   app.post('/api/artworks', requireAuth, async (req: AuthRequest, res) => {
     try {
       const uid = req.user!.uid;
-      await syncUserProfile({
-        uid,
-        email: req.user!.email || `${uid}@artverse.user`,
-        fullName: req.user!.name,
-      });
       const artwork = await upsertArtworkListing(uid, req.body);
       res.status(201).json({ artwork });
     } catch (error: unknown) {

@@ -1,6 +1,6 @@
 # Artivora Database Migrations
 
-This directory contains versioned SQL migration files for the Artivora platform's Supabase database.
+This directory contains versioned SQL migration files for Artivora's PostgreSQL schema. The Express/Drizzle application connects to the server-configured `SQL_*` database; Supabase Auth and Storage are separate services.
 
 ## Migration Files
 
@@ -46,11 +46,14 @@ Adds additional fields to existing tables:
 ### 4. `20241027000003_fix_profiles_rls.sql`
 Restricts public profile reads to active, non-demo artist accounts and grants access only to public profile columns. Email and phone details remain private.
 
+### 5. `20261027000000_profile_sync_users_table.sql`
+Adds the `profiles.registration_date` field (backfilled from the existing registration timestamp) and creates the `users` table required by the Express/Drizzle profile-sync transaction. Apply this migration to the same PostgreSQL database configured by the server's `SQL_HOST`, `SQL_DB_NAME`, `SQL_USER`, and `SQL_PASSWORD` variables. Supabase Auth and Storage do not imply that this separate runtime PostgreSQL database has received the migration.
+
 ## Running Migrations
 
 ### Local Development
 
-To apply migrations to your local Supabase instance:
+Use these commands only when the target PostgreSQL instance is the Supabase database:
 
 ```bash
 # Start Supabase locally
@@ -62,7 +65,7 @@ npx supabase db push
 
 ### Production Deployment
 
-To deploy migrations to your Supabase project:
+To deploy Supabase-targeted migrations:
 
 ```bash
 # Link your project (if not already linked)
@@ -72,7 +75,7 @@ npx supabase link --project-ref your-project-ref
 npx supabase db push
 ```
 
-Or use the Supabase Dashboard to upload and run SQL files manually.
+Or use the Supabase Dashboard to upload and run SQL files manually. The Express runtime schema migration must be applied to the PostgreSQL instance configured by `SQL_*`; applying it to Supabase does not change a separate Cloud SQL database.
 
 ## Migration Order
 
@@ -81,6 +84,9 @@ Migrations must be applied in numerical order:
 2. `20241027000001_rls_policies.sql` - Security policies
 3. `20241027000002_add_user_fields.sql` - Additional fields
 4. `20241027000003_fix_profiles_rls.sql` - Safe public artist profile access
+5. `20261027000000_profile_sync_users_table.sql` - Runtime PostgreSQL user records
+
+The Express/Drizzle API uses its configured `SQL_*` PostgreSQL database for profiles, account details, and artwork. Apply runtime database migrations to that database, not to Supabase Auth/Storage by assumption.
 
 ## Database Schema Summary
 
