@@ -133,13 +133,20 @@ export async function uploadArtworkImage(
     throw new Error('Artwork images must be under 10 MB.');
   }
 
+  // Get the authenticated user's ID from Supabase to match RLS policy
+  const { data: { user }, error: authError } = await supabase.auth.getUser();
+  if (authError || !user) {
+    throw new Error('Unable to get authenticated user for upload.');
+  }
+
   const extensionByType: Record<string, string> = {
     'image/jpeg': 'jpg',
     'image/png': 'png',
     'image/webp': 'webp',
     'image/gif': 'gif',
   };
-  const imagePath = `${artistId}/${crypto.randomUUID()}.${extensionByType[contentType]}`;
+  // Use auth.uid() to match the RLS policy requirement
+  const imagePath = `${user.id}/${crypto.randomUUID()}.${extensionByType[contentType]}`;
   const { error } = await supabase.storage
     .from(ARTWORK_IMAGE_BUCKET)
     .upload(imagePath, imageBytes, {
