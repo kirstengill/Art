@@ -168,13 +168,19 @@ function profileFromSupabaseUser(
     (typeof metadata.user_name === 'string' && metadata.user_name) ||
     fullName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) ||
     'artivora_member';
+  const username =
+    (typeof metadata.username === 'string' && metadata.username) ||
+    handle;
 
   return {
     id: user.id,
     email: user.email || '',
     fullName,
     handle,
+    username,
     role,
+    accountStatus: 'active',
+    registrationDate: user.created_at,
     avatarUrl:
       typeof metadata.avatar_url === 'string'
         ? metadata.avatar_url
@@ -188,6 +194,7 @@ function profileFromSupabaseUser(
     verified: false,
     isDemo: false,
     createdAt: user.created_at,
+    updatedAt: user.created_at,
   };
 }
 

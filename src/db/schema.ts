@@ -24,7 +24,10 @@ export const profiles = pgTable(
     email: text('email').notNull(),
     fullName: text('full_name').notNull(),
     handle: text('handle').notNull(),
+    username: text('username').notNull().unique(),
     role: text('role').notNull().default('collector'), // 'admin' | 'artist' | 'collector' | 'art_lover'
+    accountStatus: text('account_status').notNull().default('active'),
+    registrationDate: timestamp('registration_date').defaultNow().notNull(),
     avatarUrl: text('avatar_url'),
     coverUrl: text('cover_url'),
     bio: text('bio').notNull().default(''),
@@ -35,7 +38,7 @@ export const profiles = pgTable(
     createdAt: timestamp('created_at').defaultNow().notNull(),
     updatedAt: timestamp('updated_at').defaultNow().notNull(),
   },
-  (table) => [index('profiles_role_idx').on(table.role)]
+  (table) => [index('profiles_role_idx').on(table.role), index('profiles_account_status_idx').on(table.accountStatus)]
 );
 
 export const userAccountDetails = pgTable('user_account_details', {
@@ -45,6 +48,12 @@ export const userAccountDetails = pgTable('user_account_details', {
   firstName: text('first_name').notNull(),
   lastName: text('last_name').notNull(),
   phoneNumber: text('phone_number').notNull(),
+  address: text('address'),
+  city: text('city'),
+  country: text('country'),
+  postalCode: text('postal_code'),
+  dateOfBirth: date('date_of_birth'),
+  registrationDate: timestamp('registration_date').defaultNow().notNull(),
   location: text('location'),
   updatedAt: timestamp('updated_at').defaultNow().notNull(),
 });

@@ -92,12 +92,19 @@ export async function syncUserProfile(params: {
 
     if (existing.length > 0) {
       const current = existing[0];
+      const defaultName = params.fullName?.trim() || current.fullName;
+      const username = sanitizeHandle(defaultName);
+      
       const updated = await db
         .update(profiles)
         .set({
           email: params.email,
-          fullName: params.fullName?.trim() || current.fullName,
+          fullName: defaultName,
+          handle: sanitizeHandle(defaultName),
+          username: username,
           role: params.isAdmin ? 'admin' : current.role,
+          accountStatus: 'active',
+          registrationDate: current.registrationDate || current.createdAt,
           bio: params.bio !== undefined ? params.bio : current.bio,
           location:
             current.role === 'artist' && params.location !== undefined
@@ -116,6 +123,8 @@ export async function syncUserProfile(params: {
     const defaultName =
       params.fullName?.trim() ||
       params.email.split('@')[0].replace(/[._-]/g, ' ');
+    const username = sanitizeHandle(defaultName);
+    
     const inserted = await db
       .insert(profiles)
       .values({
@@ -123,7 +132,10 @@ export async function syncUserProfile(params: {
         email: params.email,
         fullName: defaultName,
         handle: sanitizeHandle(defaultName),
+        username: username,
         role: accountRole || 'collector',
+        accountStatus: 'active',
+        registrationDate: new Date(),
         bio: params.bio || 'Member of the ARTIVORA collecting community.',
         location: safeRole === 'artist' ? params.location || 'International' : '',
         discipline: safeRole === 'artist' ? 'Contemporary Fine Art' : 'Private Collection',
@@ -132,7 +144,13 @@ export async function syncUserProfile(params: {
       })
       .onConflictDoUpdate({
         target: profiles.id,
-        set: { email: params.email, updatedAt: new Date() },
+        set: { 
+          email: params.email, 
+          fullName: defaultName,
+          handle: sanitizeHandle(defaultName),
+          username: username,
+          updatedAt: new Date() 
+        },
       })
       .returning();
 

@@ -17,6 +17,7 @@ export type AdminTimeframe = 7 | 30 | 90 | 'all';
 export type AdminContentKind = 'artworks' | 'community';
 export type AdminArtworkFilter = 'all' | 'direct';
 export type AdminRoleFilter = 'admin' | 'artist' | 'collector' | 'art_lover' | 'all';
+export type AdminAccountStatusFilter = 'active' | 'pending' | 'suspended' | 'deleted' | 'all';
 
 function getPageParams(pageValue: unknown, pageSizeValue: unknown) {
   const page = Math.max(1, Math.floor(Number(pageValue) || 1));
@@ -57,6 +58,10 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
     [collectorCount],
     [artLoverCount],
     [adminCount],
+    [activeCount],
+    [pendingCount],
+    [suspendedCount],
+    [deletedCount],
     [artworkCount],
     [communityPostCount],
     [orderSummary],
@@ -65,27 +70,51 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
     communitySeries,
     orderSeries,
   ] = await Promise.all([
-    db.select({ value: count() }).from(users),
     db
       .select({ value: count() })
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.uid))
-      .where(and(eq(profiles.role, 'artist'), eq(profiles.isDemo, false))),
+      .where(eq(profiles.accountStatus, 'active')),
     db
       .select({ value: count() })
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.uid))
-      .where(and(eq(profiles.role, 'collector'), eq(profiles.isDemo, false))),
+      .where(and(eq(profiles.role, 'artist'), eq(profiles.isDemo, false), eq(profiles.accountStatus, 'active'))),
     db
       .select({ value: count() })
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.uid))
-      .where(and(eq(profiles.role, 'art_lover'), eq(profiles.isDemo, false))),
+      .where(and(eq(profiles.role, 'collector'), eq(profiles.isDemo, false), eq(profiles.accountStatus, 'active'))),
     db
       .select({ value: count() })
       .from(users)
       .innerJoin(profiles, eq(profiles.id, users.uid))
-      .where(and(eq(profiles.role, 'admin'), eq(profiles.isDemo, false))),
+      .where(and(eq(profiles.role, 'art_lover'), eq(profiles.isDemo, false), eq(profiles.accountStatus, 'active'))),
+    db
+      .select({ value: count() })
+      .from(users)
+      .innerJoin(profiles, eq(profiles.id, users.uid))
+      .where(and(eq(profiles.role, 'admin'), eq(profiles.isDemo, false), eq(profiles.accountStatus, 'active'))),
+    db
+      .select({ value: count() })
+      .from(artworks)
+      .innerJoin(profiles, eq(profiles.id, artworks.artistId))
+      .where(and(eq(artworks.isDemo, false), eq(profiles.isDemo, false))),
+    db
+      .select({ value: count() })
+      .from(users)
+      .innerJoin(profiles, eq(profiles.id, users.uid))
+      .where(and(eq(profiles.isDemo, false), eq(profiles.accountStatus, 'pending'))),
+    db
+      .select({ value: count() })
+      .from(users)
+      .innerJoin(profiles, eq(profiles.id, users.uid))
+      .where(and(eq(profiles.isDemo, false), eq(profiles.accountStatus, 'suspended'))),
+    db
+      .select({ value: count() })
+      .from(users)
+      .innerJoin(profiles, eq(profiles.id, users.uid))
+      .where(and(eq(profiles.isDemo, false), eq(profiles.accountStatus, 'deleted'))),
     db
       .select({ value: count() })
       .from(artworks)
@@ -170,6 +199,12 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
         { role: 'collector', count: collectorCount.value },
         { role: 'art_lover', count: artLoverCount.value },
       ],
+      accountStatusDistribution: [
+        { status: 'active', count: activeCount.value },
+        { status: 'pending', count: pendingCount.value },
+        { status: 'suspended', count: suspendedCount.value },
+        { status: 'deleted', count: deletedCount.value },
+      ],
     },
   };
 }
@@ -178,15 +213,18 @@ export async function getAdminUsers(options: {
   page?: unknown;
   pageSize?: unknown;
   role?: AdminRoleFilter;
+  accountStatus?: AdminAccountStatusFilter;
   search?: string;
 }) {
   const { page, pageSize, offset } = getPageParams(options.page, options.pageSize);
   const role = options.role && options.role !== 'all' ? options.role : undefined;
+  const accountStatus = options.accountStatus && options.accountStatus !== 'all' ? options.accountStatus : undefined;
   const search = options.search?.trim().slice(0, 100);
   const filters = [
     ...(role ? [eq(profiles.role, role)] : []),
+    ...(accountStatus ? [eq(profiles.accountStatus, accountStatus)] : []),
     ...(search
-      ? [or(ilike(profiles.fullName, `%${search}%`), ilike(profiles.handle, `%${search}%`))]
+      ? [or(ilike(profiles.fullName, `%${search}%`), ilike(profiles.handle, `%${search}%`), ilike(profiles.username, `%${search}%`))]
       : []),
   ];
   const where = and(...filters);
@@ -201,7 +239,10 @@ export async function getAdminUsers(options: {
         profileId: profiles.id,
         fullName: profiles.fullName,
         handle: profiles.handle,
+        username: profiles.username,
         role: profiles.role,
+        accountStatus: profiles.accountStatus,
+        registrationDate: profiles.registrationDate,
         createdAt: users.createdAt,
         artworkCount: count(artworks.id),
         availableArtworkCount: count(
@@ -215,7 +256,7 @@ export async function getAdminUsers(options: {
         and(eq(artworks.artistId, profiles.id), eq(artworks.isDemo, false))
       )
       .where(where)
-      .groupBy(profiles.id, profiles.fullName, profiles.handle, profiles.role, users.uid, users.createdAt)
+      .groupBy(profiles.id, profiles.fullName, profiles.handle, profiles.username, profiles.role, profiles.accountStatus, profiles.registrationDate, users.uid, users.createdAt)
       .orderBy(desc(users.createdAt))
       .limit(pageSize)
       .offset(offset),

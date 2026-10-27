@@ -82,12 +82,17 @@ export type OfferStatus =
   | 'withdrawn'
   | 'expired';
 
+export type AccountStatus = 'active' | 'pending' | 'suspended' | 'deleted';
+
 export interface Profile {
   id: string;
   email: string;
   fullName: string;
   handle: string;
+  username: string;
   role: AccountRole;
+  accountStatus: AccountStatus;
+  registrationDate: string;
   avatarUrl: string | null;
   coverUrl: string | null;
   bio: string;
@@ -96,6 +101,7 @@ export interface Profile {
   verified: boolean;
   isDemo: boolean;
   createdAt: string;
+  updatedAt?: string;
 }
 
 export interface Artwork {
