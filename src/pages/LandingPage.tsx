@@ -1,7 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react';
+import { ArrowRight, ArrowUpRight, Menu, X, MessageCircle } from 'lucide-react';
 import lapisArtwork from '../assets/images/art_lapis_refraction_1792993241626.jpg';
 import artivoraLogo from '../images/artivora.png';
 
@@ -180,6 +180,17 @@ export const LandingPage: React.FC = () => {
       <p className="absolute bottom-6 right-6 hidden text-[10px] uppercase tracking-[0.22em] text-white/70 sm:block">
         ARTIVORA, beyond the ordinary
       </p>
+      
+      {/* Floating WhatsApp Helpline */}
+      <a
+        href={import.meta.env.VITE_HELPLINE_WHATSAPP_URL || 'https://wa.me'}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Contact us on WhatsApp"
+        className="fixed bottom-6 left-6 z-50 flex items-center justify-center w-14 h-14 rounded-full bg-[#25D366] text-white shadow-lg hover:bg-[#128C7E] transition-all duration-300 hover:scale-110"
+      >
+        <MessageCircle className="w-7 h-7" />
+      </a>
     </section>
   );
 };
