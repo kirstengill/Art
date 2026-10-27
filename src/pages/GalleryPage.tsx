@@ -1,7 +1,7 @@
 import React, { useMemo, useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Columns2, Grid3x3, RefreshCw, Search, X } from 'lucide-react';
+import { Columns2, Grid3x3, MessageCircle, RefreshCw, Search, X } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { ArtworkGrid } from '../components/artwork/ArtworkGrid';
 import { ArtworkCard } from '../components/artwork/ArtworkCard';
@@ -394,6 +394,17 @@ export const GalleryPage: React.FC = () => {
           )}
         </AnimatePresence>
       </div>
+      
+      {/* Floating WhatsApp Helpline */}
+      <a
+        href={import.meta.env.VITE_HELPLINE_WHATSAPP_URL || 'https://wa.me'}
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Contact us on WhatsApp"
+        className="fixed bottom-6 left-6 z-50 flex items-center justify-center w-14 h-14 rounded-full bg-[#25D366] text-white shadow-lg hover:bg-[#128C7E] transition-all duration-300 hover:scale-110"
+      >
+        <MessageCircle className="w-7 h-7" />
+      </a>
     </div>
   );
 };
