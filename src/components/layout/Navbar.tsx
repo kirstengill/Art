@@ -56,7 +56,7 @@ export const Navbar: React.FC = () => {
           to="/"
           className="whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C59B47]"
         >
-          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-8 sm:h-10 w-auto" />
+          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-10 sm:h-12 w-auto mix-blend-mode-lighten" />
         </Link>
 
         {/* Desktop Navigation */}

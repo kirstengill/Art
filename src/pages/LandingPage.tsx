@@ -69,7 +69,7 @@ export const LandingPage: React.FC = () => {
           to="/"
           className="flex items-center justify-center gap-2"
         >
-          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-8 sm:h-10 w-auto" />
+          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-10 sm:h-12 w-auto mix-blend-mode-lighten" />
         </Link>
 
         <nav aria-label="Main navigation" className="hidden items-center gap-8 md:flex">
