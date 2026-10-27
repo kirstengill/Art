@@ -339,7 +339,7 @@ export const GalleryPage: React.FC = () => {
             </h2>
             <p className="text-sm text-[#575048]">
               {artworks.length === 0
-                ? 'Check back soon to discover new work from Art Universe artists.'
+                ? 'Check back soon to discover new work from ARTIVORA artists.'
                 : 'Try adjusting your search query, category filter, or saved shortlist selection to explore more works in the catalogue.'}
             </p>
             {artworks.length > 0 && (

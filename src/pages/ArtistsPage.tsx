@@ -96,7 +96,7 @@ export const ArtistsPage: React.FC = () => {
             <p className="text-sm text-[#5C554C]">
               {profiles.some((profile) => profile.role === 'artist')
                 ? 'Try clearing your search filter to view all studio artists.'
-                : 'Artist profiles will appear here as artists join Art Universe.'}
+                : 'Artist profiles will appear here as artists join ARTIVORA.'}
             </p>
             {profiles.some((profile) => profile.role === 'artist') ? (
               <button

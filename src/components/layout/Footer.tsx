@@ -44,7 +44,7 @@ export const Footer: React.FC = () => {
               to="/"
               className="font-serif text-2xl font-semibold text-[#141312] tracking-wide inline-block hover:text-[#B38B40] transition-colors"
             >
-              Art Universe
+              ARTIVORA
             </Link>
             <p className="text-sm leading-relaxed max-w-md text-[#5C554C]">
               A contemporary digital fine-art gallery and collector community connecting
@@ -116,7 +116,7 @@ export const Footer: React.FC = () => {
               Helpline
             </h3>
             <p className="text-xs leading-relaxed">
-              Connect with Art Universe through our configured social channels.
+              Connect with ARTIVORA through our configured social channels.
             </p>
             <div className="flex flex-wrap gap-2">
               {HELPLINE_LINKS.map(({ label, href, icon: Icon }) => (
@@ -125,7 +125,7 @@ export const Footer: React.FC = () => {
                   href={href}
                   target="_blank"
                   rel="noopener noreferrer"
-                  aria-label={`Open Art Universe on ${label}`}
+                  aria-label={`Open ARTIVORA on ${label}`}
                   title={label}
                   className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D0C1] text-[#5C554C] transition-colors hover:border-[#B38B40] hover:bg-white hover:text-[#141312] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B38B40]"
                 >
@@ -144,7 +144,7 @@ export const Footer: React.FC = () => {
         </div>
 
         <div className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-[#7A7267]">
-          <p>© {new Date().getFullYear()} Art Universe Fine Art Platform. All rights reserved.</p>
+          <p>© {new Date().getFullYear()} ARTIVORA Fine Art Platform. All rights reserved.</p>
           <p>Antwerp · Pietrasanta · Stockholm · London · Zurich</p>
         </div>
       </div>

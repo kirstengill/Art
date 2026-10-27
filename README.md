@@ -1,10 +1,10 @@
-# Art Universe — Contemporary Fine-Art Gallery & Collector Platform
+# ARTIVORA — Contemporary Fine-Art Gallery & Collector Platform
 
-Art Universe is a digital fine-art gallery and collector community where artists publish original works with transparent acquisition modes, collectors purchase or negotiate artwork-linked offers, and art enthusiasts engage with studio dispatches.
+ARTIVORA is a digital fine-art gallery and collector community where artists publish original works with transparent acquisition modes, collectors purchase or negotiate artwork-linked offers, and art enthusiasts engage with studio dispatches.
 
 ## User Roles
 
-Art Universe implements a **role-based access control system** with three user types:
+ARTIVORA implements a **role-based access control system** with three user types:
 
 | Role | Can Browse | Can Purchase | Can Upload Artwork | Can Create Posts | Can Negotiate | Has Collection |
 |------|------------|--------------|------------------|-----------------|---------------|----------------|

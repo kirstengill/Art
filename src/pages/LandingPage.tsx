@@ -3,6 +3,7 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react';
 import lapisArtwork from '../assets/images/art_lapis_refraction_1792993241626.jpg';
+import artivoraLogo from '../images/artivora.png';
 
 const NAV_LINKS = [
   { to: '/', label: 'Home' },
@@ -66,9 +67,9 @@ export const LandingPage: React.FC = () => {
       <header className="relative z-20 mx-auto flex w-full max-w-[1440px] items-center justify-between px-5 py-5 sm:px-8 sm:py-7 lg:px-12">
         <Link
           to="/"
-          className="font-serif text-xl font-semibold tracking-[0.16em] text-white sm:text-2xl"
+          className="flex items-center justify-center gap-2"
         >
-          ART UNIVERSE
+          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-8 sm:h-10 w-auto" />
         </Link>
 
         <nav aria-label="Main navigation" className="hidden items-center gap-8 md:flex">
@@ -177,7 +178,7 @@ export const LandingPage: React.FC = () => {
       </div>
 
       <p className="absolute bottom-6 right-6 hidden text-[10px] uppercase tracking-[0.22em] text-white/70 sm:block">
-        Art, beyond the ordinary
+        ARTIVORA, beyond the ordinary
       </p>
     </section>
   );

@@ -1,6 +1,6 @@
 {
-  "name": "Art Universe",
-  "description": "Art Universe is a digital fine-art gallery and collector community where artists publish original works, collectors negotiate offers, and art lovers connect.",
+  "name": "ARTIVORA",
+  "description": "ARTIVORA is a digital fine-art gallery and collector community where artists publish original works, collectors negotiate offers, and art lovers connect.",
   "requestFramePermissions": [],
   "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
 }

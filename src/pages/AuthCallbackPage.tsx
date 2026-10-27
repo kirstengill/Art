@@ -32,7 +32,7 @@ export const AuthCallbackPage: React.FC = () => {
     <main className="flex min-h-dvh items-center justify-center bg-[#171614] px-4 py-12 text-white">
       <section className="w-full max-w-md rounded-2xl border border-white/15 bg-white/[0.07] p-7 text-center shadow-2xl backdrop-blur-xl">
         <p className="text-[10px] uppercase tracking-[0.24em] text-[#d6bb7e]">
-          Art Universe
+          ARTIVORA
         </p>
         <h1 className="mt-3 font-serif text-2xl">Completing sign-in</h1>
         {authError ? (

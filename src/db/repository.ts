@@ -124,7 +124,7 @@ export async function syncUserProfile(params: {
         fullName: defaultName,
         handle: sanitizeHandle(defaultName),
         role: accountRole || 'collector',
-        bio: params.bio || 'Member of the Art Universe collecting community.',
+        bio: params.bio || 'Member of the ARTIVORA collecting community.',
         location: safeRole === 'artist' ? params.location || 'International' : '',
         discipline: safeRole === 'artist' ? 'Contemporary Fine Art' : 'Private Collection',
         verified: false,

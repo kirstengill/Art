@@ -1,6 +1,6 @@
-# Role-Based Access Control for Art Universe
+# Role-Based Access Control for ARTIVORA
 
-This document describes the implementation of role-based accounts for Art Universe with three user types: **Artist**, **Collector**, and **Art Lover (Explore)**.
+This document describes the implementation of role-based accounts for ARTIVORA with three user types: **Artist**, **Collector**, and **Art Lover (Explore)**.
 
 ## User Roles & Permissions
 

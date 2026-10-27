@@ -108,7 +108,7 @@ export const DiscoverPage: React.FC = () => {
                 transition={{ duration: 0.32, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
                 className="text-base sm:text-lg text-[#575048] leading-relaxed max-w-xl"
               >
-                Art Universe unites independent fine artists, discerning private
+                ARTIVORA unites independent fine artists, discerning private
                 collectors, and studio dialogue—pairing transparent gallery pricing
                 with live artwork-linked offer negotiation.
               </motion.p>
@@ -525,7 +525,7 @@ export const DiscoverPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {artists.length === 0 ? (
               <p className="col-span-full py-10 text-center text-sm text-[#6B655E]">
-                Artist profiles will appear here as artists join Art Universe.
+                Artist profiles will appear here as artists join ARTIVORA.
               </p>
             ) : artists.map((artist, idx) => {
               const isFollowing = followedArtistIds.includes(artist.id);
@@ -661,7 +661,7 @@ export const DiscoverPage: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center gap-2.5 text-xs text-[#787066]">
                       <span className="font-medium text-[#141312]">
-                        {author?.fullName || 'Art Universe Member'}
+                        {author?.fullName || 'ARTIVORA Member'}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatShortDate(post.createdAt)}</span>

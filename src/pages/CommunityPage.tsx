@@ -269,7 +269,7 @@ export const CommunityPage: React.FC = () => {
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3.5 min-w-0">
                               <ProfileAvatar
-                                name={author?.fullName || 'Art Universe Member'}
+                                name={author?.fullName || 'ARTIVORA Member'}
                                 avatarKey={author?.avatarUrl}
                                 sizeClass="w-11 h-11 text-sm"
                               />
@@ -284,7 +284,7 @@ export const CommunityPage: React.FC = () => {
                                     </Link>
                                   ) : (
                                     <span className="text-sm font-medium text-[#141312] truncate">
-                                      {author?.fullName || 'Art Universe Member'}
+                                      {author?.fullName || 'ARTIVORA Member'}
                                     </span>
                                   )}
                                 </div>

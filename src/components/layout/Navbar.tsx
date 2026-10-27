@@ -10,6 +10,7 @@ import {
 import { ArrowUpRight, Menu, X, LogOut } from 'lucide-react';
 import { useArtVerse } from '../../context/ArtVerseContext';
 import { formatRoleLabel } from '../../utils/formatters';
+import artivoraLogo from '../../images/artivora.png';
 
 const PUBLIC_LINKS = [
   { to: '/', label: 'Home' },
@@ -53,9 +54,9 @@ export const Navbar: React.FC = () => {
         {/* Brand */}
         <Link
           to="/"
-          className="font-serif text-2xl sm:text-3xl font-semibold tracking-wide text-[#FAF8F3] whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C59B47]"
+          className="whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C59B47]"
         >
-          ART UNIVERSE
+          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-8 sm:h-10 w-auto" />
         </Link>
 
         {/* Desktop Navigation */}

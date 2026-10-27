@@ -162,12 +162,12 @@ function profileFromSupabaseUser(
     (typeof metadata.full_name === 'string' && metadata.full_name) ||
     (typeof metadata.name === 'string' && metadata.name) ||
     user.email?.split('@')[0] ||
-    'Art Universe Member';
+    'ARTIVORA Member';
   const role = preferredRole || (isUserRole(metadata.role) ? metadata.role : 'collector');
   const handle =
     (typeof metadata.user_name === 'string' && metadata.user_name) ||
     fullName.toLowerCase().replace(/[^a-z0-9]/g, '').slice(0, 20) ||
-    'artverse_member';
+    'artivora_member';
 
   return {
     id: user.id,

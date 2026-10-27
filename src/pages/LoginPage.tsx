@@ -159,7 +159,7 @@ export const LoginPage: React.FC = () => {
         </form>
 
         <p className="border-t border-white/20 pt-2 text-center text-xs text-white/80">
-          New to Art Universe?{' '}
+          New to ARTIVORA?{' '}
           <Link
             to="/signup"
             className="font-medium text-[#f0d79f] hover:text-white transition-colors"
