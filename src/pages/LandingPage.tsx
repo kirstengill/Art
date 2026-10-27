@@ -10,7 +10,7 @@ const NAV_LINKS = [
   { to: '/gallery', label: 'Explore' },
 ];
 
-const HERO_WORDS = ['Tells a Story', 'Inspires Souls', 'Creates Magic'];
+const HERO_WORDS = ['Every Masterpiece Tells a Story', 'Every Masterpiece Inspires Souls', 'Every Masterpiece Creates Magic'];
 
 export const LandingPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
@@ -145,16 +145,46 @@ export const LandingPage: React.FC = () => {
           </p>
           <h1
             aria-label="Every Masterpiece Tells a Story"
-            className="max-w-3xl font-serif text-5xl font-medium uppercase leading-[0.98] tracking-[0.035em] text-white sm:text-7xl lg:text-8xl"
+            className="max-w-3xl font-serif text-4xl sm:text-5xl lg:text-6xl font-medium uppercase leading-[0.98] tracking-[0.035em] text-white"
           >
-            Every Masterpiece
-            <br />
-            <span aria-hidden="true" className="neon-type-word italic font-normal">
+            <motion.span
+              aria-hidden="true"
+              className="inline-block"
+              style={{
+                background: 'linear-gradient(135deg, #FFD700 0%, #FFA500 25%, #FF6B6B 50%, #C084FC 75%, #86EFAC 100%)',
+                backgroundSize: '400% 400%',
+                WebkitBackgroundClip: 'text',
+                WebkitTextFillColor: 'transparent',
+                backgroundClip: 'text',
+              }}
+              animate={{
+                backgroundPosition: ['0% 0%', '100% 100%', '0% 0%'],
+              }}
+              transition={{
+                duration: 8,
+                repeat: Infinity,
+                ease: 'linear',
+              }}
+            >
               {shouldReduceMotion ? HERO_WORDS[0] : typedWord}
               {!shouldReduceMotion && (
-                <span className="neon-type-cursor ml-1 inline-block h-[0.8em] w-[2px] translate-y-[0.08em]" />
+                <motion.span
+                  className="inline-block h-[0.8em] w-[2px] translate-y-[0.08em] ml-1"
+                  animate={{
+                    opacity: [1, 1, 1, 0.35, 1, 1, 0.35, 1],
+                  }}
+                  transition={{
+                    duration: 1.1,
+                    repeat: Infinity,
+                    ease: 'steps(1, end)',
+                  }}
+                  style={{
+                    background: '#c4faff',
+                    boxShadow: '0 0 8px #62eaff, 0 0 18px rgba(98, 234, 255, 0.85)',
+                  }}
+                />
               )}
-            </span>
+            </motion.span>
             <span className="sr-only">Every Masterpiece Tells a Story</span>
           </h1>
           <p className="mt-7 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">
