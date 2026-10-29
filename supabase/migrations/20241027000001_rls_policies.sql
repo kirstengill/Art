@@ -388,7 +388,7 @@ CREATE POLICY "Authenticated users update their own artwork images"
 -- Authenticated users can delete their own artwork images
 CREATE POLICY "Authenticated users delete their own artwork images"
   ON storage.objects FOR DELETE TO authenticated
-  WITH CHECK (
+  USING (
     bucket_id = 'artwork-images' AND
     (storage.foldername(name))[1] = auth.uid()::text
   );

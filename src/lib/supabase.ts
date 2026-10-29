@@ -138,6 +138,9 @@ export async function uploadArtworkImage(
   if (authError || !user) {
     throw new Error('Unable to get authenticated user for upload.');
   }
+  if (artistId !== user.id) {
+    throw new Error('Artwork images can only be uploaded to the authenticated artist folder.');
+  }
 
   const extensionByType: Record<string, string> = {
     'image/jpeg': 'jpg',

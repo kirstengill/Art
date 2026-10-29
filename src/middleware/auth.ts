@@ -1,5 +1,10 @@
 import type { Request, Response, NextFunction } from 'express';
-import { getSupabaseAuthClient, verifySupabaseAccessToken } from '../lib/supabase-server.ts';
+import {
+  getSupabaseAuthClient,
+  getSupabaseDataClient,
+  type SupabaseDataClient,
+  verifySupabaseAccessToken,
+} from '../lib/supabase-server.ts';
 
 interface AuthenticatedUser {
   uid: string;
@@ -19,6 +24,7 @@ export function isAdminUid(uid: string | undefined): boolean {
 
 export interface AuthRequest extends Request {
   user?: AuthenticatedUser;
+  supabase?: SupabaseDataClient;
 }
 
 export const requireAdmin = (
@@ -53,7 +59,11 @@ export const requireAuth = async (
     return;
   }
 
-  const token = authHeader.split('Bearer ')[1];
+  const token = authHeader.slice('Bearer '.length).trim();
+  if (!token) {
+    res.status(401).json({ error: 'Unauthorized: Missing authentication token.' });
+    return;
+  }
   try {
     if (!getSupabaseAuthClient()) {
       res.status(503).json({ error: 'Supabase Auth is not configured on the server.' });
@@ -65,6 +75,7 @@ export const requireAuth = async (
       return;
     }
     req.user = user;
+    req.supabase = getSupabaseDataClient(token);
     next();
   } catch (error) {
     if (error instanceof Error && error.message.includes('not configured')) {
@@ -83,16 +94,32 @@ export const optionalAuth = async (
 ) => {
   const authHeader = req.headers.authorization;
   if (!authHeader || !authHeader.startsWith('Bearer ')) {
+    try {
+      req.supabase = getSupabaseDataClient();
+    } catch (error) {
+      console.error('Supabase public database client is not configured:', error);
+    }
     next();
     return;
   }
 
-  const token = authHeader.split('Bearer ')[1];
+  const token = authHeader.slice('Bearer '.length).trim();
   try {
+    if (!token) throw new Error('Empty optional bearer token.');
     const user = await verifySupabaseAccessToken(token);
-    if (user) req.user = user;
-  } catch {
-    console.warn('Optional Supabase authentication could not be verified.');
+    if (user) {
+      req.user = user;
+      req.supabase = getSupabaseDataClient(token);
+    } else {
+      req.supabase = getSupabaseDataClient();
+    }
+  } catch (error) {
+    console.warn('Optional Supabase authentication could not be verified:', error);
+    try {
+      req.supabase = getSupabaseDataClient();
+    } catch (clientError) {
+      console.error('Supabase public database client is not configured:', clientError);
+    }
   }
   next();
 };

@@ -1,5 +1,5 @@
--- Art Universe reference PostgreSQL & Row-Level Security (RLS) schema for Supabase deployments
--- Mirrors the core relational tables used by Art Universe with strict participant & owner RLS.
+-- Historical schema snapshot only; apply ordered files from supabase/migrations/ instead.
+-- Do not replay this snapshot against the existing Supabase project.
 
 CREATE TABLE IF NOT EXISTS public.profiles (
   id text PRIMARY KEY,
@@ -25,16 +25,6 @@ ALTER TABLE public.profiles DROP CONSTRAINT IF EXISTS profiles_role_check;
 ALTER TABLE public.profiles
   ADD CONSTRAINT profiles_role_check
   CHECK (role IN ('admin', 'artist', 'collector', 'art_lover'));
-
-CREATE TABLE IF NOT EXISTS public.users (
-  id serial PRIMARY KEY,
-  uid text NOT NULL,
-  email text NOT NULL,
-  created_at timestamptz NOT NULL DEFAULT now()
-);
-
-CREATE UNIQUE INDEX IF NOT EXISTS users_uid_unique
-  ON public.users (uid);
 
 CREATE TABLE IF NOT EXISTS public.user_account_details (
   user_id text PRIMARY KEY REFERENCES public.profiles(id) ON DELETE CASCADE,
@@ -70,6 +60,7 @@ CREATE TABLE IF NOT EXISTS public.artworks (
   edition_info text NOT NULL DEFAULT 'Unique 1 of 1 original work',
   featured boolean NOT NULL DEFAULT false,
   likes_count integer NOT NULL DEFAULT 0,
+  is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
   updated_at timestamptz NOT NULL DEFAULT now()
 );
@@ -83,6 +74,7 @@ CREATE TABLE IF NOT EXISTS public.posts (
   image_key text,
   likes_count integer NOT NULL DEFAULT 0,
   comments_count integer NOT NULL DEFAULT 0,
+  is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -134,6 +126,7 @@ CREATE TABLE IF NOT EXISTS public.conversations (
   artist_id text NOT NULL REFERENCES public.profiles(id) ON DELETE CASCADE,
   last_message_preview text NOT NULL DEFAULT '',
   last_message_at timestamptz NOT NULL DEFAULT now(),
+  is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now()
 );
 
@@ -211,7 +204,6 @@ CREATE TABLE IF NOT EXISTS public.notifications (
 
 -- Enable Row Level Security (RLS)
 ALTER TABLE public.profiles ENABLE ROW LEVEL SECURITY;
-ALTER TABLE public.users ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_account_details ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.artworks ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.collections ENABLE ROW LEVEL SECURITY;
@@ -223,7 +215,6 @@ ALTER TABLE public.artwork_offers ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.orders ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.notifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.purchases ENABLE ROW LEVEL SECURITY;
-REVOKE ALL ON TABLE public.users FROM PUBLIC, anon, authenticated;
 
 -- Artwork images are public so artwork listings render for every visitor.
 INSERT INTO storage.buckets (id, name, public, file_size_limit, allowed_mime_types)
@@ -231,8 +222,8 @@ VALUES (
   'artwork-images',
   'artwork-images',
   true,
-  4718592,
-  ARRAY['image/jpeg', 'image/png', 'image/webp']
+  10485760,
+  ARRAY['image/jpeg', 'image/png', 'image/webp', 'image/gif']
 )
 ON CONFLICT (id) DO UPDATE SET
   public = EXCLUDED.public,

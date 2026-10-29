@@ -1,5 +1,7 @@
 import { createClient, type SupabaseClient } from '@supabase/supabase-js';
 
+export type SupabaseDataClient = SupabaseClient;
+
 interface SupabaseAuthUser {
   uid: string;
   email?: string;
@@ -7,11 +9,20 @@ interface SupabaseAuthUser {
   user_metadata: Record<string, unknown>;
 }
 
-let authClient: SupabaseClient | null = null;
+function getProjectUrl(): string | undefined {
+  return process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+}
 
-export function getSupabaseAuthClient(): SupabaseClient | null {
-  const url = process.env.VITE_SUPABASE_URL;
-  const anonKey = process.env.VITE_SUPABASE_ANON_KEY;
+function getPublishableKey(): string | undefined {
+  return process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
+}
+
+let authClient: SupabaseDataClient | null = null;
+let serviceClient: SupabaseDataClient | null = null;
+
+export function getSupabaseAuthClient(): SupabaseDataClient | null {
+  const url = getProjectUrl();
+  const anonKey = getPublishableKey();
   if (!url || !anonKey) return null;
 
   if (!authClient) {
@@ -24,6 +35,45 @@ export function getSupabaseAuthClient(): SupabaseClient | null {
     });
   }
   return authClient;
+}
+
+export function getSupabaseDataClient(accessToken?: string): SupabaseDataClient {
+  const url = getProjectUrl();
+  const anonKey = getPublishableKey();
+  if (!url || !anonKey) {
+    throw new Error('Supabase URL and publishable key are required on the server.');
+  }
+  return createClient(url, anonKey, {
+    global: accessToken
+      ? { headers: { Authorization: `Bearer ${accessToken}` } }
+      : undefined,
+    auth: {
+      autoRefreshToken: false,
+      detectSessionInUrl: false,
+      persistSession: false,
+    },
+  });
+}
+
+export function getSupabaseServiceClient(): SupabaseDataClient {
+  const url = getProjectUrl();
+  const secretKey =
+    process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
+  if (!url || !secretKey) {
+    throw new Error(
+      'Trusted Supabase server operations require SUPABASE_URL and SUPABASE_SECRET_KEY.'
+    );
+  }
+  if (!serviceClient) {
+    serviceClient = createClient(url, secretKey, {
+      auth: {
+        autoRefreshToken: false,
+        detectSessionInUrl: false,
+        persistSession: false,
+      },
+    });
+  }
+  return serviceClient;
 }
 
 export async function verifySupabaseAccessToken(

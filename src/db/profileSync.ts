@@ -28,7 +28,6 @@ export interface SyncProfileValues {
 }
 
 export interface ProfileSyncOperations<TProfile extends SyncProfileRecord> {
-  upsertUser(uid: string, email?: string): Promise<void>;
   getProfile(uid: string): Promise<TProfile | undefined>;
   isHandleTaken(handle: string, exceptUid: string): Promise<boolean>;
   insertProfile(values: SyncProfileValues): Promise<TProfile>;
@@ -102,7 +101,6 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
     : undefined;
 
   const current = await operations.getProfile(uid);
-  await operations.upsertUser(uid, providedEmail);
   const fullName =
     params.fullName?.trim() ||
     current?.fullName?.trim() ||

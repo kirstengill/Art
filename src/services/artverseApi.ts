@@ -236,17 +236,6 @@ export const artverseApi = {
   },
 
   // Purchase-related endpoints
-  completePurchase: (payload: {
-    orderId: string;
-    artworkId: string;
-    amount: number;
-    currency: string;
-  }) =>
-    apiFetch<{ order: OrderIntent; purchase: Purchase }>('/api/purchases/complete', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
-
   fetchPurchases: () =>
     apiFetch<{ purchases: Purchase[]; artworks: Artwork[] }>('/api/purchases'),
 

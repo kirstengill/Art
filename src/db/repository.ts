@@ -1,262 +1,234 @@
-import { and, desc, eq, inArray, ne, or } from 'drizzle-orm';
-import { db } from './index.ts';
+import { randomUUID } from 'node:crypto';
 import {
-  artworkOffers,
-  artworks,
-  collectionItems,
-  collections,
-  comments,
-  conversationParticipants,
-  conversations,
-  follows,
-  likes,
-  messages,
-  orders,
-  posts,
-  profiles,
-  purchases,
-  users,
-  userAccountDetails,
-} from './schema.ts';
+  getSupabaseServiceClient,
+  type SupabaseDataClient,
+} from '../lib/supabase-server.ts';
 import {
   syncProfileWithOperations,
+  type SyncProfileRecord,
   type SyncProfileValues,
   type SyncUserProfileParams,
 } from './profileSync.ts';
-import { getDatabaseErrorDiagnostics } from './databaseDiagnostics.ts';
+
+type DbRow = Record<string, unknown>;
+
+async function execute<T>(
+  request: PromiseLike<{ data: T | null; error: { message: string } | null }>
+): Promise<T> {
+  const { data, error } = await request;
+  if (error) throw new Error(error.message);
+  return data as T;
+}
+
+async function executeOptional<T>(
+  request: PromiseLike<{ data: T | null; error: { message: string } | null }>
+): Promise<T | null> {
+  const { data, error } = await request;
+  if (error) throw new Error(error.message);
+  return data;
+}
+
+function fromDatabase<T>(value: unknown): T {
+  if (Array.isArray(value)) {
+    return value.map((item) => fromDatabase(item)) as T;
+  }
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(
+      Object.entries(value).map(([key, item]) => [
+        key.replace(/_([a-z])/g, (_match, letter: string) => letter.toUpperCase()),
+        fromDatabase(item),
+      ])
+    ) as T;
+  }
+  return value as T;
+}
+
+function toDatabase(value: object): DbRow {
+  return Object.fromEntries(
+    Object.entries(value).map(([key, item]) => [
+      key.replace(/[A-Z]/g, (letter) => `_${letter.toLowerCase()}`),
+      item,
+    ])
+  );
+}
+
+async function one<T>(
+  request: PromiseLike<{ data: unknown; error: { message: string } | null }>
+): Promise<T | undefined> {
+  const data = await executeOptional(request);
+  return data === null ? undefined : fromDatabase<T>(data);
+}
+
+async function many<T>(
+  request: PromiseLike<{ data: unknown; error: { message: string } | null }>
+): Promise<T[]> {
+  const data = await execute(request);
+  if (!Array.isArray(data)) throw new Error('Supabase returned an invalid row set.');
+  return fromDatabase<T[]>(data);
+}
+
+function requireImageKey(imageKey: string): void {
+  if (!imageKey || imageKey.startsWith('data:image/')) {
+    throw new Error('Artwork images must be uploaded to Supabase Storage before publishing.');
+  }
+}
+
+function storageObjectPath(imageKey: string): string | undefined {
+  const marker = '/storage/v1/object/public/artwork-images/';
+  const index = imageKey.indexOf(marker);
+  if (index >= 0) return decodeURIComponent(imageKey.slice(index + marker.length));
+  if (!imageKey.includes('://') && !imageKey.startsWith('/')) return imageKey;
+  return undefined;
+}
 
 export async function syncUserProfile(params: SyncUserProfileParams) {
-  if (typeof params.uid !== 'string' || !params.uid.trim()) {
-    throw new Error('An authenticated user ID is required to synchronize a profile.');
-  }
-
-  let stage = 'profile transaction';
-  try {
-    for (let attempt = 0; ; attempt += 1) {
-      stage = 'profile transaction';
-      try {
-        return await db.transaction(async (tx) =>
-          syncProfileWithOperations(params, {
-            upsertUser: async (uid, email) => {
-              stage = 'user record upsert';
-              const insert = tx.insert(users).values({
-                uid,
-                email: email || `${uid}@artverse.user`,
-              });
-              if (email) {
-                await insert.onConflictDoUpdate({
-                  target: users.uid,
-                  set: { email },
-                });
-              } else {
-                await insert.onConflictDoNothing({ target: users.uid });
-              }
-            },
-            getProfile: async (uid) => {
-              stage = 'profile lookup';
-              const [profile] = await tx
-                .select()
-                .from(profiles)
-                .where(eq(profiles.id, uid))
-                .limit(1);
-              return profile;
-            },
-            isHandleTaken: async (handle, exceptUid) => {
-              stage = 'username collision check';
-              const [profile] = await tx
-                .select({ id: profiles.id })
-                .from(profiles)
-                .where(
-                  and(
-                    or(eq(profiles.handle, handle), eq(profiles.username, handle)),
-                    ne(profiles.id, exceptUid)
-                  )
-                )
-                .limit(1);
-              return Boolean(profile);
-            },
-            insertProfile: async (values: SyncProfileValues) => {
-              stage = 'profile insert';
-              const [profile] = await tx
-                .insert(profiles)
-                .values(values)
-                .onConflictDoUpdate({
-                  target: profiles.id,
-                  set: {
-                    email: values.email,
-                    fullName: values.fullName,
-                    handle: values.handle,
-                    username: values.username,
-                    role: values.role,
-                    updatedAt: new Date(),
-                  },
-                })
-                .returning();
-              return profile;
-            },
-            updateProfile: async (uid, values) => {
-              stage = 'profile update';
-              const [profile] = await tx
-                .update(profiles)
-                .set({ ...values, updatedAt: new Date() })
-                .where(eq(profiles.id, uid))
-                .returning();
-              if (!profile) throw new Error('Profile disappeared during synchronization.');
-              return profile;
-            },
-            saveAccountDetails: async (details) => {
-              stage = 'private account details upsert';
-              await tx
-                .insert(userAccountDetails)
-                .values({
-                  userId: details.uid,
-                  firstName: details.firstName,
-                  lastName: details.lastName,
-                  phoneNumber: details.phoneNumber,
-                  location: details.location || null,
-                  updatedAt: new Date(),
-                })
-                .onConflictDoUpdate({
-                  target: userAccountDetails.userId,
-                  set: {
-                    firstName: details.firstName,
-                    lastName: details.lastName,
-                    phoneNumber: details.phoneNumber,
-                    location: details.location || null,
-                    updatedAt: new Date(),
-                  },
-                });
-            },
-          })
-        );
-      } catch (error) {
-        if (
-          attempt < 2 &&
-          getDatabaseErrorDiagnostics(error).code === '23505'
-        ) {
-          continue;
-        }
-        throw error;
-      }
-    }
-  } catch (error) {
-    console.error('Database syncUserProfile failed:', {
-      stage,
-      ...getDatabaseErrorDiagnostics(error),
-    });
-    throw new Error(
-      'Unable to synchronize your profile. Please retry. If the problem continues, contact support.',
-      { cause: error }
-    );
-  }
-}
-
-export async function getArtists() {
-  try {
-    const artists = await db
-      .select({
-        id: profiles.id,
-        fullName: profiles.fullName,
-        handle: profiles.handle,
-        username: profiles.username,
-        role: profiles.role,
-        accountStatus: profiles.accountStatus,
-        registrationDate: profiles.registrationDate,
-        avatarUrl: profiles.avatarUrl,
-        coverUrl: profiles.coverUrl,
-        bio: profiles.bio,
-        location: profiles.location,
-        discipline: profiles.discipline,
-        verified: profiles.verified,
-        createdAt: profiles.createdAt,
-        updatedAt: profiles.updatedAt,
-      })
-      .from(profiles)
-      .where(
-        and(
-          eq(profiles.role, 'artist'),
-          eq(profiles.accountStatus, 'active'),
-          eq(profiles.isDemo, false)
+  const db = getSupabaseServiceClient();
+  return syncProfileWithOperations(params, {
+    getProfile: async (uid) =>
+      one(db.from('profiles').select('*').eq('id', uid).maybeSingle()),
+    isHandleTaken: async (handle, exceptUid) => {
+      const profile = await one<DbRow>(
+        db
+          .from('profiles')
+          .select('id')
+          .or(`handle.eq.${handle},username.eq.${handle}`)
+          .neq('id', exceptUid)
+          .limit(1)
+          .maybeSingle()
+      );
+      return Boolean(profile);
+    },
+    insertProfile: async (values: SyncProfileValues) => {
+      const profile = await one<SyncProfileRecord>(
+        db
+          .from('profiles')
+          .insert(toDatabase(values))
+          .select('*')
+          .single()
+      );
+      if (!profile) throw new Error('Supabase did not return the saved profile.');
+      return profile;
+    },
+    updateProfile: async (uid, values) => {
+      const updated = await one<SyncProfileRecord>(
+        db
+          .from('profiles')
+          .update(toDatabase({ ...values, updatedAt: new Date().toISOString() }))
+          .eq('id', uid)
+          .select('*')
+          .single()
+      );
+      if (!updated) throw new Error('Profile disappeared during synchronization.');
+      return updated;
+    },
+    saveAccountDetails: async (details) => {
+      await execute(
+        db.from('user_account_details').upsert(
+          {
+            user_id: details.uid,
+            first_name: details.firstName,
+            last_name: details.lastName,
+            phone_number: details.phoneNumber,
+            location: details.location || null,
+            updated_at: new Date().toISOString(),
+          },
+          { onConflict: 'user_id' }
         )
-      )
-      .orderBy(desc(profiles.createdAt));
-    return artists;
-  } catch (error) {
-    console.error('Database getArtists failed:', error);
-    throw new Error('Unable to load artists.', { cause: error });
-  }
+      );
+    },
+  });
 }
 
-export async function getPublicCatalog(viewerUid?: string) {
-  try {
-    const [
-      allProfiles,
-      allArtworks,
-      allPosts,
-      allComments,
-      allFollows,
-      allLikes,
-      viewerCollections,
-    ] = await Promise.all([
-      db.select().from(profiles).orderBy(desc(profiles.createdAt)),
-      db.select().from(artworks).orderBy(desc(artworks.createdAt)),
-      db.select().from(posts).orderBy(desc(posts.createdAt)),
-      db.select().from(comments).orderBy(comments.createdAt),
-      viewerUid
-        ? db.select().from(follows).where(eq(follows.followerId, viewerUid))
-        : Promise.resolve([]),
-      viewerUid
-        ? db.select().from(likes).where(eq(likes.userId, viewerUid))
-        : Promise.resolve([]),
-      viewerUid
-        ? db.select().from(collections).where(eq(collections.ownerId, viewerUid))
-        : Promise.resolve([]),
-    ]);
+export async function getArtists(db: SupabaseDataClient) {
+  return many(
+    db
+      .from('profiles')
+      .select('id,full_name,handle,username,role,account_status,registration_date,avatar_url,cover_url,bio,location,discipline,verified,is_demo,created_at,updated_at')
+      .eq('role', 'artist')
+      .eq('account_status', 'active')
+      .eq('is_demo', false)
+      .order('created_at', { ascending: false })
+  );
+}
 
-    let savedArtworkIds: string[] = [];
-    if (viewerUid && viewerCollections.length > 0) {
-      const items = await db
-        .select()
-        .from(collectionItems)
-        .where(eq(collectionItems.collectionId, viewerCollections[0].id));
-      savedArtworkIds = items.map((item) => item.artworkId);
-    }
+export async function getPublicCatalog(db: SupabaseDataClient, viewerUid?: string) {
+  const [
+    profileRows,
+    artworkRows,
+    postRows,
+    commentRows,
+    followRows,
+    likeRows,
+    collections,
+  ] = await Promise.all([
+    many<DbRow>(
+      db
+        .from('profiles')
+        .select('id,full_name,handle,username,role,account_status,registration_date,avatar_url,cover_url,bio,location,discipline,verified,is_demo,created_at,updated_at')
+        .order('created_at', { ascending: false })
+    ),
+    many<DbRow>(db.from('artworks').select('*').order('created_at', { ascending: false })),
+    many<DbRow>(db.from('posts').select('*').order('created_at', { ascending: false })),
+    many<DbRow>(db.from('comments').select('*').order('created_at')),
+    viewerUid
+      ? many<DbRow>(db.from('follows').select('*').eq('follower_id', viewerUid))
+      : Promise.resolve([]),
+    viewerUid
+      ? many<DbRow>(db.from('likes').select('*').eq('user_id', viewerUid))
+      : Promise.resolve([]),
+    viewerUid
+      ? many<DbRow>(db.from('collections').select('*').eq('owner_id', viewerUid).limit(1))
+      : Promise.resolve([]),
+  ]);
+  const savedRows =
+    viewerUid && collections.length
+      ? await many<DbRow>(
+          db
+            .from('collection_items')
+            .select('*')
+            .eq('collection_id', String(collections[0].id))
+        )
+      : [];
 
-    const visibleProfiles = allProfiles.filter((profile) => !profile.isDemo);
-    const visibleProfileIds = new Set(visibleProfiles.map((profile) => profile.id));
-    const visibleArtworks = allArtworks.filter(
-      (artwork) => !artwork.isDemo && visibleProfileIds.has(artwork.artistId)
-    );
-    const visibleArtworkIds = new Set(visibleArtworks.map((artwork) => artwork.id));
-    const visiblePosts = allPosts.filter(
-      (post) => !post.isDemo && visibleProfileIds.has(post.authorId)
-    );
-    const visiblePostIds = new Set(visiblePosts.map((post) => post.id));
+  const visibleProfiles = profileRows.filter((profile) => !profile.is_demo);
+  const visibleProfileIds = new Set(visibleProfiles.map((profile) => profile.id));
+  const visibleArtworks = artworkRows.filter(
+    (artwork) => !artwork.is_demo && visibleProfileIds.has(String(artwork.artist_id))
+  );
+  const visibleArtworkIds = new Set(visibleArtworks.map((artwork) => artwork.id));
+  const visiblePosts = postRows.filter(
+    (post) => !post.is_demo && visibleProfileIds.has(String(post.author_id))
+  );
+  const visiblePostIds = new Set(visiblePosts.map((post) => post.id));
 
-    return {
-      profiles: visibleProfiles.map((profile) => ({ ...profile, email: '' })),
-      artworks: visibleArtworks,
-      posts: visiblePosts,
-      comments: allComments.filter(
+  return {
+    profiles: visibleProfiles.map((profile) => ({
+      ...fromDatabase<DbRow>(profile),
+      email: '',
+    })),
+    artworks: visibleArtworks.map((artwork) => fromDatabase(artwork)),
+    posts: visiblePosts.map((post) => fromDatabase(post)),
+    comments: commentRows
+      .filter(
         (comment) =>
-          visiblePostIds.has(comment.postId) &&
-          visibleProfileIds.has(comment.authorId)
-      ),
-      followedArtistIds: allFollows
-        .filter((follow) => visibleProfileIds.has(follow.followingId))
-        .map((follow) => follow.followingId),
-      likedPostIds: allLikes
-        .filter((like) => visiblePostIds.has(like.postId))
-        .map((like) => like.postId),
-      savedArtworkIds: savedArtworkIds.filter((id) => visibleArtworkIds.has(id)),
-    };
-  } catch (error) {
-    console.error('Database getPublicCatalog failed:', error);
-    throw new Error('Unable to load gallery catalog right now.', { cause: error });
-  }
+          visiblePostIds.has(String(comment.post_id)) &&
+          visibleProfileIds.has(String(comment.author_id))
+      )
+      .map((comment) => fromDatabase(comment)),
+    followedArtistIds: followRows
+      .filter((follow) => visibleProfileIds.has(String(follow.following_id)))
+      .map((follow) => String(follow.following_id)),
+    likedPostIds: likeRows
+      .filter((like) => visiblePostIds.has(String(like.post_id)))
+      .map((like) => String(like.post_id)),
+    savedArtworkIds: savedRows
+      .map((item) => String(item.artwork_id))
+      .filter((id) => visibleArtworkIds.has(id)),
+  };
 }
 
 export async function upsertArtworkListing(
+  db: SupabaseDataClient,
   ownerUid: string,
   payload: {
     id?: string;
@@ -275,863 +247,498 @@ export async function upsertArtworkListing(
     editionInfo?: string;
   }
 ) {
-  try {
-    const [ownerProfile] = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.id, ownerUid));
-    if (ownerProfile?.role !== 'artist') {
-      throw new Error('Forbidden: Only artist accounts may publish artwork.');
-    }
+  const owner = await one<DbRow>(db.from('profiles').select('role').eq('id', ownerUid).maybeSingle());
+  if (owner?.role !== 'artist') throw new Error('Forbidden: Only artist accounts may publish artwork.');
+  const categories = ['painting', 'photography', 'sculpture', 'drawing', 'digital_art'];
+  const saleModes = ['buy_now', 'negotiation_only', 'buy_now_and_negotiation'];
+  const availability = ['available', 'reserved', 'sold'];
+  if (!categories.includes(payload.category)) throw new Error('Invalid artwork category.');
+  if (!saleModes.includes(payload.saleMode)) throw new Error('Invalid sale mode.');
+  if (!availability.includes(payload.availability)) throw new Error('Invalid availability status.');
+  requireImageKey(payload.imageKey);
 
-    const validCategories = ['painting', 'photography', 'sculpture', 'drawing', 'digital_art'];
-    const validSaleModes = ['buy_now', 'negotiation_only', 'buy_now_and_negotiation'];
-    const validAvailability = ['available', 'reserved', 'sold'];
+  const values = {
+    title: payload.title.trim(),
+    description: payload.description.trim(),
+    category: payload.category,
+    medium: payload.medium.trim(),
+    dimensions: payload.dimensions.trim(),
+    year: payload.year,
+    price: payload.price,
+    currency: payload.currency || 'USD',
+    availability: payload.availability,
+    saleMode: payload.saleMode,
+    imageKey: payload.imageKey,
+    provenance: payload.provenance?.trim() || 'Direct from the artist studio',
+    editionInfo: payload.editionInfo?.trim() || 'Unique 1 of 1 original work',
+  };
 
-    if (!validCategories.includes(payload.category)) {
-      throw new Error('Invalid artwork category.');
+  if (payload.id) {
+    const existing = await one<DbRow>(db.from('artworks').select('*').eq('id', payload.id).maybeSingle());
+    if (!existing) throw new Error('Artwork listing not found.');
+    if (existing.artist_id !== ownerUid) {
+      throw new Error('Forbidden: Only the creator artist may edit this artwork.');
     }
-    if (!validSaleModes.includes(payload.saleMode)) {
-      throw new Error('Invalid sale mode.');
-    }
-    if (!validAvailability.includes(payload.availability)) {
-      throw new Error('Invalid availability status.');
-    }
-    if (payload.imageKey.startsWith('data:image/')) {
-      throw new Error('Artwork images must be uploaded to Supabase Storage before publishing.');
-    }
+    values.provenance = payload.provenance?.trim() || String(existing.provenance);
+    values.editionInfo = payload.editionInfo?.trim() || String(existing.edition_info);
+    return one(
+      db
+        .from('artworks')
+        .update(toDatabase({ ...values, updatedAt: new Date().toISOString() }))
+        .eq('id', payload.id)
+        .eq('artist_id', ownerUid)
+        .select('*')
+        .single()
+    );
+  }
 
-    if (payload.id) {
-      const existing = await db
-        .select()
-        .from(artworks)
-        .where(eq(artworks.id, payload.id));
-      if (existing.length === 0) {
-        throw new Error('Artwork listing not found.');
-      }
-      if (existing[0].artistId !== ownerUid) {
-        throw new Error('Forbidden: Only the creator artist may edit this artwork.');
-      }
-
-      const updated = await db
-        .update(artworks)
-        .set({
-          title: payload.title.trim(),
-          description: payload.description.trim(),
-          category: payload.category,
-          medium: payload.medium.trim(),
-          dimensions: payload.dimensions.trim(),
-          year: payload.year,
-          price: payload.price,
-          currency: payload.currency || 'USD',
-          availability: payload.availability,
-          saleMode: payload.saleMode,
-          imageKey: payload.imageKey,
-          provenance: payload.provenance?.trim() || existing[0].provenance,
-          editionInfo: payload.editionInfo?.trim() || existing[0].editionInfo,
-          updatedAt: new Date(),
+  return one(
+    db
+      .from('artworks')
+      .insert(
+        toDatabase({
+          id: `art-${randomUUID()}`,
+          artistId: ownerUid,
+          ...values,
+          accessionNumber: `AV-${new Date().getFullYear()}-${randomUUID().slice(0, 6).toUpperCase()}`,
         })
-        .where(eq(artworks.id, payload.id))
-        .returning();
-      return updated[0];
-    }
-
-    const newId = `art-${Date.now().toString(36)}`;
-    const accessionNumber = `AV-${new Date().getFullYear()}-${Math.floor(100 + Math.random() * 900)}`;
-
-    const created = await db
-      .insert(artworks)
-      .values({
-        id: newId,
-        artistId: ownerUid,
-        title: payload.title.trim(),
-        description: payload.description.trim(),
-        category: payload.category,
-        medium: payload.medium.trim(),
-        dimensions: payload.dimensions.trim(),
-        year: payload.year,
-        price: payload.price,
-        currency: payload.currency || 'USD',
-        availability: payload.availability,
-        saleMode: payload.saleMode,
-        imageKey: payload.imageKey,
-        provenance: payload.provenance?.trim() || 'Direct from the artist studio',
-        accessionNumber,
-        editionInfo: payload.editionInfo?.trim() || 'Unique 1 of 1 original work',
-        featured: false,
-        likesCount: 0,
-        isDemo: false,
-      })
-      .returning();
-
-    return created[0];
-  } catch (error) {
-    console.error('Database upsertArtworkListing failed:', error);
-    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
-      throw error;
-    }
-    throw new Error('Failed to save artwork listing.', { cause: error });
-  }
+      )
+      .select('*')
+      .single()
+  );
 }
 
-export async function removeArtworkListing(ownerUid: string, artworkId: string) {
-  try {
-    const existing = await db
-      .select()
-      .from(artworks)
-      .where(eq(artworks.id, artworkId));
-    if (existing.length === 0) {
-      throw new Error('Artwork not found.');
-    }
-    if (existing[0].artistId !== ownerUid) {
-      throw new Error('Forbidden: Only the artwork owner may delete this listing.');
-    }
-    await db.delete(artworks).where(eq(artworks.id, artworkId));
-    return { deletedId: artworkId };
-  } catch (error) {
-    console.error('Database removeArtworkListing failed:', error);
-    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
-      throw error;
-    }
-    throw new Error('Failed to delete artwork listing.', { cause: error });
+export async function removeArtworkListing(
+  db: SupabaseDataClient,
+  ownerUid: string,
+  artworkId: string
+) {
+  const artwork = await one<DbRow>(db.from('artworks').select('*').eq('id', artworkId).maybeSingle());
+  if (!artwork) throw new Error('Artwork not found.');
+  if (artwork.is_demo) throw new Error('This artwork is not available for inquiries.');
+  if (artwork.artist_id !== ownerUid) {
+    throw new Error('Forbidden: Only the artwork owner may delete this listing.');
   }
+  const objectPath = storageObjectPath(String(artwork.image_key || ''));
+  if (objectPath) {
+    const { error } = await db.storage.from('artwork-images').remove([objectPath]);
+    if (error) throw new Error(`Unable to remove artwork image: ${error.message}`);
+  }
+  await execute(db.from('artworks').delete().eq('id', artworkId).eq('artist_id', ownerUid));
+  return { deletedId: artworkId };
 }
 
-export async function toggleSavedArtworkInDb(ownerUid: string, artworkId: string) {
-  try {
-    let userCols = await db
-      .select()
-      .from(collections)
-      .where(eq(collections.ownerId, ownerUid));
-
-    if (userCols.length === 0) {
-      userCols = await db
-        .insert(collections)
-        .values({
-          id: `col-${ownerUid.slice(0, 12)}`,
-          ownerId: ownerUid,
-          title: 'Saved Works',
-          description: 'Private shortlist of collected and watched works.',
-          isPublic: false,
-        })
-        .returning();
-    }
-
-    const colId = userCols[0].id;
-    const existing = await db
-      .select()
-      .from(collectionItems)
-      .where(
-        and(
-          eq(collectionItems.collectionId, colId),
-          eq(collectionItems.artworkId, artworkId)
-        )
-      );
-
-    if (existing.length > 0) {
-      await db
-        .delete(collectionItems)
-        .where(eq(collectionItems.id, existing[0].id));
-      return { saved: false };
-    }
-
-    await db.insert(collectionItems).values({
-      collectionId: colId,
-      artworkId,
-    });
-    return { saved: true };
-  } catch (error) {
-    console.error('Database toggleSavedArtworkInDb failed:', error);
-    throw new Error('Unable to update collection right now.', { cause: error });
+export async function toggleSavedArtworkInDb(db: SupabaseDataClient, ownerUid: string, artworkId: string) {
+  let collections = await many<DbRow>(db.from('collections').select('*').eq('owner_id', ownerUid).limit(1));
+  if (!collections.length) {
+    collections = [
+      (await one<DbRow>(
+        db
+          .from('collections')
+          .insert({
+            id: `col-${ownerUid.slice(0, 12)}`,
+            owner_id: ownerUid,
+            title: 'Saved Works',
+            description: 'Private shortlist of collected and watched works.',
+            is_public: false,
+          })
+          .select('*')
+          .single()
+      ))!,
+    ];
   }
+  const collectionId = String(collections[0].id);
+  const saved = await one<DbRow>(
+    db
+      .from('collection_items')
+      .select('*')
+      .eq('collection_id', collectionId)
+      .eq('artwork_id', artworkId)
+      .maybeSingle()
+  );
+  if (saved) {
+    await execute(db.from('collection_items').delete().eq('id', saved.id));
+    return { saved: false };
+  }
+  await execute(
+    db.from('collection_items').insert({ collection_id: collectionId, artwork_id: artworkId })
+  );
+  return { saved: true };
 }
 
-export async function toggleFollowInDb(followerUid: string, artistId: string) {
-  try {
-    const existing = await db
-      .select()
-      .from(follows)
-      .where(
-        and(eq(follows.followerId, followerUid), eq(follows.followingId, artistId))
-      );
-
-    if (existing.length > 0) {
-      await db.delete(follows).where(eq(follows.id, existing[0].id));
-      return { following: false };
-    }
-
-    await db.insert(follows).values({
-      followerId: followerUid,
-      followingId: artistId,
-    });
-    return { following: true };
-  } catch (error) {
-    console.error('Database toggleFollowInDb failed:', error);
-    throw new Error('Unable to update artist follow status.', { cause: error });
+export async function toggleFollowInDb(db: SupabaseDataClient, followerUid: string, artistId: string) {
+  const existing = await one<DbRow>(
+    db.from('follows').select('*').eq('follower_id', followerUid).eq('following_id', artistId).maybeSingle()
+  );
+  if (existing) {
+    await execute(db.from('follows').delete().eq('id', existing.id).eq('follower_id', followerUid));
+    return { following: false };
   }
+  await execute(db.from('follows').insert({ follower_id: followerUid, following_id: artistId }));
+  return { following: true };
 }
 
 export async function createPostInDb(
+  db: SupabaseDataClient,
   authorUid: string,
   payload: { title: string; body: string; artworkId?: string; imageKey?: string }
 ) {
-  try {
-    const id = `post-${Date.now().toString(36)}`;
-    const inserted = await db
-      .insert(posts)
-      .values({
-        id,
-        authorId: authorUid,
-        artworkId: payload.artworkId || null,
+  return one(
+    db
+      .from('posts')
+      .insert({
+        id: `post-${randomUUID()}`,
+        author_id: authorUid,
+        artwork_id: payload.artworkId || null,
         title: payload.title.trim(),
         body: payload.body.trim(),
-        imageKey: payload.imageKey || null,
-        likesCount: 0,
-        commentsCount: 0,
-        isDemo: false,
+        image_key: payload.imageKey || null,
       })
-      .returning();
-    return inserted[0];
-  } catch (error) {
-    console.error('Database createPostInDb failed:', error);
-    throw new Error('Unable to publish community post.', { cause: error });
-  }
+      .select('*')
+      .single()
+  );
 }
 
-export async function addCommentInDb(authorUid: string, postId: string, body: string) {
-  try {
-    const targetPosts = await db.select().from(posts).where(eq(posts.id, postId));
-    if (targetPosts.length === 0) {
-      throw new Error('Post not found.');
-    }
-    const commentId = `comment-${Date.now().toString(36)}`;
-    const inserted = await db
-      .insert(comments)
-      .values({
-        id: commentId,
-        postId,
-        authorId: authorUid,
-        body: body.trim(),
-      })
-      .returning();
-
-    await db
-      .update(posts)
-      .set({ commentsCount: targetPosts[0].commentsCount + 1 })
-      .where(eq(posts.id, postId));
-
-    return inserted[0];
-  } catch (error) {
-    console.error('Database addCommentInDb failed:', error);
-    throw new Error('Unable to post comment.', { cause: error });
-  }
+export async function addCommentInDb(db: SupabaseDataClient, authorUid: string, postId: string, body: string) {
+  const inserted = await one<DbRow>(
+    db
+      .from('comments')
+      .insert({ id: `comment-${randomUUID()}`, post_id: postId, author_id: authorUid, body: body.trim() })
+      .select('*')
+      .single()
+  );
+  return inserted;
 }
 
-export async function togglePostLikeInDb(userUid: string, postId: string) {
-  try {
-    const targetPosts = await db.select().from(posts).where(eq(posts.id, postId));
-    if (targetPosts.length === 0) {
-      throw new Error('Post not found.');
-    }
-    const existing = await db
-      .select()
-      .from(likes)
-      .where(and(eq(likes.postId, postId), eq(likes.userId, userUid)));
-
-    if (existing.length > 0) {
-      await db.delete(likes).where(eq(likes.id, existing[0].id));
-      const nextCount = Math.max(0, targetPosts[0].likesCount - 1);
-      await db.update(posts).set({ likesCount: nextCount }).where(eq(posts.id, postId));
-      return { liked: false, likesCount: nextCount };
-    }
-
-    await db.insert(likes).values({ postId, userId: userUid });
-    const nextCount = targetPosts[0].likesCount + 1;
-    await db.update(posts).set({ likesCount: nextCount }).where(eq(posts.id, postId));
-    return { liked: true, likesCount: nextCount };
-  } catch (error) {
-    console.error('Database togglePostLikeInDb failed:', error);
-    throw new Error('Unable to update post appreciation.', { cause: error });
+export async function togglePostLikeInDb(db: SupabaseDataClient, userUid: string, postId: string) {
+  const existing = await one<DbRow>(
+    db.from('likes').select('*').eq('post_id', postId).eq('user_id', userUid).maybeSingle()
+  );
+  if (existing) {
+    await execute(db.from('likes').delete().eq('id', existing.id).eq('user_id', userUid));
+  } else {
+    await execute(db.from('likes').insert({ post_id: postId, user_id: userUid }));
   }
+  const likes = await many<DbRow>(db.from('likes').select('id').eq('post_id', postId));
+  return { liked: !existing, likesCount: likes.length };
 }
 
-export async function getConversationsForParticipant(uid: string) {
-  try {
-    // Strictly return only conversations where uid is collector or artist participant
-    const userConvs = await db
-      .select()
-      .from(conversations)
-      .where(or(eq(conversations.collectorId, uid), eq(conversations.artistId, uid)))
-      .orderBy(desc(conversations.lastMessageAt));
-
-    const visibleConversations = userConvs.filter((conversation) => !conversation.isDemo);
-    if (visibleConversations.length === 0) {
-      return { conversations: [], messages: [], offers: [] };
-    }
-
-    const convIds = visibleConversations.map((c) => c.id);
-    const allMsgs = await db.select().from(messages).orderBy(messages.createdAt);
-    const allOffers = await db
-      .select()
-      .from(artworkOffers)
-      .orderBy(artworkOffers.createdAt);
-
-    return {
-      conversations: visibleConversations,
-      messages: allMsgs.filter((m) => convIds.includes(m.conversationId)),
-      offers: allOffers.filter((o) => convIds.includes(o.conversationId)),
-    };
-  } catch (error) {
-    console.error('Database getConversationsForParticipant failed:', error);
-    throw new Error('Unable to load private conversations.', { cause: error });
-  }
+export async function getConversationsForParticipant(db: SupabaseDataClient, uid: string) {
+  const conversations = await many<DbRow>(
+    db
+      .from('conversations')
+      .select('*')
+      .or(`collector_id.eq.${uid},artist_id.eq.${uid}`)
+      .order('last_message_at', { ascending: false })
+  );
+  const visible = conversations.filter((conversation) => !conversation.is_demo);
+  if (!visible.length) return { conversations: [], messages: [], offers: [] };
+  const ids = visible.map((conversation) => String(conversation.id));
+  const [messages, offers] = await Promise.all([
+    many(db.from('messages').select('*').in('conversation_id', ids).order('created_at')),
+    many(db.from('artwork_offers').select('*').in('conversation_id', ids).order('created_at')),
+  ]);
+  return {
+    conversations: visible.map((row) => fromDatabase(row)),
+    messages: messages.map((row) => fromDatabase(row)),
+    offers: offers.map((row) => fromDatabase(row)),
+  };
 }
 
 export async function getOrCreateArtworkConversation(
+  db: SupabaseDataClient,
   collectorUid: string,
   artworkId: string
 ) {
-  try {
-    const [collectorProfile] = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.id, collectorUid));
-    if (!collectorProfile || !['collector', 'art_lover'].includes(collectorProfile.role)) {
-      throw new Error('Forbidden: A collector or art lover account is required.');
-    }
-
-    const targetArt = await db
-      .select()
-      .from(artworks)
-      .where(eq(artworks.id, artworkId));
-    if (targetArt.length === 0) {
-      throw new Error('Artwork not found.');
-    }
-    const art = targetArt[0];
-
-    const existing = await db
-      .select()
-      .from(conversations)
-      .where(
-        and(
-          eq(conversations.artworkId, artworkId),
-          eq(conversations.collectorId, collectorUid)
-        )
-      );
-
-    if (existing.length > 0) {
-      return existing[0];
-    }
-
-    const convId = `conv-${Date.now().toString(36)}`;
-    const created = await db
-      .insert(conversations)
-      .values({
-        id: convId,
-        artworkId,
-        collectorId: collectorUid,
-        artistId: art.artistId,
-        lastMessagePreview: `Inquiry opened regarding ${art.title}`,
-        isDemo: art.isDemo,
-      })
-      .returning();
-
-    await db
-      .insert(conversationParticipants)
-      .values([
-        { conversationId: convId, profileId: collectorUid, unreadCount: 0 },
-        { conversationId: convId, profileId: art.artistId, unreadCount: 1 },
-      ])
-      .onConflictDoNothing();
-
-    return created[0];
-  } catch (error) {
-    console.error('Database getOrCreateArtworkConversation failed:', error);
-    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
-      throw error;
-    }
-    throw new Error('Unable to open artwork inquiry.', { cause: error });
+  const profile = await one<DbRow>(db.from('profiles').select('role').eq('id', collectorUid).maybeSingle());
+  if (!profile || !['collector', 'art_lover'].includes(String(profile.role))) {
+    throw new Error('Forbidden: A collector or art lover account is required.');
   }
+  const artwork = await one<DbRow>(db.from('artworks').select('*').eq('id', artworkId).maybeSingle());
+  if (!artwork) throw new Error('Artwork not found.');
+  const existing = await one<DbRow>(
+    db
+      .from('conversations')
+      .select('*')
+      .eq('artwork_id', artworkId)
+      .eq('collector_id', collectorUid)
+      .maybeSingle()
+  );
+  if (existing) return fromDatabase(existing);
+  return one(
+    db
+      .from('conversations')
+      .insert({
+        id: `conv-${randomUUID()}`,
+        artwork_id: artworkId,
+        collector_id: collectorUid,
+        artist_id: artwork.artist_id,
+        last_message_preview: `Inquiry opened regarding ${artwork.title}`,
+      })
+      .select('*')
+      .single()
+  );
 }
 
 export async function appendMessageToDb(
+  db: SupabaseDataClient,
   senderUid: string,
   conversationId: string,
   body: string,
   attachmentName?: string
 ) {
-  try {
-    const convRows = await db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.id, conversationId));
-    if (convRows.length === 0) {
-      throw new Error('Conversation not found.');
-    }
-    const conv = convRows[0];
-    if (conv.collectorId !== senderUid && conv.artistId !== senderUid) {
-      throw new Error('Forbidden: Only conversation participants can send messages.');
-    }
-
-    const msgId = `msg-${Date.now().toString(36)}`;
-    const inserted = await db
-      .insert(messages)
-      .values({
-        id: msgId,
-        conversationId,
-        senderId: senderUid,
-        body: body.trim(),
-        attachmentName: attachmentName || null,
-        messageType: 'text',
-      })
-      .returning();
-
-    await db
-      .update(conversations)
-      .set({
-        lastMessagePreview: body.trim().slice(0, 140),
-        lastMessageAt: new Date(),
-      })
-      .where(eq(conversations.id, conversationId));
-
-    return inserted[0];
-  } catch (error) {
-    console.error('Database appendMessageToDb failed:', error);
-    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
-      throw error;
-    }
-    throw new Error('Unable to send message.', { cause: error });
+  const conversation = await one<DbRow>(
+    db.from('conversations').select('*').eq('id', conversationId).maybeSingle()
+  );
+  if (!conversation) throw new Error('Conversation not found.');
+  if (conversation.collector_id !== senderUid && conversation.artist_id !== senderUid) {
+    throw new Error('Forbidden: Only conversation participants can send messages.');
   }
+  const message = await one<DbRow>(
+    db
+      .from('messages')
+      .insert({
+        id: `msg-${randomUUID()}`,
+        conversation_id: conversationId,
+        sender_id: senderUid,
+        body: body.trim(),
+        attachment_name: attachmentName || null,
+        message_type: 'text',
+      })
+      .select('*')
+      .single()
+  );
+  await execute(
+    db
+      .from('conversations')
+      .update({
+        last_message_preview: body.trim().slice(0, 140),
+        last_message_at: new Date().toISOString(),
+      })
+      .eq('id', conversationId)
+  );
+  return message;
 }
 
-export async function createOfferInDb(params: {
-  senderUid: string;
-  conversationId: string;
-  amount: number;
-  currency: string;
-  note: string;
-}) {
-  try {
-    const convRows = await db
-      .select()
-      .from(conversations)
-      .where(eq(conversations.id, params.conversationId));
-    if (convRows.length === 0) {
-      throw new Error('Conversation not found.');
-    }
-    const conv = convRows[0];
-    if (conv.collectorId !== params.senderUid && conv.artistId !== params.senderUid) {
-      throw new Error('Forbidden: Only authorized participants may submit offers.');
-    }
-
-    const [senderProfile] = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.id, params.senderUid));
-    if (senderProfile?.role !== 'collector' || conv.collectorId !== params.senderUid) {
-      throw new Error('Forbidden: Only collector accounts may submit new offers.');
-    }
-
-    const artRows = await db
-      .select()
-      .from(artworks)
-      .where(eq(artworks.id, conv.artworkId));
-    if (artRows.length === 0) {
-      throw new Error('Linked artwork not found.');
-    }
-    if (artRows[0].saleMode === 'buy_now') {
-      throw new Error('This artwork is listed for fixed-price purchase only.');
-    }
-    if (params.amount <= 0) {
-      throw new Error('Offer amount must be positive.');
-    }
-
-    const recipientId =
-      params.senderUid === conv.collectorId ? conv.artistId : conv.collectorId;
-    const offerId = `offer-${Date.now().toString(36)}`;
-    const inserted = await db
-      .insert(artworkOffers)
-      .values({
-        id: offerId,
-        conversationId: conv.id,
-        artworkId: conv.artworkId,
-        senderId: params.senderUid,
-        recipientId,
+export async function createOfferInDb(
+  db: SupabaseDataClient,
+  params: { senderUid: string; conversationId: string; amount: number; currency: string; note: string }
+) {
+  const conversation = await one<DbRow>(
+    db.from('conversations').select('*').eq('id', params.conversationId).maybeSingle()
+  );
+  if (!conversation) throw new Error('Conversation not found.');
+  if (conversation.collector_id !== params.senderUid) {
+    throw new Error('Forbidden: Only collector accounts may submit new offers.');
+  }
+  const profile = await one<DbRow>(db.from('profiles').select('role').eq('id', params.senderUid).maybeSingle());
+  if (profile?.role !== 'collector') throw new Error('Forbidden: Only collector accounts may submit new offers.');
+  const artwork = await one<DbRow>(db.from('artworks').select('*').eq('id', conversation.artwork_id).maybeSingle());
+  if (!artwork) throw new Error('Linked artwork not found.');
+  if (artwork.sale_mode === 'buy_now') throw new Error('This artwork is listed for fixed-price purchase only.');
+  if (!Number.isFinite(params.amount) || params.amount <= 0) throw new Error('Offer amount must be positive.');
+  const summary = `Proposed an offer of $${Math.round(params.amount).toLocaleString()} ${params.currency || artwork.currency}${params.note.trim() ? ` · "${params.note.trim()}"` : ''}`;
+  const offer = await one<DbRow>(
+    db
+      .from('artwork_offers')
+      .insert({
+        id: `offer-${randomUUID()}`,
+        conversation_id: conversation.id,
+        artwork_id: conversation.artwork_id,
+        sender_id: params.senderUid,
+        recipient_id: conversation.artist_id,
         amount: Math.round(params.amount),
-        currency: params.currency || artRows[0].currency,
+        currency: params.currency || artwork.currency,
         status: 'pending',
         note: params.note.trim(),
       })
-      .returning();
+      .select('*')
+      .single()
+  );
+  await execute(
+    db.from('messages').insert({
+      id: `msg-${randomUUID()}`,
+      conversation_id: conversation.id,
+      sender_id: params.senderUid,
+      body: summary,
+      message_type: 'offer_event',
+    })
+  );
+  await execute(
+    db.from('conversations').update({
+      last_message_preview: summary.slice(0, 140),
+      last_message_at: new Date().toISOString(),
+    }).eq('id', conversation.id)
+  );
+  return offer;
+}
 
-    const eventSummary = `Proposed an offer of $${Math.round(params.amount).toLocaleString()} ${params.currency || 'USD'}${params.note.trim() ? ` · "${params.note.trim()}"` : ''}`;
-    await db.insert(messages).values({
-      id: `msg-${Date.now().toString(36)}-ev`,
-      conversationId: conv.id,
-      senderId: params.senderUid,
-      body: eventSummary,
-      messageType: 'offer_event',
-    });
+export async function transitionOfferStatusInDb(
+  db: SupabaseDataClient,
+  params: {
+    actorUid: string;
+    offerId: string;
+    action: 'accept' | 'reject' | 'withdraw' | 'counter';
+    counterAmount?: number;
+    note?: string;
+  }
+) {
+  const offer = await one<DbRow>(db.from('artwork_offers').select('*').eq('id', params.offerId).maybeSingle());
+  if (!offer) throw new Error('Offer not found.');
+  if (offer.status !== 'pending') throw new Error(`Offer can no longer be modified (current status: ${offer.status}).`);
+  const isWithdraw = params.action === 'withdraw';
+  if ((isWithdraw && offer.sender_id !== params.actorUid) || (!isWithdraw && offer.recipient_id !== params.actorUid)) {
+    throw new Error(`Forbidden: ${isWithdraw ? 'Only the sender' : 'Only the offer recipient'} may perform this action.`);
+  }
 
-    await db
-      .update(conversations)
-      .set({
-        lastMessagePreview: eventSummary.slice(0, 140),
-        lastMessageAt: new Date(),
-      })
-      .where(eq(conversations.id, conv.id));
-
-    return inserted[0];
-  } catch (error) {
-    console.error('Database createOfferInDb failed:', error);
-    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
-      throw error;
-    }
-    throw new Error(
-      error instanceof Error ? error.message : 'Unable to submit offer.',
-      { cause: error }
+  if (params.action === 'counter' && (!params.counterAmount || params.counterAmount <= 0)) {
+    throw new Error('Valid counteroffer amount is required.');
+  }
+  const nextStatus =
+    params.action === 'withdraw'
+      ? 'withdrawn'
+      : params.action === 'accept'
+        ? 'accepted'
+        : params.action === 'reject'
+          ? 'rejected'
+          : 'countered';
+  const updatedOffer = await one<DbRow>(
+    db
+      .from('artwork_offers')
+      .update({ status: nextStatus, updated_at: new Date().toISOString() })
+      .eq('id', offer.id)
+      .eq('status', 'pending')
+      .select('*')
+      .single()
+  );
+  if (nextStatus === 'accepted') {
+    await execute(
+      db.from('artworks').update({ availability: 'reserved', updated_at: new Date().toISOString() }).eq('id', offer.artwork_id)
     );
   }
+  let counterOffer: DbRow | null = null;
+  let eventText: string;
+  if (nextStatus === 'countered') {
+    counterOffer =
+      (await one<DbRow>(
+      db
+        .from('artwork_offers')
+        .insert({
+          id: `offer-${randomUUID()}`,
+          conversation_id: offer.conversation_id,
+          artwork_id: offer.artwork_id,
+          sender_id: params.actorUid,
+          recipient_id: offer.sender_id,
+          amount: Math.round(params.counterAmount!),
+          currency: offer.currency,
+          status: 'pending',
+          note: params.note?.trim() || '',
+          parent_offer_id: offer.id,
+        })
+        .select('*')
+        .single()
+      )) || null;
+    eventText = `Countered at $${Math.round(params.counterAmount!).toLocaleString()} ${offer.currency}${params.note?.trim() ? ` · "${params.note.trim()}"` : ''}`;
+  } else if (nextStatus === 'accepted') {
+    eventText = `Accepted offer of $${Number(offer.amount).toLocaleString()} ${offer.currency}. Settlement remains pending collector invoice checkout.`;
+  } else if (nextStatus === 'rejected') {
+    eventText = `Declined offer of $${Number(offer.amount).toLocaleString()} ${offer.currency}.`;
+  } else {
+    eventText = `Withdrew offer of $${Number(offer.amount).toLocaleString()} ${offer.currency}.`;
+  }
+  await execute(
+    db.from('messages').insert({
+      id: `msg-${randomUUID()}`,
+      conversation_id: offer.conversation_id,
+      sender_id: params.actorUid,
+      body: eventText,
+      message_type: 'offer_event',
+    })
+  );
+  await execute(
+    db.from('conversations').update({
+      last_message_preview: eventText.slice(0, 140),
+      last_message_at: new Date().toISOString(),
+    }).eq('id', offer.conversation_id)
+  );
+  return {
+    updatedOffer: fromDatabase(updatedOffer),
+    counterOffer: counterOffer ? fromDatabase(counterOffer) : null,
+  };
 }
 
-export async function transitionOfferStatusInDb(params: {
-  actorUid: string;
-  offerId: string;
-  action: 'accept' | 'reject' | 'withdraw' | 'counter';
-  counterAmount?: number;
-  note?: string;
-}) {
-  try {
-    const offerRows = await db
-      .select()
-      .from(artworkOffers)
-      .where(eq(artworkOffers.id, params.offerId));
-    if (offerRows.length === 0) {
-      throw new Error('Offer not found.');
-    }
-    const offer = offerRows[0];
-
-    if (offer.status !== 'pending') {
-      throw new Error(`Offer can no longer be modified (current status: ${offer.status}).`);
-    }
-
-    if (params.action === 'withdraw') {
-      if (offer.senderId !== params.actorUid) {
-        throw new Error('Forbidden: Only the sender of a pending offer can withdraw it.');
-      }
-      const updated = await db
-        .update(artworkOffers)
-        .set({ status: 'withdrawn', updatedAt: new Date() })
-        .where(eq(artworkOffers.id, offer.id))
-        .returning();
-
-      await db.insert(messages).values({
-        id: `msg-${Date.now().toString(36)}-wd`,
-        conversationId: offer.conversationId,
-        senderId: params.actorUid,
-        body: `Withdrew offer of $${offer.amount.toLocaleString()} ${offer.currency}.`,
-        messageType: 'offer_event',
-      });
-      return { updatedOffer: updated[0], counterOffer: null };
-    }
-
-    // Accept, Reject, or Counter may only be performed by the recipient
-    if (offer.recipientId !== params.actorUid) {
-      throw new Error('Forbidden: Only the offer recipient can respond to this offer.');
-    }
-
-    if (params.action === 'accept' || params.action === 'reject') {
-      const nextStatus = params.action === 'accept' ? 'accepted' : 'rejected';
-      const updated = await db
-        .update(artworkOffers)
-        .set({ status: nextStatus, updatedAt: new Date() })
-        .where(eq(artworkOffers.id, offer.id))
-        .returning();
-
-      if (nextStatus === 'accepted') {
-        // Reserve artwork while awaiting settlement — never automatically mark paid
-        await db
-          .update(artworks)
-          .set({ availability: 'reserved', updatedAt: new Date() })
-          .where(eq(artworks.id, offer.artworkId));
-      }
-
-      const eventText =
-        nextStatus === 'accepted'
-          ? `Accepted offer of $${offer.amount.toLocaleString()} ${offer.currency}. Settlement remains pending collector invoice checkout.`
-          : `Declined offer of $${offer.amount.toLocaleString()} ${offer.currency}.`;
-
-      await db.insert(messages).values({
-        id: `msg-${Date.now().toString(36)}-rs`,
-        conversationId: offer.conversationId,
-        senderId: params.actorUid,
-        body: eventText,
-        messageType: 'offer_event',
-      });
-
-      await db
-        .update(conversations)
-        .set({ lastMessagePreview: eventText, lastMessageAt: new Date() })
-        .where(eq(conversations.id, offer.conversationId));
-
-      return { updatedOffer: updated[0], counterOffer: null };
-    }
-
-    // Counteroffer
-    if (!params.counterAmount || params.counterAmount <= 0) {
-      throw new Error('Valid counteroffer amount is required.');
-    }
-
-    const markedCountered = await db
-      .update(artworkOffers)
-      .set({ status: 'countered', updatedAt: new Date() })
-      .where(eq(artworkOffers.id, offer.id))
-      .returning();
-
-    const counterId = `offer-${Date.now().toString(36)}-ct`;
-    const newCounter = await db
-      .insert(artworkOffers)
-      .values({
-        id: counterId,
-        conversationId: offer.conversationId,
-        artworkId: offer.artworkId,
-        senderId: params.actorUid,
-        recipientId: offer.senderId,
-        amount: Math.round(params.counterAmount),
-        currency: offer.currency,
-        status: 'pending',
-        note: params.note?.trim() || '',
-        parentOfferId: offer.id,
-      })
-      .returning();
-
-    const counterText = `Countered at $${Math.round(params.counterAmount).toLocaleString()} ${offer.currency}${params.note?.trim() ? ` · "${params.note.trim()}"` : ''}`;
-    await db.insert(messages).values({
-      id: `msg-${Date.now().toString(36)}-ct`,
-      conversationId: offer.conversationId,
-      senderId: params.actorUid,
-      body: counterText,
-      messageType: 'offer_event',
-    });
-
-    await db
-      .update(conversations)
-      .set({ lastMessagePreview: counterText.slice(0, 140), lastMessageAt: new Date() })
-      .where(eq(conversations.id, offer.conversationId));
-
-    return { updatedOffer: markedCountered[0], counterOffer: newCounter[0] };
-  } catch (error) {
-    console.error('Database transitionOfferStatusInDb failed:', error);
-    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
-      throw error;
-    }
-    throw new Error(
-      error instanceof Error ? error.message : 'Unable to update offer state.',
-      { cause: error }
+export async function createPurchaseIntentInDb(
+  db: SupabaseDataClient,
+  params: { buyerUid: string; artworkId: string; offerId?: string; shippingCity: string; collectorNote: string }
+) {
+  const buyer = await one<DbRow>(db.from('profiles').select('role').eq('id', params.buyerUid).maybeSingle());
+  if (buyer?.role !== 'collector') throw new Error('Forbidden: A collector account is required to create a purchase intent.');
+  const artwork = await one<DbRow>(db.from('artworks').select('*').eq('id', params.artworkId).maybeSingle());
+  if (!artwork) throw new Error('Artwork not found.');
+  if (artwork.availability === 'sold') throw new Error('This artwork is no longer available.');
+  let amount = Number(artwork.price);
+  let currency = String(artwork.currency);
+  if (params.offerId) {
+    const offer = await one<DbRow>(
+      db.from('artwork_offers').select('*').eq('id', params.offerId).maybeSingle()
     );
+    if (!offer || offer.status !== 'accepted' || offer.artwork_id !== artwork.id) {
+      throw new Error('Referenced offer must be accepted for this artwork before creating an inquiry.');
+    }
+    amount = Number(offer.amount);
+    currency = String(offer.currency);
+  } else if (artwork.sale_mode === 'negotiation_only') {
+    throw new Error('This work requires an accepted offer prior to acquisition.');
   }
-}
-
-export async function createPurchaseIntentInDb(params: {
-  buyerUid: string;
-  artworkId: string;
-  offerId?: string;
-  shippingCity: string;
-  collectorNote: string;
-}) {
-  try {
-    const [buyerProfile] = await db
-      .select()
-      .from(profiles)
-      .where(eq(profiles.id, params.buyerUid));
-    if (!buyerProfile || buyerProfile.role !== 'collector') {
-      throw new Error('Forbidden: A collector account is required to create a purchase intent.');
-    }
-
-    const artRows = await db
-      .select()
-      .from(artworks)
-      .where(eq(artworks.id, params.artworkId));
-    if (artRows.length === 0) {
-      throw new Error('Artwork not found.');
-    }
-    const art = artRows[0];
-
-    let verifiedPrice = art.price;
-    if (params.offerId) {
-      const offerRows = await db
-        .select()
-        .from(artworkOffers)
-        .where(eq(artworkOffers.id, params.offerId));
-      if (offerRows.length === 0 || offerRows[0].status !== 'accepted') {
-        throw new Error('Referenced offer must be accepted before creating an invoice intent.');
-      }
-      verifiedPrice = offerRows[0].amount;
-    } else if (art.saleMode === 'negotiation_only') {
-      throw new Error('This work requires an accepted offer prior to acquisition.');
-    }
-
-    const orderId = `ord-${Date.now().toString(36)}`;
-    const created = await db
-      .insert(orders)
-      .values({
-        id: orderId,
-        artworkId: art.id,
-        buyerId: params.buyerUid,
-        sellerId: art.artistId,
-        offerId: params.offerId || null,
-        amount: verifiedPrice,
-        currency: art.currency,
-        status: 'awaiting_payment', // Honest status: never pretends payment is completed
-        shippingCity: params.shippingCity.trim(),
-        collectorNote: params.collectorNote.trim(),
+  return one(
+    db
+      .from('orders')
+      .insert({
+        id: `ord-${randomUUID()}`,
+        artwork_id: artwork.id,
+        buyer_id: params.buyerUid,
+        seller_id: artwork.artist_id,
+        offer_id: params.offerId || null,
+        amount,
+        currency,
+        status: 'awaiting_payment',
+        shipping_city: params.shippingCity.trim(),
+        collector_note: params.collectorNote.trim(),
       })
-      .returning();
-
-    return created[0];
-  } catch (error) {
-    console.error('Database createPurchaseIntentInDb failed:', error);
-    throw new Error(
-      error instanceof Error ? error.message : 'Unable to register acquisition intent.',
-      { cause: error }
-    );
-  }
+      .select('*')
+      .single()
+  );
 }
 
-export async function completePurchaseInDb(params: {
-  orderId: string;
-  artworkId: string;
-  collectorId: string;
-  amount: number;
-  currency: string;
-}) {
-  try {
-    const orderRows = await db
-      .select()
-      .from(orders)
-      .where(eq(orders.id, params.orderId));
-    if (orderRows.length === 0) {
-      throw new Error('Order not found.');
-    }
-    const order = orderRows[0];
-
-    // Verify the order belongs to the collector
-    if (order.buyerId !== params.collectorId) {
-      throw new Error('Forbidden: Only the order owner can complete this purchase.');
-    }
-
-    // Verify the artwork exists and is available
-    const artRows = await db
-      .select()
-      .from(artworks)
-      .where(eq(artworks.id, params.artworkId));
-    if (artRows.length === 0) {
-      throw new Error('Artwork not found.');
-    }
-    const art = artRows[0];
-
-    if (art.availability !== 'available' && art.availability !== 'reserved') {
-      throw new Error('This artwork is no longer available for purchase.');
-    }
-
-    // Mark order as completed
-    const updatedOrder = await db
-      .update(orders)
-      .set({ status: 'completed' })
-      .where(eq(orders.id, params.orderId))
-      .returning();
-
-    // Record the purchase
-    const purchaseId = `purchase-${Date.now().toString(36)}`;
-    const purchase = await db
-      .insert(purchases)
-      .values({
-        id: purchaseId,
-        artworkId: params.artworkId,
-        collectorId: params.collectorId,
-        orderId: params.orderId,
-        purchasePrice: params.amount,
-        currency: params.currency,
-      })
-      .returning();
-
-    // Mark artwork as sold
-    await db
-      .update(artworks)
-      .set({ availability: 'sold', updatedAt: new Date() })
-      .where(eq(artworks.id, params.artworkId));
-
-    return { order: updatedOrder[0], purchase: purchase[0] };
-  } catch (error) {
-    console.error('Database completePurchaseInDb failed:', error);
-    if (error instanceof Error && error.message.startsWith('Forbidden:')) {
-      throw error;
-    }
-    throw new Error(
-      error instanceof Error ? error.message : 'Unable to complete purchase.',
-      { cause: error }
-    );
-  }
+export async function getPurchasesForCollector(db: SupabaseDataClient, collectorId: string) {
+  const purchases = await many<DbRow>(
+    db.from('purchases').select('*').eq('collector_id', collectorId).order('purchased_at', { ascending: false })
+  );
+  if (!purchases.length) return { purchases: [], artworks: [] };
+  const artworks = await many(
+    db.from('artworks').select('*').in('id', purchases.map((purchase) => String(purchase.artwork_id)))
+  );
+  return {
+    purchases: purchases.map((purchase) => fromDatabase(purchase)),
+    artworks: artworks.map((artwork) => fromDatabase(artwork)),
+  };
 }
 
-export async function getPurchasesForCollector(collectorId: string) {
-  try {
-    const purchaseRows = await db
-      .select()
-      .from(purchases)
-      .where(eq(purchases.collectorId, collectorId))
-      .orderBy(desc(purchases.purchasedAt));
-
-    if (purchaseRows.length === 0) {
-      return { purchases: [], artworks: [] };
-    }
-
-    const artworkIds = purchaseRows.map((p) => p.artworkId);
-    const artworksRows = await db
-      .select()
-      .from(artworks)
-      .where(inArray(artworks.id, artworkIds));
-
-    return {
-      purchases: purchaseRows,
-      artworks: artworksRows,
-    };
-  } catch (error) {
-    console.error('Database getPurchasesForCollector failed:', error);
-    throw new Error('Unable to load purchased artworks.', { cause: error });
-  }
-}
-
-export async function getPurchasedArtworkIds(collectorId: string): Promise<string[]> {
-  try {
-    const purchaseRows = await db
-      .select({ artworkId: purchases.artworkId })
-      .from(purchases)
-      .where(eq(purchases.collectorId, collectorId));
-    return purchaseRows.map((p) => p.artworkId);
-  } catch (error) {
-    console.error('Database getPurchasedArtworkIds failed:', error);
-    throw new Error('Unable to load purchased artwork IDs.', { cause: error });
-  }
+export async function getPurchasedArtworkIds(db: SupabaseDataClient, collectorId: string): Promise<string[]> {
+  const purchases = await many<DbRow>(
+    db.from('purchases').select('artwork_id').eq('collector_id', collectorId)
+  );
+  return purchases.map((purchase) => String(purchase.artwork_id));
 }
 
 export async function checkArtworkPurchased(
+  db: SupabaseDataClient,
   artworkId: string,
   collectorId: string
 ): Promise<boolean> {
-  try {
-    const result = await db
-      .select()
-      .from(purchases)
-      .where(
-        and(
-          eq(purchases.artworkId, artworkId),
-          eq(purchases.collectorId, collectorId)
-        )
-      );
-    return result.length > 0;
-  } catch (error) {
-    console.error('Database checkArtworkPurchased failed:', error);
-    return false;
-  }
+  return Boolean(
+    await one<DbRow>(
+      db.from('purchases').select('id').eq('artwork_id', artworkId).eq('collector_id', collectorId).maybeSingle()
+    )
+  );
 }

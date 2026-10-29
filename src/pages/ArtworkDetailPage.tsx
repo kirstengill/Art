@@ -39,7 +39,6 @@ export const ArtworkDetailPage: React.FC = () => {
     openOrCreateConversation,
     makeOffer,
     createOrderIntent,
-    completePurchase,
     currentUser,
   } = useArtVerse();
 
@@ -85,7 +84,9 @@ export const ArtworkDetailPage: React.FC = () => {
     (artwork.saleMode === 'negotiation_only' ||
       artwork.saleMode === 'buy_now_and_negotiation');
   
-  const permissions = currentUser ? ROLE_PERMISSIONS[currentUser.role] : { canPurchase: false, canUploadArtwork: false };
+  const permissions = currentUser
+    ? ROLE_PERMISSIONS[currentUser.role]
+    : ROLE_PERMISSIONS.art_lover;
   const canAcquire = permissions.canPurchase && canBuyNow;
   const canContactArtist = !currentUser || (currentUser.role === 'collector' || currentUser.role === 'art_lover');
   const canMakeOffer = permissions.canMakeOffers && canNegotiate;
@@ -574,7 +575,6 @@ export const ArtworkDetailPage: React.FC = () => {
         isOpen={purchaseModalOpen}
         onClose={() => setPurchaseModalOpen(false)}
         onCreateIntent={createOrderIntent}
-        onCompletePurchase={completePurchase}
       />
       </div>
     </div>

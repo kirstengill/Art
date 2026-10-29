@@ -24,7 +24,6 @@ import {
   addCommentInDb,
   appendMessageToDb,
   checkArtworkPurchased,
-  completePurchaseInDb,
   createOfferInDb,
   createPostInDb,
   createPurchaseIntentInDb,
@@ -91,7 +90,8 @@ async function startServer() {
 
   app.get('/api/catalog', optionalAuth, async (req: AuthRequest, res) => {
     try {
-      const catalog = await getPublicCatalog(req.user?.uid);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const catalog = await getPublicCatalog(req.supabase, req.user?.uid);
       res.json(catalog);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load catalog.';
@@ -101,7 +101,8 @@ async function startServer() {
 
   app.get('/api/artists', optionalAuth, async (req: AuthRequest, res) => {
     try {
-      const artists = await getArtists();
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const artists = await getArtists(req.supabase);
       res.json({ artists });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load artists.';
@@ -194,8 +195,9 @@ async function startServer() {
 
   app.post('/api/artworks', requireAuth, async (req: AuthRequest, res) => {
     try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
       const uid = req.user!.uid;
-      const artwork = await upsertArtworkListing(uid, req.body);
+      const artwork = await upsertArtworkListing(req.supabase, uid, req.body);
       res.status(201).json({ artwork });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to save artwork.';
@@ -206,7 +208,8 @@ async function startServer() {
 
   app.put('/api/artworks/:id', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const artwork = await upsertArtworkListing(req.user!.uid, {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const artwork = await upsertArtworkListing(req.supabase, req.user!.uid, {
         ...req.body,
         id: req.params.id,
       });
@@ -220,7 +223,8 @@ async function startServer() {
 
   app.delete('/api/artworks/:id', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const result = await removeArtworkListing(req.user!.uid, req.params.id);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const result = await removeArtworkListing(req.supabase, req.user!.uid, req.params.id);
       res.json(result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to remove artwork.';
@@ -231,7 +235,8 @@ async function startServer() {
 
   app.post('/api/artworks/:id/save', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const result = await toggleSavedArtworkInDb(req.user!.uid, req.params.id);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const result = await toggleSavedArtworkInDb(req.supabase, req.user!.uid, req.params.id);
       res.json(result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to update saved state.';
@@ -241,7 +246,8 @@ async function startServer() {
 
   app.post('/api/artists/:id/follow', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const result = await toggleFollowInDb(req.user!.uid, req.params.id);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const result = await toggleFollowInDb(req.supabase, req.user!.uid, req.params.id);
       res.json(result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to update follow status.';
@@ -251,7 +257,8 @@ async function startServer() {
 
   app.post('/api/posts', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const post = await createPostInDb(req.user!.uid, req.body);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const post = await createPostInDb(req.supabase, req.user!.uid, req.body);
       res.status(201).json({ post });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to create post.';
@@ -261,7 +268,8 @@ async function startServer() {
 
   app.post('/api/posts/:id/comments', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const comment = await addCommentInDb(req.user!.uid, req.params.id, req.body.body);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const comment = await addCommentInDb(req.supabase, req.user!.uid, req.params.id, req.body.body);
       res.status(201).json({ comment });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to add comment.';
@@ -271,7 +279,8 @@ async function startServer() {
 
   app.post('/api/posts/:id/like', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const result = await togglePostLikeInDb(req.user!.uid, req.params.id);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const result = await togglePostLikeInDb(req.supabase, req.user!.uid, req.params.id);
       res.json(result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to toggle appreciation.';
@@ -281,7 +290,8 @@ async function startServer() {
 
   app.get('/api/conversations', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const data = await getConversationsForParticipant(req.user!.uid);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const data = await getConversationsForParticipant(req.supabase, req.user!.uid);
       res.json(data);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load conversations.';
@@ -291,7 +301,9 @@ async function startServer() {
 
   app.post('/api/conversations/open', requireAuth, async (req: AuthRequest, res) => {
     try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
       const conversation = await getOrCreateArtworkConversation(
+        req.supabase,
         req.user!.uid,
         req.body.artworkId
       );
@@ -305,7 +317,9 @@ async function startServer() {
 
   app.post('/api/conversations/:id/messages', requireAuth, async (req: AuthRequest, res) => {
     try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
       const message = await appendMessageToDb(
+        req.supabase,
         req.user!.uid,
         req.params.id,
         req.body.body,
@@ -321,7 +335,8 @@ async function startServer() {
 
   app.post('/api/conversations/:id/offers', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const offer = await createOfferInDb({
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const offer = await createOfferInDb(req.supabase, {
         senderUid: req.user!.uid,
         conversationId: req.params.id,
         amount: Number(req.body.amount),
@@ -338,7 +353,8 @@ async function startServer() {
 
   app.post('/api/offers/:id/respond', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const result = await transitionOfferStatusInDb({
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const result = await transitionOfferStatusInDb(req.supabase, {
         actorUid: req.user!.uid,
         offerId: req.params.id,
         action: req.body.action,
@@ -355,7 +371,8 @@ async function startServer() {
 
   app.post('/api/orders/intent', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const order = await createPurchaseIntentInDb({
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const order = await createPurchaseIntentInDb(req.supabase, {
         buyerUid: req.user!.uid,
         artworkId: req.body.artworkId,
         offerId: req.body.offerId,
@@ -370,29 +387,18 @@ async function startServer() {
     }
   });
 
-  // Complete a purchase and record ownership
+  // Purchase completion is unavailable until payment and delivery verification exist.
   app.post('/api/purchases/complete', requireAuth, async (req: AuthRequest, res) => {
-    try {
-      const { orderId, artworkId, amount, currency } = req.body;
-      const result = await completePurchaseInDb({
-        orderId,
-        artworkId,
-        collectorId: req.user!.uid,
-        amount: Number(amount),
-        currency: currency || 'USD',
-      });
-      res.status(201).json(result);
-    } catch (error: unknown) {
-      const errMessage = error instanceof Error ? error.message : 'Failed to complete purchase.';
-      const status = errMessage.startsWith('Forbidden:') ? 403 : 400;
-      res.status(status).json({ error: errMessage });
-    }
+    res.status(501).json({
+      error: 'Purchase completion is unavailable until payment and delivery verification are configured.',
+    });
   });
 
   // Get all purchases for a collector
   app.get('/api/purchases', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const data = await getPurchasesForCollector(req.user!.uid);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const data = await getPurchasesForCollector(req.supabase, req.user!.uid);
       res.json(data);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load purchases.';
@@ -403,7 +409,8 @@ async function startServer() {
   // Check if a specific artwork has been purchased by the current user
   app.get('/api/purchases/check/:artworkId', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const isPurchased = await checkArtworkPurchased(req.params.artworkId, req.user!.uid);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const isPurchased = await checkArtworkPurchased(req.supabase, req.params.artworkId, req.user!.uid);
       res.json({ isPurchased });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to check purchase status.';
@@ -414,7 +421,8 @@ async function startServer() {
   // Get list of purchased artwork IDs for a collector
   app.get('/api/purchases/artwork-ids', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const artworkIds = await getPurchasedArtworkIds(req.user!.uid);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const artworkIds = await getPurchasedArtworkIds(req.supabase, req.user!.uid);
       res.json({ artworkIds });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load purchased artwork IDs.';

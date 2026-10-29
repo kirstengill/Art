@@ -46,18 +46,12 @@ ARTIVORA implements a **role-based access control system** with three user types
 
 ## Architecture & Database Setup
 
-1. **Managed PostgreSQL + Express API (`server.ts`, `src/db/schema.ts`, `src/db/repository.ts`)**:
-   - Uses Drizzle ORM (`pg` connection pool) across 14 domain tables (`profiles`, `artworks`, `posts`, `comments`, `likes`, `follows`, `collections`, `collection_items`, `conversations`, `conversation_participants`, `messages`, `artwork_offers`, `orders`, `notifications`) plus `users` and private `user_account_details`.
-   - Enforces ownership checks on artwork edits/deletions, artist-only publishing, participant-only access on conversations/messages/offers, and server-side offer state transition & order price validation.
-2. **Supabase Auth, Storage & Client (`src/lib/supabase.ts`, `supabase/schema.sql`)**:
-   - Uses Supabase Auth as the sole authentication provider for email/password. The browser uses only the publishable/anon key; the server validates bearer tokens with Supabase Auth before PostgreSQL API access.
-   - Artist-uploaded artwork images are uploaded to the public `artwork-images` Storage bucket. Its policies permit public reads and authenticated uploads only to the uploader's own folder. The artwork record contains the bucket's public URL; images are not saved as data URLs in PostgreSQL.
-   - Includes a typed Supabase client and Realtime channel helper, plus SQL DDL, Storage bucket configuration, and Row-Level Security policies in `supabase/schema.sql` for standalone Supabase + Vercel deployments. The current Express/Drizzle application data remains in PostgreSQL.
-3. **Administrator Dashboard (`/admin`)**:
-   - Reads live user and profile counts, artwork listings, community posts, and purchase intents from the PostgreSQL tables used by the Express/Drizzle backend. The reference Supabase schema is not used as a second data source by this dashboard.
-   - Supabase Auth access tokens are verified by the server, then the server checks the authenticated user ID against the server-only `ADMIN_UIDS` allowlist before any `/api/admin/*` query. Configure one or more Supabase Auth user IDs (UUIDs, comma-separated) in the server environment; public sign-up and editable profile roles do not grant admin access.
-   - The account, listing, community post, and purchase-intent tables are `users`, `profiles`, `artworks`, `posts`, and `orders`. `profiles.id` links to `users.uid`; `artworks.artist_id` and `posts.author_id` link to `profiles.id`; orders link to buyer/seller profiles and artwork. Legacy rows flagged as demo are excluded from public catalog responses.
-   - The current `orders` schema records only `intent_created`, `awaiting_payment`, and `cancelled`; there are no payment, deposit, refund, payout, or completed-sale records. The dashboard labels these as purchase intents and reports payment integration as not configured.
+- **Supabase is the single persistent backend**: Supabase Postgres stores profiles, private account details, artwork, community activity, saved collections, inquiries/offers, and purchase intents. The Express API uses the official Supabase client and the caller's verified Supabase access token so ordinary requests remain subject to RLS.
+- **Authentication**: Supabase Auth is the only account/session provider. Email/password registration and sign-in use the existing Supabase Auth flow; explore remains available without signing in. Public signup accepts Artist, Collector, or Art Lover. Admin access is granted only by the server-side `ADMIN_UIDS` allowlist, never by client metadata or profile updates.
+- **Artwork storage**: Images go to the existing public `artwork-images` bucket. Uploads are restricted to authenticated artist accounts and a folder named for their Auth user ID; MIME types are JPEG, PNG, WebP, or GIF, up to 10 MB. Artwork metadata references the public Storage URL.
+- **Administrator dashboard**: `/api/admin/*` checks the authenticated user ID against `ADMIN_UIDS` before using the server-only Supabase secret. Configure `SUPABASE_SECRET_KEY` only in the trusted server/deployment environment. Never prefix it with `VITE_`.
+- **Transactions**: A purchase intent is not a payment. Artivora's intended split is 20% platform / 80% artist, with artist payout only after delivery confirmation, but no payment collection, escrow, delivery verification, or payout integration exists. The admin must mediate inquiries manually; no legal compliance or settlement is asserted. The UI does not allow users to mark an unpaid intent as a completed purchase.
+- **Schema**: Existing tables and policies in `supabase/migrations/` remain the foundation. The new security migration adds only missing demo fields and tightens profile, artwork, order, and Storage authorization. The old `public.users` mirror table is no longer used; if present from an earlier migration, it is retained rather than dropped to avoid data loss.
 
 ## Getting Started
 
@@ -71,23 +65,23 @@ npm install
 
 Copy `.env.example` to `.env` and populate the required placeholders (never commit real secrets):
 
-- `SQL_HOST`, `SQL_DB_NAME`, `SQL_USER`, `SQL_PASSWORD` (PostgreSQL runtime credentials)
-- `SQL_ADMIN_USER`, `SQL_ADMIN_PASSWORD` (for Drizzle schema updates)
-- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (required for Supabase authentication; use only the publishable/anon key in the browser)
+- `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (required by the browser; use only the Supabase publishable/anon key)
+- `SUPABASE_URL`, `SUPABASE_ANON_KEY` (server equivalents; may be omitted when the `VITE_` equivalents are present)
+- `SUPABASE_SECRET_KEY` (required for trusted profile synchronization and admin queries; server only; a legacy `SUPABASE_SERVICE_ROLE_KEY` is also accepted)
 - `ADMIN_UIDS` (server-only comma-separated Supabase Auth user IDs for administrator access; do not use a `VITE_` prefix)
 - `VITE_HELPLINE_WHATSAPP_URL`, `VITE_HELPLINE_X_URL`, `VITE_HELPLINE_ETSY_URL` (optional official HTTPS destinations for the footer icons)
 
-Apply the updated PostgreSQL schema, including the private account-details table, with `npx drizzle-kit push --config=src/db/drizzle.config.ts` after setting the `SQL_ADMIN_*` values. Review schema changes before applying them to a production database.
-
-The application no longer provides demo accounts, seeded sample content, or demo-mode actions. If a PostgreSQL database still contains legacy rows marked `is_demo = true`, back up and review the explicitly destructive cleanup script at [`scripts/remove_demo_data.sql`](./scripts/remove_demo_data.sql) before running it against that database. Public catalog and conversation APIs exclude those legacy rows until cleanup is applied.
+`GEMINI_API_KEY` and `APP_URL` remain available for the existing AI/hosting integrations. No separately hosted PostgreSQL instance or database login credentials are required.
 
 ### Supabase Auth Setup
 
 1. Enable email/password authentication in the Supabase dashboard. Configure email confirmation according to your deployment policy.
 2. Add each app callback URL to Supabase Auth's allowed redirect URLs, including `http://localhost:3000/auth/callback` for local development and the corresponding URL for each deployed origin.
 3. Add administrator Supabase Auth user UUIDs to the server-only `ADMIN_UIDS` variable. Never use mutable role metadata to grant administrator access; public registration cannot create Admin accounts.
-4. Run `supabase/schema.sql` in the Supabase SQL Editor to create/configure the public `artwork-images` Storage bucket and its upload/read policies, as well as the reference database schema.
+4. Link the Supabase CLI to project `majessboafhzsbardtmb` and review/apply pending migrations with `npx supabase db push`. Do not re-run the full `supabase/schema.sql` snapshot against an existing project.
 5. Configure Helpline URL variables only with your official WhatsApp, X/Twitter, and Etsy destinations. Invalid or unset URLs stay hidden.
+
+The app's profile sync and admin routes require a server-only Supabase secret key. Missing credentials prevent those routes from succeeding; local build/tests do not verify a live Supabase project.
 
 ### 3. Run in Development
 

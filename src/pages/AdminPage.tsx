@@ -401,7 +401,7 @@ export const AdminPage: React.FC = () => {
           {!accessUnavailable && section === 'overview' && overview && (
             <div className="space-y-7">
               <div className="grid gap-3 sm:grid-cols-2 xl:grid-cols-3">
-                <StatCard label="Registered users" value={overview.counts.users.toLocaleString()} detail="Supabase accounts synced to PostgreSQL" icon={Users} />
+                <StatCard label="Registered users" value={overview.counts.users.toLocaleString()} detail="Active Supabase profiles" icon={Users} />
                 <StatCard label="Artists" value={overview.counts.artists.toLocaleString()} detail="Registered artist profiles" icon={Brush} />
                 <StatCard label="Collectors" value={overview.counts.collectors.toLocaleString()} detail="Registered collector profiles" icon={Users} />
                 <StatCard label="Artwork listings" value={overview.counts.artworks.toLocaleString()} detail="Published catalogue artwork records" icon={Image} />

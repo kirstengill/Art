@@ -4,6 +4,7 @@ import { CheckCircle2, ShieldAlert, X } from 'lucide-react';
 import type { Artwork, OrderIntent } from '../../types/artverse';
 import { ArtworkImage } from '../../data/artworkImages';
 import { formatMoney } from '../../utils/formatters';
+import { getWhatsAppHelplineUrl } from '../../utils/helpline';
 
 interface PurchaseIntentModalProps {
   artwork: Artwork;
@@ -17,12 +18,6 @@ interface PurchaseIntentModalProps {
     shippingCity: string;
     collectorNote: string;
   }) => Promise<OrderIntent>;
-  onCompletePurchase?: (params: {
-    orderId: string;
-    artworkId: string;
-    amount: number;
-    currency: string;
-  }) => Promise<{ order: OrderIntent; purchase: any }>;
 }
 
 export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
@@ -42,6 +37,11 @@ export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
 
   const unitAmount = agreedAmount ?? artwork.price;
   const cratingEstimate = Math.max(180, Math.round(unitAmount * 0.035));
+  const whatsappUrl = createdOrder
+    ? getWhatsAppHelplineUrl(
+        `Artivora purchase inquiry ${createdOrder.id}: ${artwork.title}`
+      )
+    : undefined;
 
   useEffect(() => {
     if (isOpen) {
@@ -145,8 +145,8 @@ export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
                         <span className="font-mono font-medium text-[#141312]">
                           awaiting_payment
                         </span>
-                        . No payment has been processed—live payment gateway integration
-                        (Stripe / wire escrow) is required before funds can be settled.
+                        . No payment has been processed. The administrator mediates next
+                        steps; payment collection and delivery verification are not configured.
                       </p>
                     </div>
                   </div>
@@ -175,41 +175,27 @@ export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
                     </div>
                   </dl>
 
-                  <div className="flex justify-end gap-3 pt-2">
-                    {onCompletePurchase && (
-                      <motion.button
-                        type="button"
-                        whileTap={shouldReduceMotion ? undefined : { scale: 0.97 }}
-                        onClick={async () => {
-                          if (!createdOrder) return;
-                          try {
-                            setSubmitting(true);
-                            await onCompletePurchase({
-                              orderId: createdOrder.id,
-                              artworkId: artwork.id,
-                              amount: createdOrder.amount,
-                              currency: createdOrder.currency,
-                            });
-                            onClose();
-                          } catch (err) {
-                            setError(
-                              err instanceof Error ? err.message : 'Failed to complete purchase.'
-                            );
-                          } finally {
-                            setSubmitting(false);
-                          }
-                        }}
-                        disabled={submitting}
-                        className="px-5 py-2.5 text-sm font-medium rounded-xl transition-colors disabled:opacity-50"
-                        style={{
-                          background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
-                          color: '#FAF8F3',
-                          boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
-                        }}
+                  <div className="rounded-xl border border-[#E2D6BD] bg-[#F5EFE2] p-4 text-xs leading-relaxed text-[#4F473D]">
+                    The intended commission is 20% for Artivora and 80% for the artist.
+                    Artist payouts are intended only after delivery is confirmed. These
+                    steps are not automated or payment-enabled.
+                    {whatsappUrl ? (
+                      <a
+                        href={whatsappUrl}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="mt-3 inline-flex font-medium text-[#76551F] underline underline-offset-2"
                       >
-                        {submitting ? 'Completing...' : 'Complete Purchase'}
-                      </motion.button>
+                        Contact the Artivora administrator on WhatsApp
+                      </a>
+                    ) : (
+                      <p className="mt-2 text-[#6B655E]">
+                        The WhatsApp helpline is not configured for this deployment.
+                      </p>
                     )}
+                  </div>
+
+                  <div className="flex justify-end gap-3 pt-2">
                     <button
                       type="button"
                       onClick={onClose}

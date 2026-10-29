@@ -1,6 +1,42 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { publishArtworkWithSynchronizedProfile } from './artworkPublishing.ts';
+import {
+  persistImageBeforeSave,
+  publishArtworkWithSynchronizedProfile,
+} from './artworkPublishing.ts';
+
+test('uploads a community post image before saving the post', async () => {
+  const calls: string[] = [];
+  const post = await persistImageBeforeSave(
+    'data:image/png;base64,abc',
+    async () => {
+      calls.push('upload');
+      return 'https://storage.example.test/post.png';
+    },
+    async (imageKey) => {
+      calls.push(`save:${imageKey}`);
+      return { imageKey };
+    }
+  );
+
+  assert.deepEqual(calls, ['upload', 'save:https://storage.example.test/post.png']);
+  assert.equal(post.imageKey, 'https://storage.example.test/post.png');
+});
+
+test('preserves a linked artwork image without uploading it again', async () => {
+  const calls: string[] = [];
+  const post = await persistImageBeforeSave(
+    'https://storage.example.test/artwork.png',
+    async () => {
+      calls.push('upload');
+      return 'unused';
+    },
+    async (imageKey) => ({ imageKey })
+  );
+
+  assert.deepEqual(calls, []);
+  assert.equal(post.imageKey, 'https://storage.example.test/artwork.png');
+});
 
 test('synchronizes, uploads the image, then publishes using the storage URL', async () => {
   const calls: string[] = [];

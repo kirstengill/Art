@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArrowUpRight, Check, Heart, MessageCircle, Share2 } from 'lucide-react';
+import { ArrowUpRight, Check, Heart, ImagePlus, MessageCircle, Share2, X } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
 import {
@@ -34,12 +34,39 @@ export const CommunityPage: React.FC = () => {
   const [title, setTitle] = useState('');
   const [body, setBody] = useState('');
   const [selectedArtworkId, setSelectedArtworkId] = useState<string>('');
+  const [uploadedImageKey, setUploadedImageKey] = useState<string | undefined>();
+  const [uploadedImageName, setUploadedImageName] = useState('');
   const [composerError, setComposerError] = useState<string | null>(null);
   const [publishing, setPublishing] = useState(false);
 
   const [expandedComments, setExpandedComments] = useState<Record<string, boolean>>({});
   const [commentDrafts, setCommentDrafts] = useState<Record<string, string>>({});
   const [copiedPostId, setCopiedPostId] = useState<string | null>(null);
+
+  const handlePostImageUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.currentTarget.value = '';
+    if (!file) return;
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setComposerError('Please upload a JPEG, PNG, or WebP image file.');
+      return;
+    }
+    if (file.size > 4.5 * 1024 * 1024) {
+      setComposerError('Image file must be under 4.5 MB.');
+      return;
+    }
+
+    const reader = new FileReader();
+    reader.onload = () => {
+      if (typeof reader.result === 'string') {
+        setUploadedImageKey(reader.result);
+        setUploadedImageName(file.name);
+        setComposerError(null);
+      }
+    };
+    reader.onerror = () => setComposerError('Unable to read the selected image.');
+    reader.readAsDataURL(file);
+  };
 
   const handlePublishPost = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -60,11 +87,13 @@ export const CommunityPage: React.FC = () => {
         title: title.trim() || 'Community Note',
         body: body.trim(),
         artworkId: selectedArtworkId || undefined,
-        imageKey: linked?.imageKey,
+        imageKey: uploadedImageKey || linked?.imageKey,
       });
       setTitle('');
       setBody('');
       setSelectedArtworkId('');
+      setUploadedImageKey(undefined);
+      setUploadedImageName('');
     } catch (err) {
       setComposerError(
         err instanceof Error ? err.message : 'Unable to publish community post.'
@@ -204,6 +233,47 @@ export const CommunityPage: React.FC = () => {
                   className="w-full px-4 py-3 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] placeholder:text-[#9A9184] focus:outline-none focus:border-[#B38B40] transition-colors"
                 />
               </div>
+
+              <div className="flex flex-wrap items-center gap-3">
+                <label className="inline-flex items-center gap-2 px-3.5 py-2 text-xs font-medium bg-[#F3EFE6] text-[#141312] rounded-lg hover:bg-[#E7E0D2] cursor-pointer transition-colors">
+                  <ImagePlus className="w-4 h-4" />
+                  Add image
+                  <input
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handlePostImageUpload}
+                    className="sr-only"
+                  />
+                </label>
+                {uploadedImageKey && (
+                  <>
+                    <span className="text-xs text-[#5C554C] truncate max-w-48">
+                      {uploadedImageName}
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setUploadedImageKey(undefined);
+                        setUploadedImageName('');
+                      }}
+                      aria-label="Remove uploaded image"
+                      className="p-1.5 text-[#5C554C] hover:text-[#141312]"
+                    >
+                      <X className="w-4 h-4" />
+                    </button>
+                  </>
+                )}
+              </div>
+
+              {uploadedImageKey && (
+                <div className="h-48 max-w-md overflow-hidden rounded-lg border border-[#E6DFD3]">
+                  <ArtworkImage
+                    imageKey={uploadedImageKey}
+                    alt="Selected studio photograph preview"
+                    className="w-full h-full object-cover"
+                  />
+                </div>
+              )}
 
               {composerError && (
                 <p role="alert" className="text-xs font-medium text-[#992E24]">

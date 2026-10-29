@@ -14,7 +14,10 @@ import {
   uploadArtworkImage,
 } from '../lib/supabase';
 import { artverseApi } from '../services/artverseApi';
-import { publishArtworkWithSynchronizedProfile } from '../services/artworkPublishing';
+import {
+  persistImageBeforeSave,
+  publishArtworkWithSynchronizedProfile,
+} from '../services/artworkPublishing';
 import type {
   Artwork,
   ArtworkInput,
@@ -102,12 +105,6 @@ interface ArtVerseContextValue {
     shippingCity: string;
     collectorNote: string;
   }) => Promise<OrderIntent>;
-  completePurchase: (params: {
-    orderId: string;
-    artworkId: string;
-    amount: number;
-    currency: string;
-  }) => Promise<{ order: OrderIntent; purchase: Purchase }>;
   getProfileById: (id: string) => Profile | undefined;
   getArtworkById: (id: string) => Artwork | undefined;
   getIsPurchased: (artworkId: string) => boolean;
@@ -619,7 +616,17 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       imageKey?: string;
     }): Promise<CommunityPost> => {
       requireAuthenticatedUser(authMode, currentUser);
-      const { post } = await artverseApi.createPost(payload);
+      if (currentUser.role !== 'artist') {
+        throw new Error('An artist account is required to publish community posts.');
+      }
+      const post = await persistImageBeforeSave(
+        payload.imageKey,
+        (dataUrl) => uploadArtworkImage(dataUrl, currentUser.id),
+        async (imageKey) => {
+          const result = await artverseApi.createPost({ ...payload, imageKey });
+          return result.post;
+        }
+      );
       setPosts((prev) => mergeById([post], prev));
       return post;
     },
@@ -793,25 +800,6 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     [artworks]
   );
 
-  const completePurchase = useCallback(
-    async (params: {
-      orderId: string;
-      artworkId: string;
-      amount: number;
-      currency: string;
-    }): Promise<{ order: OrderIntent; purchase: Purchase }> => {
-      requireAuthenticatedUser(authMode, currentUser);
-      if (currentUser?.role !== 'collector') {
-        throw new Error('Only collectors can complete purchases.');
-      }
-      const result = await artverseApi.completePurchase(params);
-      await refreshPurchases();
-      await loadCatalog();
-      return result;
-    },
-    [authMode, currentUser, refreshPurchases, loadCatalog]
-  );
-
   const getIsPurchased = useCallback(
     (artworkId: string): boolean => {
       return purchasedArtworkIds.includes(artworkId);
@@ -860,7 +848,6 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       makeOffer,
       respondToOffer,
       createOrderIntent,
-      completePurchase,
       getProfileById,
       getArtworkById,
       getIsPurchased,
@@ -905,7 +892,6 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       makeOffer,
       respondToOffer,
       createOrderIntent,
-      completePurchase,
       getProfileById,
       getArtworkById,
       getIsPurchased,
