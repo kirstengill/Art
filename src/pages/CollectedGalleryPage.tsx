@@ -6,6 +6,7 @@ import { useArtVerse } from '../context/ArtVerseContext';
 import { ArtworkGrid } from '../components/artwork/ArtworkGrid';
 import { ArtworkCard } from '../components/artwork/ArtworkCard';
 import { ArtworkGridSkeleton } from '../components/ui/Skeletons';
+import { artverseApi } from '../services/artverseApi';
 import { formatMoney } from '../utils/formatters';
 import type { Artwork, Purchase } from '../types/artverse';
 
@@ -22,14 +23,16 @@ export const CollectedGalleryPage: React.FC = () => {
     authMode,
   } = useArtVerse();
 
-  const [purchases, setPurchases] = useState<Purchase[]>([]);
   const [purchasedArtworks, setPurchasedArtworks] = useState<CollectedArtwork[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
+    let active = true;
     const loadPurchases = async () => {
       if (authMode !== 'authenticated' || !currentUser) {
+        setPurchasedArtworks([]);
+        setError(null);
         setLoading(false);
         return;
       }
@@ -38,22 +41,11 @@ export const CollectedGalleryPage: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        // Fetch purchases from the API
-        const response = await fetch('/api/purchases', {
-          headers: {
-            'Authorization': `Bearer ${localStorage.getItem('sb-access-token') || ''}`,
-          },
-        });
+        const { purchases } = await artverseApi.fetchPurchases();
+        if (!active) return;
 
-        if (!response.ok) {
-          throw new Error('Failed to load purchases');
-        }
-
-        const data = await response.json();
-        setPurchases(data.purchases || []);
-        
         // Combine purchases with artwork data
-        const combined = data.purchases.map((purchase: Purchase) => {
+        const combined = purchases.map((purchase) => {
           const artwork = getArtworkById(purchase.artworkId);
           if (artwork) {
             return { ...artwork, purchase };
@@ -63,14 +55,19 @@ export const CollectedGalleryPage: React.FC = () => {
 
         setPurchasedArtworks(combined);
       } catch (err) {
-        setError(err instanceof Error ? err.message : 'Unable to load your collection');
-        console.error('Failed to load purchases:', err);
+        if (active) {
+          setError(err instanceof Error ? err.message : 'Unable to load your collection');
+          console.error('Failed to load purchases:', err);
+        }
       } finally {
-        setLoading(false);
+        if (active) setLoading(false);
       }
     };
 
     void loadPurchases();
+    return () => {
+      active = false;
+    };
   }, [authMode, currentUser, getArtworkById]);
 
   const totalSpent = purchasedArtworks.reduce(

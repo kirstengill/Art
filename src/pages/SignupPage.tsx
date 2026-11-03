@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate } from 'react-router-dom';
+import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
@@ -22,9 +22,15 @@ const inputClass =
 export const SignupPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { signUpWithEmail } = useArtVerse();
 
-  const [role, setRole] = useState<UserRole>('artist');
+  const [role, setRole] = useState<UserRole>(() => {
+    const requestedRole = searchParams.get('role');
+    return requestedRole === 'collector' || requestedRole === 'art_lover'
+      ? requestedRole
+      : 'artist';
+  });
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
   const [phoneNumber, setPhoneNumber] = useState('');

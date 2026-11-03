@@ -167,7 +167,7 @@ export const CommunityPage: React.FC = () => {
               </p>
             </motion.div>
 
-            {/* Create Post Composer */}
+            {currentUser?.role === 'artist' ? (
             <motion.form
               initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
               animate={{ opacity: 1, y: 0 }}
@@ -292,6 +292,27 @@ export const CommunityPage: React.FC = () => {
                 </motion.button>
               </div>
             </motion.form>
+            ) : (
+              <div className="rounded-2xl border border-[#E6DFD3] bg-white p-6 sm:p-7">
+                <h2 className="font-serif text-xl font-semibold text-[#141312]">
+                  {currentUser ? 'Enjoy the studio journal' : 'Join the ARTIVORA community'}
+                </h2>
+                <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5C554C]">
+                  {currentUser
+                    ? 'Artist accounts can publish studio dispatches. You can browse, follow artists, and join the conversation here.'
+                    : 'Browse public posts and artist stories. Sign in to comment, appreciate, or follow the studios you love.'}
+                </p>
+                {!currentUser && (
+                  <Link
+                    to="/login"
+                    state={{ from: { pathname: '/community' } }}
+                    className="mt-4 inline-flex rounded-xl bg-[#141312] px-4 py-2.5 text-xs font-medium text-[#FAF8F3] transition-colors hover:bg-[#2A2724]"
+                  >
+                    Sign in to participate
+                  </Link>
+                )}
+              </div>
+            )}
 
             {/* Feed Posts */}
             {posts.length === 0 ? (

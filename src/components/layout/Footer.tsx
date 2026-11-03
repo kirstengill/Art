@@ -82,12 +82,12 @@ export const Footer: React.FC = () => {
 
           <div className="space-y-2.5 text-sm">
             <h3 className="font-serif text-base font-semibold text-[#141312]">
-              For Artists & Collectors
+              Your ARTIVORA Account
             </h3>
             <ul className="space-y-2">
               <li>
                 <Link to="/dashboard" className="hover:text-[#141312] transition-colors">
-                  Artist Studio Dashboard
+                  Member Dashboard
                 </Link>
               </li>
               <li>
@@ -100,7 +100,7 @@ export const Footer: React.FC = () => {
               </li>
               <li>
                 <Link to="/login" className="hover:text-[#141312] transition-colors">
-                  Collector & Artist Sign In
+                  Member Sign In
                 </Link>
               </li>
               <li>

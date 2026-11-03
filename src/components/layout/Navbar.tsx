@@ -10,12 +10,14 @@ import {
 import { ArrowUpRight, Menu, X, LogOut } from 'lucide-react';
 import { useArtVerse } from '../../context/ArtVerseContext';
 import { formatRoleLabel } from '../../utils/formatters';
+import { dashboardPathForRole } from '../../utils/roleRoutes';
 import artivoraLogo from '../../images/artivora.png';
 
 const PUBLIC_LINKS = [
   { to: '/', label: 'Home' },
   { to: '/gallery', label: 'Explore' },
   { to: '/artists', label: 'Artists' },
+  { to: '/community', label: 'Community' },
 ];
 
 export const Navbar: React.FC = () => {
@@ -109,7 +111,7 @@ export const Navbar: React.FC = () => {
                 </Link>
               )}
               <Link
-                to="/dashboard"
+                to={dashboardPathForRole(currentUser.role)}
                 className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
                   isActive('/dashboard')
                     ? 'text-[#FAF8F3]'
@@ -124,7 +126,11 @@ export const Navbar: React.FC = () => {
                   />
                 )}
                 <span className="relative z-10">
-                  {currentUser.role === 'artist' ? 'My Studio' : 'Dashboard'}
+                  {currentUser.role === 'artist'
+                    ? 'My Studio'
+                    : currentUser.role === 'admin'
+                      ? 'Admin Dashboard'
+                      : 'Dashboard'}
                 </span>
               </Link>
             </>
@@ -250,7 +256,7 @@ export const Navbar: React.FC = () => {
                     </Link>
                   )}
                   <Link
-                    to="/dashboard"
+                    to={dashboardPathForRole(currentUser.role)}
                     onClick={() => setMobileOpen(false)}
                     className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
                       isActive('/dashboard')
@@ -258,7 +264,11 @@ export const Navbar: React.FC = () => {
                         : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
                     }`}
                   >
-                    {currentUser.role === 'artist' ? 'My Studio' : 'Dashboard'}
+                    {currentUser.role === 'artist'
+                      ? 'My Studio'
+                      : currentUser.role === 'admin'
+                        ? 'Admin Dashboard'
+                        : 'Dashboard'}
                   </Link>
                   <button
                     onClick={handleLogout}

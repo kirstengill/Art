@@ -149,7 +149,7 @@ export const LandingPage: React.FC = () => {
           className="max-w-3xl"
         >
           <p className="mb-5 text-xs font-medium uppercase tracking-[0.32em] text-[#ead8b2] sm:text-sm">
-            Discover Art. Own Inspiration.
+            Welcome to the Universe.
           </p>
           <h1
             aria-label="Every Masterpiece Tells a Story"
@@ -184,7 +184,7 @@ export const LandingPage: React.FC = () => {
                   transition={{
                     duration: 1.1,
                     repeat: Infinity,
-                    ease: 'steps(1, end)',
+                    ease: 'linear',
                   }}
                   style={{
                     background: '#c4faff',
@@ -198,18 +198,24 @@ export const LandingPage: React.FC = () => {
           <p className="mt-7 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">
             Explore extraordinary artwork, discover talented artists, and celebrate creativity. Whether you're an artist, collector, or art lover, <strong className="text-white">ARTIVORA</strong> brings you closer to the beauty of art.
           </p>
-          <div className="mt-9 flex flex-col gap-3 sm:flex-row">
+          <div className="mt-9 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
             <Link
               to="/gallery"
-              className="inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#d3b578] px-7 text-sm font-semibold uppercase tracking-[0.12em] text-[#211c13] shadow-[0_10px_35px_rgba(0,0,0,0.24)] transition-colors hover:bg-[#e4cb99] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              className="inline-flex min-h-14 items-center justify-center gap-3 rounded-full bg-[#d3b578] px-6 text-sm font-semibold uppercase tracking-[0.12em] text-[#211c13] shadow-[0_10px_35px_rgba(0,0,0,0.24)] transition-colors hover:bg-[#e4cb99] focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
-              Explore Art <ArrowRight aria-hidden="true" className="h-4 w-4" />
+              Explore <ArrowRight aria-hidden="true" className="h-4 w-4" />
             </Link>
             <Link
-              to="/artists"
-              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full border border-white/50 bg-white/10 px-7 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+              to="/signup?role=artist"
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full border border-white/50 bg-white/10 px-6 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
             >
-              Discover Artists <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
+              Artist <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
+            </Link>
+            <Link
+              to="/signup?role=collector"
+              className="inline-flex min-h-14 items-center justify-center gap-2 rounded-full border border-white/50 bg-white/10 px-6 text-sm font-medium text-white backdrop-blur-md transition-colors hover:bg-white/20 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-white"
+            >
+              Collector <ArrowUpRight aria-hidden="true" className="h-4 w-4" />
             </Link>
           </div>
         </motion.div>

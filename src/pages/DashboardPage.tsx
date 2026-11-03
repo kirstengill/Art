@@ -23,6 +23,8 @@ export const DashboardPage: React.FC = () => {
     offers,
     orderIntents,
     savedArtworkIds,
+    followedArtistIds,
+    posts,
     currentUser,
     authMode,
     logout,
@@ -47,6 +49,7 @@ export const DashboardPage: React.FC = () => {
   );
 
   const savedWorks = artworks.filter((a) => savedArtworkIds.includes(a.id));
+  const role = currentUser?.role;
 
   const totalPortfolioValue = managedListings.reduce(
     (acc, item) => acc + item.price,
@@ -63,30 +66,75 @@ export const DashboardPage: React.FC = () => {
     }
   };
 
-  const kpiCards = [
-    {
-      label: 'Managed Studio Listings',
-      value: String(managedListings.length),
-      sub: 'Saved to your permanent member portfolio',
-    },
-    {
-      label: 'Catalogue Asking Value',
-      value: formatMoney(totalPortfolioValue, 'USD'),
-      sub: 'Across active & reserved works',
-    },
-    {
-      label: 'Collector Offers',
-      value: String(incomingOffers.length),
-      sub: `${incomingOffers.filter((o) => o.status === 'pending').length} awaiting response`,
-    },
-    {
-      label: 'Saved Collector Shortlist',
-      value: String(savedWorks.length),
-      sub: `${orderIntents.length} unpaid purchase ${
-        orderIntents.length === 1 ? 'intent' : 'intents'
-      }`,
-    },
-  ];
+  const kpiCards =
+    role === 'artist'
+      ? [
+          {
+            label: 'Managed Studio Listings',
+            value: String(managedListings.length),
+            sub: 'Works in your artist portfolio',
+          },
+          {
+            label: 'Catalogue Asking Value',
+            value: formatMoney(totalPortfolioValue, 'USD'),
+            sub: 'Across your listed works',
+          },
+          {
+            label: 'Collector Offers',
+            value: String(incomingOffers.length),
+            sub: `${incomingOffers.filter((offer) => offer.status === 'pending').length} awaiting response`,
+          },
+          {
+            label: 'Saved Artworks',
+            value: String(savedWorks.length),
+            sub: 'Works in your personal shortlist',
+          },
+        ]
+      : role === 'collector'
+        ? [
+            {
+              label: 'Saved Artworks',
+              value: String(savedWorks.length),
+              sub: 'Works in your personal shortlist',
+            },
+            {
+              label: 'Negotiation Intents',
+              value: String(orderIntents.length),
+              sub: 'Created during this session only',
+            },
+            {
+              label: 'Artists Followed',
+              value: String(followedArtistIds.length),
+              sub: 'Studios in your network',
+            },
+            {
+              label: 'Artwork to Explore',
+              value: String(artworks.length),
+              sub: 'Browse the public catalogue',
+            },
+          ]
+        : [
+            {
+              label: 'Saved Artworks',
+              value: String(savedWorks.length),
+              sub: 'Works in your personal shortlist',
+            },
+            {
+              label: 'Artists Followed',
+              value: String(followedArtistIds.length),
+              sub: 'Studios in your network',
+            },
+            {
+              label: 'Community Posts',
+              value: String(posts.length),
+              sub: 'Stories and studio dispatches',
+            },
+            {
+              label: 'Artwork to Explore',
+              value: String(artworks.length),
+              sub: 'Browse the public catalogue',
+            },
+          ];
 
   return (
     <div className="w-full relative isolate">
@@ -107,7 +155,7 @@ export const DashboardPage: React.FC = () => {
         }}
       />
       <div className="max-w-[1360px] mx-auto px-4 sm:px-8 py-8 sm:py-12 lg:py-16 space-y-10 sm:space-y-12">
-        {/* Studio Header */}
+        {/* Member Dashboard Header */}
         <motion.div
           initial={shouldReduceMotion ? false : { opacity: 0, y: 12 }}
           animate={{ opacity: 1, y: 0 }}
@@ -128,13 +176,24 @@ export const DashboardPage: React.FC = () => {
               </p>
               <h1 className="font-serif text-2xl sm:text-4xl font-semibold text-[#141312] mt-0.5 text-balance truncate">
                 {currentUser
-                  ? `${currentUser.fullName} — Studio`
-                  : 'Artist Studio Dashboard'}
+                  ? role === 'artist'
+                    ? `${currentUser.fullName} — Studio`
+                    : `${currentUser.fullName} — ${formatRoleLabel(currentUser.role)} Dashboard`
+                  : 'Member Dashboard'}
               </h1>
             </div>
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 min-w-0">
+            {currentUser?.role === 'artist' && (
+              <Link
+                to={`/artists/${currentUser.id}`}
+                className="inline-flex items-center gap-2 px-4 sm:px-5 py-2.5 text-xs font-medium bg-white border border-[#D8D0C1] text-[#3B352F] rounded-xl hover:border-[#B38B40] transition-colors whitespace-nowrap shrink-0"
+              >
+                View Artist Profile
+              </Link>
+            )}
+
             {currentUser?.role === 'artist' && (
               <Link
                 to="/add-artwork"
@@ -188,7 +247,7 @@ export const DashboardPage: React.FC = () => {
           ))}
         </div>
 
-        {/* Managed Artwork Listings Table */}
+        {role === 'artist' && (
         <section className="space-y-5">
           <div className="flex items-end justify-between">
             <div>
@@ -417,8 +476,9 @@ export const DashboardPage: React.FC = () => {
             </>
           )}
         </section>
+        )}
 
-        {/* Active Collector Offers & Saved Shortlist */}
+        {/* Role-specific activity and saved artworks */}
         <section className="grid grid-cols-1 lg:grid-cols-2 gap-8">
           <motion.div
             initial={shouldReduceMotion ? false : { opacity: 0, y: 14 }}
@@ -429,20 +489,26 @@ export const DashboardPage: React.FC = () => {
           >
             <div className="flex items-center justify-between gap-2">
               <h2 className="font-serif text-2xl font-semibold text-[#141312]">
-                Recent Collector Offers
+                {role === 'artist'
+                  ? 'Recent Collector Offers'
+                  : role === 'collector'
+                    ? 'Negotiation Purchase Intents'
+                    : 'Explore the Community'}
               </h2>
               <Link
-                to="/messages"
+                to={role === 'artist' ? '/messages' : role === 'collector' ? '/gallery' : '/community'}
                 className="text-xs font-medium text-[#8C6828] hover:text-[#141312] transition-colors whitespace-nowrap"
               >
-                Open Negotiation Desk →
+                {role === 'artist'
+                  ? 'Open Negotiation Desk →'
+                  : role === 'collector'
+                    ? 'Discover Artwork →'
+                    : 'Open Community →'}
               </Link>
             </div>
 
-            {incomingOffers.length === 0 ? (
-              <p className="text-sm text-[#6B655E]">
-                No collector offers recorded yet.
-              </p>
+            {role === 'artist' ? incomingOffers.length === 0 ? (
+              <p className="text-sm text-[#6B655E]">No collector offers recorded yet.</p>
             ) : (
               <div className="divide-y divide-[#ECE6DA]">
                 {incomingOffers.slice(0, 4).map((offer) => {
@@ -476,6 +542,34 @@ export const DashboardPage: React.FC = () => {
                   );
                 })}
               </div>
+            ) : role === 'collector' ? orderIntents.length === 0 ? (
+              <p className="text-sm leading-relaxed text-[#6B655E]">
+                Negotiation intents created during this session appear here. The existing collector API does not provide a persistent purchase-request list.
+              </p>
+            ) : (
+              <div className="divide-y divide-[#ECE6DA]">
+                {orderIntents.slice(0, 4).map((intent) => {
+                  const artwork = getArtworkById(intent.artworkId);
+                  return (
+                    <div key={intent.id} className="flex items-center justify-between gap-3 py-3.5 first:pt-0 last:pb-0">
+                      <div className="min-w-0">
+                        <Link to={`/artwork/${intent.artworkId}`} className="block truncate font-serif text-lg font-semibold text-[#141312] hover:text-[#B38B40]">
+                          {artwork?.title || 'Artwork'}
+                        </Link>
+                        <p className="text-xs text-[#6B655E]">Intent status: {intent.status.replaceAll('_', ' ')}</p>
+                      </div>
+                      <p className="shrink-0 font-mono text-sm text-[#141312]">{formatMoney(intent.amount, intent.currency)}</p>
+                    </div>
+                  );
+                })}
+                <p className="pt-3 text-xs leading-relaxed text-[#6B655E]">
+                  These session-only negotiation intents are not admin-mediated purchase requests and do not confirm payment, delivery, or ownership.
+                </p>
+              </div>
+            ) : (
+              <p className="text-sm leading-relaxed text-[#6B655E]">
+                Browse community stories and artist dispatches, or discover studios to follow.
+              </p>
             )}
           </motion.div>
 
@@ -488,14 +582,24 @@ export const DashboardPage: React.FC = () => {
           >
             <div className="flex items-center justify-between gap-2">
               <h2 className="font-serif text-2xl font-semibold text-[#141312]">
-                Saved Collection Shortlist
+                {role === 'collector' ? 'Saved Artwork' : 'Saved Artwork Shortlist'}
               </h2>
-              <Link
-                to="/gallery"
-                className="text-xs font-medium text-[#8C6828] hover:text-[#141312] transition-colors whitespace-nowrap"
-              >
-                Explore Gallery →
-              </Link>
+              <div className="flex items-center gap-3">
+                {role === 'collector' && (
+                  <Link
+                    to="/collection"
+                    className="text-xs font-medium text-[#8C6828] hover:text-[#141312] transition-colors whitespace-nowrap"
+                  >
+                    Purchase history
+                  </Link>
+                )}
+                <Link
+                  to="/gallery"
+                  className="text-xs font-medium text-[#8C6828] hover:text-[#141312] transition-colors whitespace-nowrap"
+                >
+                  Explore Gallery →
+                </Link>
+              </div>
             </div>
 
             {savedWorks.length === 0 ? (
