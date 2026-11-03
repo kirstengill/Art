@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
@@ -7,6 +7,7 @@ import type { UserRole } from '../types/artverse';
 import { formatRoleLabel } from '../utils/formatters';
 import { GlassPanel } from '../components/ui/GlassCard';
 import terracottaArtwork from '../assets/images/art_terracotta_study_1792993240609.jpg';
+import { dashboardPathForRole } from '../utils/roleRoutes';
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   artist: 'Publish original works, set direct or offer pricing, and manage collector inquiries.',
@@ -21,7 +22,6 @@ const inputClass =
 export const SignupPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
-  const location = useLocation();
   const { signUpWithEmail } = useArtVerse();
 
   const [role, setRole] = useState<UserRole>('artist');
@@ -36,12 +36,6 @@ export const SignupPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
-
-  const locationState = location.state as { from?: { pathname?: unknown } } | null;
-  const requestedDestination = locationState?.from?.pathname;
-  const from = typeof requestedDestination === 'string'
-    ? requestedDestination
-    : role === 'artist' ? '/dashboard' : '/gallery';
 
   const handleSignupSubmit = async (event: React.FormEvent) => {
     event.preventDefault();
@@ -79,7 +73,7 @@ export const SignupPage: React.FC = () => {
     setNotice(null);
     setLoading(true);
     try {
-      const { emailConfirmationRequired } = await signUpWithEmail({
+      const { emailConfirmationRequired, profile } = await signUpWithEmail({
         email: normalizedEmail,
         password,
         firstName: role === 'art_lover' ? undefined : firstName.trim(),
@@ -92,11 +86,8 @@ export const SignupPage: React.FC = () => {
       setConfirmPassword('');
       if (emailConfirmationRequired) {
         setNotice('Account created. Check your email and confirm your address before signing in.');
-      } else {
-        const destination = from === '/signup'
-          ? role === 'artist' ? '/dashboard' : '/gallery'
-          : from;
-        navigate(destination, { replace: true });
+      } else if (profile) {
+        navigate(dashboardPathForRole(profile.role), { replace: true });
       }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create your account.');

@@ -73,8 +73,17 @@ export interface AdminContentRecord {
 
 export interface AdminOrderRecord {
   id: string;
+  source: 'purchase_request' | 'order_intent';
+  artworkId: string;
   artworkTitle: string;
+  artworkImage: string | null;
+  artistId: string;
   buyerName: string;
+  buyerPhone: string;
+  buyerEmail: string;
+  deliveryLocation: string;
+  deliveryAddress: string;
+  instructions: string;
   sellerName: string;
   amount: number;
   currency: string;

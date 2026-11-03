@@ -219,6 +219,14 @@ export interface OrderIntent {
   createdAt: string;
 }
 
+export interface PurchaseRequestReceipt {
+  id: string;
+  status: string;
+  amount: number;
+  currency: string;
+  createdAt: string;
+}
+
 export interface Purchase {
   id: string;
   artworkId: string;

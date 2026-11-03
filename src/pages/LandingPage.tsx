@@ -52,16 +52,16 @@ export const LandingPage: React.FC = () => {
     <section className="art-universe-landing relative isolate min-h-dvh w-full overflow-hidden text-white">
       <div
         aria-hidden="true"
-        className="absolute inset-0 -z-20 bg-cover bg-center"
+        className="absolute inset-0 z-0 bg-cover bg-center"
         style={{ backgroundImage: `url("${lapisArtwork}")` }}
       />
       <div
         aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[linear-gradient(90deg,rgba(12,11,10,0.78)_0%,rgba(12,11,10,0.48)_48%,rgba(12,11,10,0.12)_100%)]"
+        className="absolute inset-0 z-[1] bg-[linear-gradient(90deg,rgba(12,11,10,0.78)_0%,rgba(12,11,10,0.48)_48%,rgba(12,11,10,0.12)_100%)]"
       />
       <div
         aria-hidden="true"
-        className="absolute inset-0 -z-10 bg-[linear-gradient(0deg,rgba(12,11,10,0.35)_0%,transparent_40%)]"
+        className="absolute inset-0 z-[1] bg-[linear-gradient(0deg,rgba(12,11,10,0.35)_0%,transparent_40%)]"
       />
 
       <header className="relative z-20 mx-auto flex w-full max-w-[1440px] items-center justify-between px-5 py-5 sm:px-8 sm:py-7 lg:px-12">
@@ -72,7 +72,7 @@ export const LandingPage: React.FC = () => {
           <img 
             src={artivoraLogo} 
             alt="ARTIVORA Logo" 
-            className="h-12 sm:h-14 w-auto object-contain"
+            className="block h-14 w-auto object-contain sm:h-16"
             style={{ 
               background: 'transparent',
               mixBlendMode: 'normal'
@@ -141,7 +141,7 @@ export const LandingPage: React.FC = () => {
         )}
       </AnimatePresence>
 
-      <div className="mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-[1440px] items-center px-5 pb-20 pt-12 sm:px-8 lg:px-12">
+      <div className="relative z-10 mx-auto flex min-h-[calc(100dvh-6rem)] w-full max-w-[1440px] items-center px-5 pb-20 pt-12 sm:px-8 lg:px-12">
         <motion.div
           initial={shouldReduceMotion ? false : { opacity: 0, y: 22 }}
           animate={{ opacity: 1, y: 0 }}
@@ -215,7 +215,7 @@ export const LandingPage: React.FC = () => {
         </motion.div>
       </div>
 
-      <p className="absolute bottom-6 right-6 hidden text-[10px] uppercase tracking-[0.22em] text-white/70 sm:block">
+      <p className="absolute bottom-6 right-6 z-10 hidden text-[10px] uppercase tracking-[0.22em] text-white/70 sm:block">
         ARTIVORA, beyond the ordinary
       </p>
     </section>

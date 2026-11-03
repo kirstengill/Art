@@ -15,7 +15,9 @@ export type {
 
 type Row = Record<string, unknown>;
 
-async function getAll(table: string): Promise<Row[]> {
+let missingPurchaseRequestsWarningLogged = false;
+
+async function getAll(table: string, missingTableIsOptional = false): Promise<Row[]> {
   const db = getSupabaseServiceClient();
   const result: Row[] = [];
   for (let offset = 0; ; offset += 1000) {
@@ -23,7 +25,16 @@ async function getAll(table: string): Promise<Row[]> {
       .from(table)
       .select('*')
       .range(offset, offset + 999);
-    if (error) throw new Error(`Unable to query ${table}: ${error.message}`);
+    if (error) {
+      if (missingTableIsOptional && error.code === 'PGRST205') {
+        if (table === 'purchase_requests' && !missingPurchaseRequestsWarningLogged) {
+          console.warn('Admin purchase requests are unavailable until the purchase_requests migration is applied.');
+          missingPurchaseRequestsWarningLogged = true;
+        }
+        return result;
+      }
+      throw new Error(`Unable to query ${table} (${error.code}): ${error.message}`);
+    }
     result.push(...(data as Row[]));
     if (data.length < 1000) return result;
   }
@@ -67,11 +78,12 @@ function series(rows: Row[], timestamp: string, timeframe: AdminTimeframe) {
 }
 
 export async function getAdminOverview(timeframe: AdminTimeframe) {
-  const [profiles, artworks, posts, orders] = await Promise.all([
+  const [profiles, artworks, posts, orders, purchaseRequests] = await Promise.all([
     getAll('profiles'),
     getAll('artworks'),
     getAll('posts'),
     getAll('orders'),
+    getAll('purchase_requests', true),
   ]);
   const publicProfiles = profiles.filter(isPublic);
   const publicArtworks = artworks.filter(
@@ -81,8 +93,10 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
     (post) => isPublic(post) && publicProfiles.some((profile) => profile.id === post.author_id)
   );
   const publicOrders = orders.filter(
-    (order) => publicProfiles.some((profile) => profile.id === order.buyer_id)
-  );
+    (order) =>
+      order.buyer_id == null ||
+      publicProfiles.some((profile) => profile.id === order.buyer_id)
+  ).concat(purchaseRequests);
   const activeProfiles = publicProfiles.filter((profile) => profile.account_status === 'active');
   const roles = ['admin', 'artist', 'collector', 'art_lover'] as const;
   const accountStatuses = ['active', 'pending', 'suspended', 'deleted'] as const;
@@ -98,7 +112,13 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
       artworks: publicArtworks.length,
       communityPosts: publicPosts.length,
       purchaseIntents: publicOrders.length,
-      pendingPaymentIntents: publicOrders.filter((order) => order.status === 'awaiting_payment').length,
+      pendingPaymentIntents: publicOrders.filter(
+        (order) =>
+          order.status === 'intent_created' ||
+          order.status === 'awaiting_payment' ||
+          order.status === 'pending' ||
+          order.status === 'confirmed'
+      ).length,
       createdIntents: publicOrders.filter((order) => order.status === 'intent_created').length,
       cancelledIntents: publicOrders.filter((order) => order.status === 'cancelled').length,
       completedPurchases: null,
@@ -143,10 +163,11 @@ export async function getAdminUsers(options: {
   search?: string;
 }) {
   const { page, pageSize, offset } = getPageParams(options.page, options.pageSize);
-  const [profiles, artworks, orders] = await Promise.all([
+  const [profiles, artworks, orders, purchaseRequests] = await Promise.all([
     getAll('profiles'),
     getAll('artworks'),
     getAll('orders'),
+    getAll('purchase_requests', true),
   ]);
   const search = options.search?.trim().toLocaleLowerCase().slice(0, 100);
   const records = profiles
@@ -186,7 +207,9 @@ export async function getAdminUsers(options: {
         createdAt: String(profile.registration_date || profile.created_at || ''),
         artworkCount: userArtworks.length,
         availableArtworkCount: userArtworks.filter((artwork) => artwork.availability === 'available').length,
-        purchaseIntentCount: orders.filter((order) => order.seller_id === profile.id).length,
+        purchaseIntentCount:
+          orders.filter((order) => order.seller_id === profile.id).length +
+          purchaseRequests.filter((request) => request.artist_id === profile.id).length,
       };
     }),
     page,
@@ -259,15 +282,26 @@ export async function getAdminContent(options: {
 
 export async function getAdminOrders(options: { page?: unknown; pageSize?: unknown }) {
   const { page, pageSize, offset } = getPageParams(options.page, options.pageSize);
-  const [profiles, artworks, orders] = await Promise.all([
+  const [profiles, artworks, orders, purchaseRequests] = await Promise.all([
     getAll('profiles'),
     getAll('artworks'),
     getAll('orders'),
+    getAll('purchase_requests', true),
   ]);
   const profileById = new Map(profiles.filter(isPublic).map((profile) => [String(profile.id), profile]));
   const artworkById = new Map(artworks.map((artwork) => [String(artwork.id), artwork]));
-  const records = orders
-    .filter((order) => profileById.has(String(order.buyer_id)))
+  const records: Array<Row & { source: 'order_intent' | 'purchase_request' }> = [
+    ...orders
+      .filter((order) => profileById.has(String(order.buyer_id)))
+      .map((order): Row & { source: 'order_intent' } => ({
+        ...order,
+        source: 'order_intent',
+      })),
+    ...purchaseRequests.map((request): Row & { source: 'purchase_request' } => ({
+      ...request,
+      source: 'purchase_request',
+    })),
+  ]
     .sort(
       (a, b) =>
         new Date(String(b.created_at)).getTime() - new Date(String(a.created_at)).getTime()
@@ -275,9 +309,35 @@ export async function getAdminOrders(options: { page?: unknown; pageSize?: unkno
   return {
     records: records.slice(offset, offset + pageSize).map((order) => ({
       id: String(order.id),
-      artworkTitle: String(artworkById.get(String(order.artwork_id))?.title || ''),
-      buyerName: String(profileById.get(String(order.buyer_id))?.full_name || ''),
-      sellerName: String(profileById.get(String(order.seller_id))?.full_name || ''),
+      source: order.source,
+      artworkId: String(order.artwork_id),
+      artworkTitle: String(
+        order.artwork_title ||
+          order.artwork_title_snapshot ||
+          artworkById.get(String(order.artwork_id))?.title ||
+          ''
+      ),
+      artworkImage: String(
+        order.artwork_image ||
+          order.artwork_image_snapshot ||
+          artworkById.get(String(order.artwork_id))?.image_key ||
+          ''
+      ) || null,
+      artistId: String(order.artist_id || order.seller_id),
+      buyerName: String(
+        order.buyer_name || profileById.get(String(order.buyer_id))?.full_name || ''
+      ),
+      buyerPhone: String(order.buyer_phone || ''),
+      buyerEmail: String(order.buyer_email || profileById.get(String(order.buyer_id))?.email || ''),
+      deliveryLocation: String(order.delivery_location || order.shipping_city || ''),
+      deliveryAddress: String(order.delivery_address || ''),
+      instructions: String(order.instructions || order.buyer_instructions || order.collector_note || ''),
+      sellerName: String(
+        order.artist_name ||
+          order.artist_name_snapshot ||
+          profileById.get(String(order.artist_id || order.seller_id))?.full_name ||
+          ''
+      ),
       amount: Number(order.amount),
       currency: String(order.currency || ''),
       status: String(order.status || ''),
@@ -287,4 +347,50 @@ export async function getAdminOrders(options: { page?: unknown; pageSize?: unkno
     pageSize,
     total: records.length,
   };
+}
+
+const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
+  intent_created: ['awaiting_payment', 'cancelled'],
+  awaiting_payment: ['cancelled'],
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['paid', 'cancelled'],
+  paid: ['delivered'],
+  delivered: ['completed'],
+  completed: [],
+  cancelled: [],
+};
+
+export async function updateAdminOrderStatus(
+  orderId: string,
+  source: 'purchase_request' | 'order_intent',
+  nextStatus: string
+) {
+  if (!Object.hasOwn(ORDER_STATUS_TRANSITIONS, nextStatus)) {
+    throw new Error('Invalid purchase request status.');
+  }
+  const db = getSupabaseServiceClient();
+  const table = source === 'purchase_request' ? 'purchase_requests' : 'orders';
+  const { data: current, error: currentError } = await db
+    .from(table)
+    .select('id,status')
+    .eq('id', orderId)
+    .maybeSingle();
+  if (currentError) throw new Error(`Unable to load purchase request: ${currentError.message}`);
+  if (!current) throw new Error('Purchase request not found.');
+  if (!ORDER_STATUS_TRANSITIONS[String(current.status)]?.includes(nextStatus)) {
+    throw new Error(`A purchase request cannot move from ${String(current.status)} to ${nextStatus}.`);
+  }
+
+  const updates =
+    source === 'purchase_request'
+      ? { status: nextStatus, updated_at: new Date().toISOString() }
+      : { status: nextStatus };
+  const { data, error } = await db
+    .from(table)
+    .update(updates)
+    .eq('id', orderId)
+    .select('id,status')
+    .single();
+  if (error) throw new Error(`Unable to update purchase request: ${error.message}`);
+  return { id: String(data.id), status: String(data.status) };
 }

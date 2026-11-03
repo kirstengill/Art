@@ -1,6 +1,6 @@
 # Supabase Database Migrations
 
-Artivora uses the existing Supabase project (`majessboafhzardtmb`) as its only persistent database, authentication provider, and artwork image store. The Express API uses the Supabase JavaScript client with user access tokens for ordinary operations. Trusted profile synchronization and allowlisted administrator queries use a server-only Supabase secret.
+Artivora uses the existing Supabase project (`majessboafhzardtmb`) as its only persistent database, authentication provider, and artwork image store. The Express API uses the Supabase JavaScript client with user access tokens for ordinary operations. Trusted profile synchronization and administrator queries use a server-only Supabase secret.
 
 ## Migration history
 
@@ -19,6 +19,7 @@ Review the SQL and the target project before applying. Do not execute `supabase/
 - `20241027000003_fix_profiles_rls.sql` limits public profile visibility to active, non-demo artists and grants only public profile columns.
 - `20261027000000_profile_sync_users_table.sql` ensures `profiles.registration_date` exists. The legacy `public.users` mirror is no longer created or used; if it already exists, Artivora leaves it untouched to avoid data loss.
 - `20261027000001_supabase_runtime_security.sql` adds missing `is_demo` fields and tightens profile role, artwork ownership, order, conversation, offer, and Storage permissions. `profiles.role` cannot be changed through authenticated profile updates, and artwork uploads require an artist profile and the uploader's own folder.
+- `20261103000001_admin_mediated_purchase_requests.sql` adds a separate, RLS-enabled request table for guest checkout details. Direct client access is revoked; the server's trusted Supabase client creates requests and serves them only through administrator-protected routes. It does not change existing artwork, order, or user records.
 - `20261103000000_restrict_public_profile_columns.sql` removes broad profile-table SELECT grants and restores access only to the public profile columns. This preserves the existing RLS row policies while preventing anonymous or authenticated clients from selecting private profile fields such as email.
 
 The application does not require separate PostgreSQL host, database, or login credentials. Do not drop legacy tables or delete data as part of this migration.
@@ -28,7 +29,7 @@ The application does not require separate PostgreSQL host, database, or login cr
 - Enable Supabase Auth email/password sign-in and configure allowed redirect URLs for localhost and the deployed origin.
 - Set `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in the browser build environment.
 - Set `SUPABASE_URL`/`SUPABASE_ANON_KEY` (or the existing `VITE_` equivalents) and `SUPABASE_SECRET_KEY` only in the trusted server environment. Never expose the secret with a `VITE_` prefix.
-- Set server-only `ADMIN_UIDS` to the intended administrator Auth user IDs. Signup metadata or profile updates do not grant admin access.
+- The authenticated user's `public.profiles.role` is the authority for dashboard and admin API access. Assign an administrator role only through a trusted database operation; signup metadata and authenticated profile updates cannot grant admin access.
 - The `artwork-images` bucket is public for image reads. Its Storage policies restrict writes to artist-owned folders and the existing 10 MB JPEG/PNG/WebP/GIF limits.
 
 No live payment provider, delivery verification, escrow, or payout process is configured. The intended 20% Artivora / 80% artist split and post-delivery payout remain manual business requirements; purchase intents do not represent collected funds or completed purchases.

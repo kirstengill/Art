@@ -29,6 +29,17 @@ import { ArtworkImage } from '../data/artworkImages';
 
 type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders';
 
+const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
+  intent_created: ['awaiting_payment', 'cancelled'],
+  awaiting_payment: ['cancelled'],
+  pending: ['confirmed', 'cancelled'],
+  confirmed: ['paid', 'cancelled'],
+  paid: ['delivered'],
+  delivered: ['completed'],
+  completed: [],
+  cancelled: [],
+};
+
 const NAV_ITEMS: Array<{ id: AdminSection; label: string; icon: React.FC<{ className?: string }> }> = [
   { id: 'overview', label: 'Overview', icon: LayoutDashboard },
   { id: 'users', label: 'Users', icon: Users },
@@ -166,6 +177,7 @@ export const AdminPage: React.FC = () => {
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,6 +284,28 @@ export const AdminPage: React.FC = () => {
     setArtistSearch('');
   };
 
+  const handleOrderStatusChange = async (order: AdminOrderRecord, status: string) => {
+    setSavingOrderId(order.id);
+    setError(null);
+    try {
+      const updated = await artverseApi.updateAdminOrderStatus(order.id, order.source, status);
+      setOrders((current) =>
+        current
+          ? {
+              ...current,
+              records: current.records.map((item) =>
+                item.id === order.id ? { ...item, status: updated.status } : item
+              ),
+            }
+          : current
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update purchase request.');
+    } finally {
+      setSavingOrderId(null);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate('/login', { replace: true });
@@ -310,7 +344,7 @@ export const AdminPage: React.FC = () => {
           )}
           {error?.includes('not configured') && (
             <p className="mt-4 text-xs text-white/55">
-              Configure <code className="text-[#ead39e]">ADMIN_UIDS</code> in the server environment before using the administrator dashboard.
+              Verify that the authenticated account has <code className="text-[#ead39e]">role = 'admin'</code> in its Supabase profile.
             </p>
           )}
         </section>
@@ -384,7 +418,7 @@ export const AdminPage: React.FC = () => {
             <div className="mt-4 rounded-2xl border border-white/15 bg-white/[0.06] p-6">
               <h2 className="font-serif text-xl">Admin access unavailable</h2>
               <p className="mt-2 max-w-2xl text-sm leading-relaxed text-white/65">
-                Sign in with the Supabase account whose user ID is allowlisted on the server. If you are the administrator, configure <code className="text-[#ead39e]">ADMIN_UIDS</code> server-side before access is granted.
+                Sign in with the Supabase account whose profile has the administrator role. Admin access is verified from <code className="text-[#ead39e]">public.profiles</code>.
               </p>
               <Link to="/login" state={{ from: { pathname: '/admin' } }} className="mt-4 inline-block rounded-lg bg-[#d3b578] px-4 py-2 text-xs font-semibold text-[#211c13]">
                 Sign in
@@ -549,21 +583,66 @@ export const AdminPage: React.FC = () => {
           {section === 'orders' && (
             <section className="space-y-4">
               <p className="max-w-3xl text-sm leading-relaxed text-white/60">
-                These are purchase intents, not completed sales. The current schema has no payment confirmation, deposit, refund, or payout records.
+                Requests are coordinated by Artivora. Status updates are manual; they do not charge a payment method, mark artwork as sold, or trigger artist payouts.
               </p>
               {orders && (
                 <div className="overflow-x-auto rounded-2xl border border-white/15 bg-white/[0.04]">
-                  <table className="w-full min-w-[700px] text-left text-sm">
+                  <table className="w-full min-w-[1100px] text-left text-sm">
                     <thead className="bg-white/[0.06] text-[10px] uppercase tracking-[0.14em] text-white/55">
-                      <tr><th className="px-4 py-3">Artwork</th><th className="px-4 py-3">Buyer</th><th className="px-4 py-3">Artist</th><th className="px-4 py-3">Amount</th><th className="px-4 py-3">Intent state</th><th className="px-4 py-3">Created</th></tr>
+                      <tr><th className="px-4 py-3">Artwork</th><th className="px-4 py-3">Buyer & contact</th><th className="px-4 py-3">Delivery</th><th className="px-4 py-3">Artist</th><th className="px-4 py-3">Price</th><th className="px-4 py-3">Request status</th><th className="px-4 py-3">Requested</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {orders.records.map((order) => (
                         <tr key={order.id} className="text-white/80">
-                          <td className="px-4 py-3">{order.artworkTitle}</td><td className="px-4 py-3">{order.buyerName}</td><td className="px-4 py-3">{order.sellerName}</td><td className="px-4 py-3">{formatMoney(order.amount, order.currency)}</td><td className="px-4 py-3">{order.status.replaceAll('_', ' ')}</td><td className="px-4 py-3">{formatShortDate(order.createdAt)}</td>
+                          <td className="px-4 py-3">
+                            <div className="flex items-center gap-3">
+                              {order.artworkImage && (
+                                <div className="h-12 w-12 shrink-0 overflow-hidden rounded-lg">
+                                  <ArtworkImage imageKey={order.artworkImage} alt={order.artworkTitle} className="h-full w-full object-cover" />
+                                </div>
+                              )}
+                              <div>
+                                <Link to={`/artwork/${order.artworkId}`} className="font-medium text-white hover:text-[#ead39e]">{order.artworkTitle}</Link>
+                                <p className="text-xs text-white/45">{order.source === 'purchase_request' ? 'Visitor request' : 'Collector intent'}</p>
+                              </div>
+                            </div>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p>{order.buyerName || '—'}</p>
+                            <p className="text-xs text-white/55">{order.buyerPhone || 'No phone provided'}</p>
+                            {order.buyerEmail && <p className="text-xs text-white/55">{order.buyerEmail}</p>}
+                          </td>
+                          <td className="max-w-64 px-4 py-3">
+                            <p>{order.deliveryLocation || order.deliveryAddress || '—'}</p>
+                            {order.deliveryAddress && <p className="whitespace-pre-wrap text-xs text-white/55">{order.deliveryAddress}</p>}
+                            {order.instructions && <p className="mt-1 whitespace-pre-wrap text-xs text-white/45">Note: {order.instructions}</p>}
+                          </td>
+                          <td className="px-4 py-3">{order.sellerName || '—'}</td>
+                          <td className="whitespace-nowrap px-4 py-3">{formatMoney(order.amount, order.currency)}</td>
+                          <td className="px-4 py-3">
+                            <select
+                              value={order.status}
+                              disabled={savingOrderId === order.id || ORDER_STATUS_TRANSITIONS[order.status] === undefined}
+                              onChange={(event) => void handleOrderStatusChange(order, event.target.value)}
+                              aria-label={`Update status for ${order.artworkTitle} request`}
+                              className="rounded-lg border border-white/15 bg-[#262420] px-2.5 py-2 text-xs text-white disabled:opacity-60"
+                            >
+                              {[...new Set([
+                                order.status,
+                                ...(ORDER_STATUS_TRANSITIONS[order.status] || []),
+                              ])].map((status) => (
+                                <option key={status} value={status}>
+                                  {status === 'intent_created'
+                                    ? 'Intent created'
+                                    : status.replaceAll('_', ' ').replace(/\b\w/g, (letter) => letter.toUpperCase())}
+                                </option>
+                              ))}
+                            </select>
+                          </td>
+                          <td className="whitespace-nowrap px-4 py-3">{formatShortDate(order.createdAt)}</td>
                         </tr>
                       ))}
-                      {orders.records.length === 0 && <tr><td colSpan={6} className="px-4 py-8 text-center text-white/55">No purchase intents are recorded.</td></tr>}
+                      {orders.records.length === 0 && <tr><td colSpan={7} className="px-4 py-8 text-center text-white/55">No purchase intents are recorded.</td></tr>}
                     </tbody>
                   </table>
                 </div>

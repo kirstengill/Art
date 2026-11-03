@@ -35,7 +35,7 @@ export interface ProfileSyncOperations<TProfile extends SyncProfileRecord> {
     uid: string,
     values: Pick<
       SyncProfileValues,
-      'email' | 'fullName' | 'handle' | 'username' | 'role' | 'bio' | 'location'
+      'email' | 'fullName' | 'handle' | 'username' | 'bio' | 'location'
     >
   ): Promise<TProfile>;
   saveAccountDetails(params: {
@@ -57,7 +57,6 @@ export interface SyncUserProfileParams {
   role?: string;
   bio?: string;
   location?: string;
-  isAdmin?: boolean;
 }
 
 const USER_ROLES = ['artist', 'collector', 'art_lover'];
@@ -107,7 +106,7 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
     providedEmail?.split('@')[0].replace(/[._-]/g, ' ') ||
     'Artivora Artist';
   const email = providedEmail || current?.email || `${uid}@artverse.user`;
-  const role = params.isAdmin ? 'admin' : validRole || current?.role || 'collector';
+  const role = current?.role || validRole || 'collector';
 
   const username =
     current?.username?.trim() ||
@@ -128,7 +127,6 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
         fullName,
         handle,
         username,
-        role,
         bio: params.bio?.trim() || current.bio,
         location:
           role === 'artist'

@@ -123,6 +123,43 @@ test('updates existing profiles without replacing non-empty values with blanks',
   assert.equal(profiles.size, 1);
 });
 
+test('preserves the database role even when auth metadata requests another role', async () => {
+  const admin: TestProfile = {
+    id: 'existing-admin',
+    email: 'admin@example.test',
+    fullName: 'Existing Admin',
+    handle: 'existingadmin',
+    username: 'existingadmin',
+    role: 'admin',
+    accountStatus: 'active',
+    bio: '',
+    location: '',
+    registrationDate: new Date('2024-01-01T00:00:00.000Z'),
+    createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    verified: false,
+    isDemo: false,
+  };
+  const { operations } = createOperations(admin);
+
+  const profile = await syncProfileWithOperations(
+    { uid: admin.id, role: 'artist' },
+    operations
+  );
+
+  assert.equal(profile.role, 'admin');
+});
+
+test('does not create an administrator profile from signup metadata', async () => {
+  const { operations } = createOperations();
+
+  const profile = await syncProfileWithOperations(
+    { uid: 'new-user-admin', email: 'user@example.test', role: 'admin' },
+    operations
+  );
+
+  assert.equal(profile.role, 'collector');
+});
+
 test('repeated synchronization remains idempotent and keeps established usernames', async () => {
   const { operations, profiles } = createOperations();
   const params = {

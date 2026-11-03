@@ -7,7 +7,7 @@ import {
   useLocation,
 } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { ArtVerseProvider } from './context/ArtVerseContext';
+import { ArtVerseProvider, useArtVerse } from './context/ArtVerseContext';
 import { Navbar } from './components/layout/Navbar';
 import { Footer } from './components/layout/Footer';
 import { LandingPage } from './pages/LandingPage';
@@ -26,6 +26,14 @@ import { SignupPage } from './pages/SignupPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { AdminPage } from './pages/AdminPage';
 import { ProtectedRoute } from './components/guards/ProtectedRoute';
+import { dashboardPathForRole } from './utils/roleRoutes';
+
+const DashboardRedirect: React.FC = () => {
+  const { currentUser } = useArtVerse();
+  return currentUser ? (
+    <Navigate to={dashboardPathForRole(currentUser.role)} replace />
+  ) : null;
+};
 
 const ScrollAndAnimateRoutes: React.FC = () => {
   const location = useLocation();
@@ -69,14 +77,17 @@ const ScrollAndAnimateRoutes: React.FC = () => {
             <Route path="/artists/:id" element={<ArtistProfilePage />} />
             <Route path="/community" element={<CommunityPage />} />
             <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
-            <Route path="/dashboard" element={<ProtectedRoute><DashboardPage /></ProtectedRoute>} />
+            <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />
+            <Route path="/dashboard/artist" element={<ProtectedRoute allowedRoles={['artist']}><DashboardPage /></ProtectedRoute>} />
+            <Route path="/dashboard/collector" element={<ProtectedRoute allowedRoles={['collector']}><DashboardPage /></ProtectedRoute>} />
+            <Route path="/dashboard/art-lover" element={<ProtectedRoute allowedRoles={['art_lover']}><DashboardPage /></ProtectedRoute>} />
             <Route path="/add-artwork" element={<ProtectedRoute allowedRoles={['artist']}><AddArtworkPage /></ProtectedRoute>} />
             <Route path="/collection" element={<ProtectedRoute allowedRoles={['collector']}><CollectedGalleryPage /></ProtectedRoute>} />
             <Route path="/login" element={<LoginPage />} />
             <Route path="/signin" element={<LoginPage />} />
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
-            <Route path="/admin" element={<ProtectedRoute><AdminPage /></ProtectedRoute>} />
+            <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminPage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </motion.main>

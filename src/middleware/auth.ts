@@ -13,39 +13,42 @@ interface AuthenticatedUser {
   user_metadata: Record<string, unknown>;
 }
 
-export function isAdminUid(uid: string | undefined): boolean {
-  if (!uid) return false;
-  return (process.env.ADMIN_UIDS || '')
-    .split(',')
-    .map((allowedUid) => allowedUid.trim())
-    .filter(Boolean)
-    .includes(uid);
-}
-
 export interface AuthRequest extends Request {
   user?: AuthenticatedUser;
   supabase?: SupabaseDataClient;
 }
 
-export const requireAdmin = (
+export const requireAdmin = async (
   req: AuthRequest,
   res: Response,
   next: NextFunction
 ) => {
   res.setHeader('Cache-Control', 'no-store');
-  if (!(process.env.ADMIN_UIDS || '').split(',').some((uid) => uid.trim())) {
-    res.status(503).json({
-      error: 'Administrator access is not configured on this server.',
-    });
+  if (!req.user || !req.supabase) {
+    res.status(401).json({ error: 'An authenticated Supabase session is required.' });
     return;
   }
 
-  if (!isAdminUid(req.user?.uid)) {
-    res.status(403).json({ error: 'Administrator access is required.' });
-    return;
+  try {
+    const { data: profile, error } = await req.supabase
+      .from('profiles')
+      .select('role')
+      .eq('id', req.user.uid)
+      .maybeSingle();
+    if (error) {
+      console.error('Unable to verify administrator role from the Supabase profile.');
+      res.status(503).json({ error: 'Unable to verify administrator access.' });
+      return;
+    }
+    if (profile?.role !== 'admin') {
+      res.status(403).json({ error: 'Administrator access is required.' });
+      return;
+    }
+    next();
+  } catch {
+    console.error('Administrator role verification failed.');
+    res.status(503).json({ error: 'Unable to verify administrator access.' });
   }
-
-  next();
 };
 
 export const requireAuth = async (

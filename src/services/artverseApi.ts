@@ -8,6 +8,7 @@ import type {
   Conversation,
   ConversationMessage,
   OrderIntent,
+  PurchaseRequestReceipt,
   PostComment,
   Profile,
   Purchase,
@@ -24,6 +25,7 @@ import type {
   AdminArtworkFilter,
   AdminTimeframe,
 } from '../types/admin';
+import type { PurchaseRequestInput } from '../utils/purchaseRequests';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getSupabaseAccessToken();
@@ -188,6 +190,12 @@ export const artverseApi = {
       body: JSON.stringify(payload),
     }),
 
+  createPurchaseRequest: (payload: PurchaseRequestInput) =>
+    apiFetch<{ order: PurchaseRequestReceipt }>('/api/purchase-requests', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
   fetchAdminOverview: (timeframe: AdminTimeframe) =>
     apiFetch<AdminOverview>(
       `/api/admin/overview?timeframe=${encodeURIComponent(timeframe)}`
@@ -234,6 +242,16 @@ export const artverseApi = {
     });
     return apiFetch<AdminPageResult<AdminOrderRecord>>(`/api/admin/orders?${params}`);
   },
+
+  updateAdminOrderStatus: (
+    orderId: string,
+    source: AdminOrderRecord['source'],
+    status: string
+  ) =>
+    apiFetch<{ id: string; status: string }>(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify({ source, status }),
+    }),
 
   // Purchase-related endpoints
   fetchPurchases: () =>

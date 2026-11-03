@@ -7,14 +7,16 @@ import {
   Expand,
   MessageSquare,
   Search,
+  ShoppingCart,
   X,
 } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
 import { MakeOfferModal } from '../components/negotiation/MakeOfferModal';
-import { PurchaseIntentModal } from '../components/negotiation/PurchaseIntentModal';
+import { PurchaseRequestModal } from '../components/purchase/PurchaseRequestModal';
 import { ArtworkCard } from '../components/artwork/ArtworkCard';
 import { ROLE_PERMISSIONS } from '../types/artverse';
+import { isArtworkDirectlyPurchasable } from '../utils/purchaseRequests';
 import {
   formatAvailabilityLabel,
   formatCategoryLabel,
@@ -38,7 +40,6 @@ export const ArtworkDetailPage: React.FC = () => {
     toggleFollowArtist,
     openOrCreateConversation,
     makeOffer,
-    createOrderIntent,
     currentUser,
   } = useArtVerse();
 
@@ -75,10 +76,10 @@ export const ArtworkDetailPage: React.FC = () => {
 
   const isSaved = savedArtworkIds.includes(artwork.id);
   const isFollowing = artist ? followedArtistIds.includes(artist.id) : false;
-  const canBuyNow =
-    artwork.availability !== 'sold' &&
-    (artwork.saleMode === 'buy_now' ||
-      artwork.saleMode === 'buy_now_and_negotiation');
+  const canBuyNow = isArtworkDirectlyPurchasable(
+    artwork.availability,
+    artwork.saleMode
+  );
   const canNegotiate =
     artwork.availability !== 'sold' &&
     (artwork.saleMode === 'negotiation_only' ||
@@ -87,7 +88,7 @@ export const ArtworkDetailPage: React.FC = () => {
   const permissions = currentUser
     ? ROLE_PERMISSIONS[currentUser.role]
     : ROLE_PERMISSIONS.art_lover;
-  const canAcquire = permissions.canPurchase && canBuyNow;
+  const canAcquire = canBuyNow;
   const canContactArtist = !currentUser || (currentUser.role === 'collector' || currentUser.role === 'art_lover');
   const canMakeOffer = permissions.canMakeOffers && canNegotiate;
 
@@ -342,26 +343,21 @@ export const ArtworkDetailPage: React.FC = () => {
               </div>
 
               <div className="flex flex-col sm:flex-row gap-3">
-                {canAcquire && canBuyNow && (
+                {canAcquire && (
                   <motion.button
                     type="button"
                     whileHover={shouldReduceMotion ? undefined : { y: -2, scale: 1.02 }}
                     whileTap={shouldReduceMotion ? undefined : { scale: 0.98 }}
-                    onClick={() => {
-                      if (!currentUser) {
-                        navigate('/login', { state: { from: { pathname: `/artwork/${artwork.id}` } } });
-                        return;
-                      }
-                      setPurchaseModalOpen(true);
-                    }}
-                    className="flex-1 px-5 py-3 text-sm font-medium rounded-xl transition-all duration-300 whitespace-nowrap"
+                    onClick={() => setPurchaseModalOpen(true)}
+                    className="flex-1 inline-flex items-center justify-center gap-2 px-5 py-3 text-sm font-medium rounded-xl transition-all duration-300 whitespace-nowrap"
                     style={{
                       background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
                       color: '#FAF8F3',
                       boxShadow: '0 6px 24px rgba(179, 139, 64, 0.4)',
                     }}
                   >
-                    Buy Artwork
+                    <ShoppingCart className="h-4 w-4" />
+                    Buy
                   </motion.button>
                 )}
 
@@ -396,12 +392,6 @@ export const ArtworkDetailPage: React.FC = () => {
                   </motion.button>
                 )}
               </div>
-
-              {currentUser && !canAcquire && !canMakeOffer && (
-                <p className="text-xs text-[#787066]">
-                  Purchase and offer actions are available to Collector accounts.
-                </p>
-              )}
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 sm:gap-3 pt-1">
                 <motion.button
@@ -444,7 +434,7 @@ export const ArtworkDetailPage: React.FC = () => {
               <p className="text-xs text-[#787066] leading-relaxed">
                 {artwork.saleMode === 'negotiation_only'
                   ? 'This artist accepts acquisitions exclusively via private offer dialogue.'
-                  : 'Buy Now opens an honest checkout preview without charging payment until payment gateway settlement is configured.'}
+                  : 'Submit a purchase request for administrator review. Payment and delivery are coordinated manually.'}
               </p>
             </div>
 
@@ -570,11 +560,11 @@ export const ArtworkDetailPage: React.FC = () => {
         onSubmitOffer={handleOfferSubmit}
       />
 
-      <PurchaseIntentModal
+      <PurchaseRequestModal
         artwork={artwork}
+        artist={artist}
         isOpen={purchaseModalOpen}
         onClose={() => setPurchaseModalOpen(false)}
-        onCreateIntent={createOrderIntent}
       />
       </div>
     </div>

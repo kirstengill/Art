@@ -9,6 +9,13 @@ import {
   type SyncProfileValues,
   type SyncUserProfileParams,
 } from './profileSync.ts';
+import {
+  isArtworkDirectlyPurchasable,
+  parsePurchaseRequestInput,
+  PurchaseRequestValidationError,
+  type PurchaseRequestInput,
+} from '../utils/purchaseRequests.ts';
+import type { PurchaseRequestReceipt } from '../types/artverse';
 
 type DbRow = Record<string, unknown>;
 
@@ -734,6 +741,85 @@ export async function createPurchaseIntentInDb(
       .select('*')
       .single()
   );
+}
+
+export async function createPurchaseRequestInDb(
+  input: unknown
+): Promise<PurchaseRequestReceipt> {
+  const params: PurchaseRequestInput = parsePurchaseRequestInput(input);
+  const db = getSupabaseServiceClient();
+  const { data: existing, error: existingError } = await db
+    .from('purchase_requests')
+    .select('id,status,amount,currency,created_at')
+    .eq('request_id', params.requestId)
+    .maybeSingle();
+  if (existingError) throw new Error(existingError.message);
+  if (existing) return fromDatabase<PurchaseRequestReceipt>(existing);
+
+  const artwork = await one<DbRow>(
+    db.from('artworks').select('*').eq('id', params.artworkId).maybeSingle()
+  );
+  if (!artwork || artwork.is_demo) {
+    throw new PurchaseRequestValidationError('This artwork is not available for purchase.');
+  }
+  if (
+    !isArtworkDirectlyPurchasable(String(artwork.availability), String(artwork.sale_mode))
+  ) {
+    throw new PurchaseRequestValidationError('This artwork is not currently available for direct purchase.');
+  }
+
+  const artist = await one<DbRow>(
+    db
+      .from('profiles')
+      .select('id,full_name,handle,role,account_status,is_demo')
+      .eq('id', String(artwork.artist_id))
+      .maybeSingle()
+  );
+  if (
+    !artist ||
+    artist.role !== 'artist' ||
+    artist.account_status !== 'active' ||
+    artist.is_demo
+  ) {
+    throw new PurchaseRequestValidationError('This artwork is not available for purchase.');
+  }
+
+  const { data, error } = await db
+    .from('purchase_requests')
+    .insert({
+      id: `pr-${randomUUID()}`,
+      request_id: params.requestId,
+      artwork_id: artwork.id,
+      artist_id: artist.id,
+      buyer_name: params.buyerName,
+      buyer_phone: params.buyerPhone,
+      buyer_email: params.buyerEmail,
+      delivery_location: params.deliveryLocation,
+      delivery_address: params.deliveryAddress,
+      instructions: params.instructions,
+      artwork_title: String(artwork.title),
+      artwork_image: String(artwork.image_key),
+      artist_name: String(artist.full_name || ''),
+      artist_handle: String(artist.handle || ''),
+      amount: Number(artwork.price),
+      currency: String(artwork.currency),
+      status: 'pending',
+    })
+    .select('id,status,amount,currency,created_at')
+    .single();
+
+  if (error?.code === '23505') {
+    const { data: duplicate, error: duplicateError } = await db
+      .from('purchase_requests')
+      .select('id,status,amount,currency,created_at')
+      .eq('request_id', params.requestId)
+      .maybeSingle();
+    if (duplicateError) throw new Error(duplicateError.message);
+    if (duplicate) return fromDatabase<PurchaseRequestReceipt>(duplicate);
+  }
+  if (error) throw new Error(error.message);
+  if (!data) throw new Error('Supabase did not return the saved purchase request.');
+  return fromDatabase<PurchaseRequestReceipt>(data);
 }
 
 export async function getPurchasesForCollector(db: SupabaseDataClient, collectorId: string) {

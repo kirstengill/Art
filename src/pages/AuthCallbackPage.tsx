@@ -1,27 +1,20 @@
 import React, { useEffect, useState } from 'react';
 import { Link, useLocation, useNavigate } from 'react-router-dom';
 import { useArtVerse } from '../context/ArtVerseContext';
-
-function getReturnPath(value: string | null): string {
-  return value && value.startsWith('/') && !value.startsWith('//')
-    ? value
-    : '/dashboard';
-}
+import { dashboardPathForRole } from '../utils/roleRoutes';
 
 export const AuthCallbackPage: React.FC = () => {
   const location = useLocation();
   const navigate = useNavigate();
-  const { currentUser } = useArtVerse();
+  const { currentUser, authError: profileError } = useArtVerse();
   const [timedOut, setTimedOut] = useState(false);
   const params = new URLSearchParams(location.search);
   const authError = params.get('error_description') || params.get('error');
-  const returnTo = getReturnPath(params.get('next'));
-
   useEffect(() => {
     if (currentUser) {
-      navigate(returnTo, { replace: true });
+      navigate(dashboardPathForRole(currentUser.role), { replace: true });
     }
-  }, [currentUser, navigate, returnTo]);
+  }, [currentUser, navigate]);
 
   useEffect(() => {
     const timeout = window.setTimeout(() => setTimedOut(true), 12000);
@@ -35,9 +28,11 @@ export const AuthCallbackPage: React.FC = () => {
           ARTIVORA
         </p>
         <h1 className="mt-3 font-serif text-2xl">Completing sign-in</h1>
-        {authError ? (
+        {authError || profileError ? (
           <>
-            <p role="alert" className="mt-3 text-sm text-red-200">{authError}</p>
+            <p role="alert" className="mt-3 text-sm text-red-200">
+              {authError || profileError}
+            </p>
             <Link to="/login" className="mt-5 inline-block text-sm text-[#f0d79f] hover:text-white">
               Return to sign in
             </Link>

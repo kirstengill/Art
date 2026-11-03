@@ -1,9 +1,10 @@
 import React, { useEffect, useState } from 'react';
-import { Link, useNavigate, useLocation } from 'react-router-dom';
+import { Link, useNavigate } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { GlassPanel } from '../components/ui/GlassCard';
+import { dashboardPathForRole } from '../utils/roleRoutes';
 import gildedArtwork from '../assets/images/hero_gilded_horizon_1792993235968.jpg';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -11,8 +12,7 @@ const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 export const LoginPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const navigate = useNavigate();
-  const location = useLocation();
-  const { signInWithEmail, currentUser } = useArtVerse();
+  const { signInWithEmail, currentUser, authError } = useArtVerse();
 
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
@@ -20,15 +20,11 @@ export const LoginPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  const locationState = location.state as { from?: { pathname?: unknown } } | null;
-  const requestedDestination = locationState?.from?.pathname;
-  const from =
-    typeof requestedDestination === 'string' ? requestedDestination : '/dashboard';
-  const destination = from === '/login' || from === '/signin' ? '/dashboard' : from;
-
   useEffect(() => {
-    if (currentUser) navigate(destination, { replace: true });
-  }, [currentUser, destination, navigate]);
+    if (currentUser) {
+      navigate(dashboardPathForRole(currentUser.role), { replace: true });
+    }
+  }, [currentUser, navigate]);
 
   const handleSignIn = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -47,7 +43,6 @@ export const LoginPage: React.FC = () => {
     try {
       await signInWithEmail(trimmedEmail, password);
       setPassword('');
-      navigate(destination, { replace: true });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to sign in.');
     } finally {
@@ -140,6 +135,11 @@ export const LoginPage: React.FC = () => {
           {error && (
             <p role="alert" className="text-xs font-medium text-red-200">
               {error}
+            </p>
+          )}
+          {!error && authError && (
+            <p role="alert" className="text-xs font-medium text-red-200">
+              {authError}
             </p>
           )}
 

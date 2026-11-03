@@ -297,9 +297,16 @@ export const GalleryPage: React.FC = () => {
         </div>
 
         {/* Animated Layout Reflow Gallery Grid with Skeleton State */}
-        <AnimatePresence mode="wait">
+        <>
           {isLoadingCatalog ? (
-            <div key="gallery-skeleton" className="pt-10">
+            <motion.div
+              key="gallery-loading"
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              transition={{ duration: 0.18 }}
+              className="pt-10"
+            >
               <ArtworkGridSkeleton
                 count={gridDensity === 'salon' ? 4 : 6}
                 columnsClass={
@@ -311,9 +318,16 @@ export const GalleryPage: React.FC = () => {
                   gridDensity === 'salon' ? 'aspect-[4/3]' : 'aspect-[4/5]'
                 }
               />
-            </div>
+            </motion.div>
           ) : catalogError ? (
-            <div role="alert" className="py-20 text-center max-w-md mx-auto space-y-4">
+            <motion.div
+              key="gallery-error"
+              role="alert"
+              initial={{ opacity: 0, y: 10 }}
+              animate={{ opacity: 1, y: 0 }}
+              exit={{ opacity: 0 }}
+              className="py-20 text-center max-w-md mx-auto space-y-4"
+            >
               <h2 className="font-serif text-2xl font-semibold text-[#141312]">
                 Catalogue could not be loaded
               </h2>
@@ -325,11 +339,13 @@ export const GalleryPage: React.FC = () => {
               >
                 Try Again
               </button>
-            </div>
+            </motion.div>
           ) : filteredArtworks.length === 0 ? (
           <motion.div
+            key="gallery-empty"
             initial={shouldReduceMotion ? false : { opacity: 0, y: 10 }}
             animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0 }}
             className="py-20 text-center max-w-md mx-auto space-y-4"
           >
             <h2 className="font-serif text-2xl font-semibold text-[#141312]">
@@ -354,7 +370,11 @@ export const GalleryPage: React.FC = () => {
           </motion.div>
         ) : (
           <motion.div
+            key="gallery-results"
             layout={!shouldReduceMotion}
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
             className={`pt-10`}
           >
             <ArtworkGrid>
@@ -392,7 +412,7 @@ export const GalleryPage: React.FC = () => {
             </ArtworkGrid>
           </motion.div>
           )}
-        </AnimatePresence>
+        </>
       </div>
       
       {/* Floating WhatsApp Helpline */}

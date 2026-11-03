@@ -7,7 +7,6 @@ import {
   optionalAuth,
   requireAdmin,
   requireAuth,
-  isAdminUid,
   type AuthRequest,
 } from './src/middleware/auth.ts';
 import {
@@ -15,6 +14,7 @@ import {
   getAdminOrders,
   getAdminOverview,
   getAdminUsers,
+  updateAdminOrderStatus,
   type AdminArtworkFilter,
   type AdminContentKind,
   type AdminRoleFilter,
@@ -27,6 +27,7 @@ import {
   createOfferInDb,
   createPostInDb,
   createPurchaseIntentInDb,
+  createPurchaseRequestInDb,
   getArtists,
   getConversationsForParticipant,
   getOrCreateArtworkConversation,
@@ -41,6 +42,7 @@ import {
   transitionOfferStatusInDb,
   upsertArtworkListing,
 } from './src/db/repository.ts';
+import { PurchaseRequestValidationError } from './src/utils/purchaseRequests.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -48,12 +50,6 @@ const __dirname = path.dirname(__filename);
 async function startServer() {
   const app = express();
   const PORT = Number(process.env.PORT || 3000);
-
-  if (!process.env.ADMIN_UIDS?.split(',').some((uid) => uid.trim())) {
-    console.warn(
-      'ADMIN_UIDS is not configured; administrator endpoints will reject all requests.'
-    );
-  }
 
   app.use(express.json({ limit: '6mb' }));
 
@@ -79,7 +75,6 @@ async function startServer() {
         role,
         bio,
         location,
-        isAdmin: isAdminUid(uid),
       });
       res.json({ profile });
     } catch (error: unknown) {
@@ -190,6 +185,32 @@ async function startServer() {
     } catch {
       console.error('Admin orders query failed.');
       res.status(500).json({ error: 'Unable to load purchase-intent records.' });
+    }
+  });
+
+  app.patch('/api/admin/orders/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      if (
+        typeof req.body?.status !== 'string' ||
+        (req.body.source !== 'purchase_request' && req.body.source !== 'order_intent')
+      ) {
+        res.status(400).json({ error: 'A valid purchase request source and status are required.' });
+        return;
+      }
+      res.json(
+        await updateAdminOrderStatus(
+          req.params.id,
+          req.body.source,
+          req.body.status
+        )
+      );
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to update purchase request.';
+      const status = /not found/i.test(message) ? 404 : /cannot move|invalid purchase request status/i.test(message) ? 400 : 500;
+      if (status === 500) console.error('Admin purchase request update failed.');
+      res.status(status).json({
+        error: status === 500 ? 'Unable to update purchase request.' : message,
+      });
     }
   });
 
@@ -384,6 +405,23 @@ async function startServer() {
       const errMessage = error instanceof Error ? error.message : 'Failed to create order intent.';
       const status = errMessage.startsWith('Forbidden:') ? 403 : 400;
       res.status(status).json({ error: errMessage });
+    }
+  });
+
+  app.post('/api/purchase-requests', async (req, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      const order = await createPurchaseRequestInDb(req.body);
+      res.status(201).json({ order });
+    } catch (error: unknown) {
+      if (error instanceof PurchaseRequestValidationError) {
+        res.status(400).json({ error: error.message });
+        return;
+      }
+      console.error('Public purchase request could not be saved.');
+      res.status(503).json({
+        error: 'Unable to submit your request right now. Please try again later.',
+      });
     }
   });
 
