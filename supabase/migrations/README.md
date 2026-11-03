@@ -19,6 +19,7 @@ Review the SQL and the target project before applying. Do not execute `supabase/
 - `20241027000003_fix_profiles_rls.sql` limits public profile visibility to active, non-demo artists and grants only public profile columns.
 - `20261027000000_profile_sync_users_table.sql` ensures `profiles.registration_date` exists. The legacy `public.users` mirror is no longer created or used; if it already exists, Artivora leaves it untouched to avoid data loss.
 - `20261027000001_supabase_runtime_security.sql` adds missing `is_demo` fields and tightens profile role, artwork ownership, order, conversation, offer, and Storage permissions. `profiles.role` cannot be changed through authenticated profile updates, and artwork uploads require an artist profile and the uploader's own folder.
+- `20261103000000_restrict_public_profile_columns.sql` removes broad profile-table SELECT grants and restores access only to the public profile columns. This preserves the existing RLS row policies while preventing anonymous or authenticated clients from selecting private profile fields such as email.
 
 The application does not require separate PostgreSQL host, database, or login credentials. Do not drop legacy tables or delete data as part of this migration.
 

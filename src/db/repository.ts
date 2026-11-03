@@ -151,6 +151,39 @@ export async function getArtists(db: SupabaseDataClient) {
   );
 }
 
+export function filterVisibleCatalogRows(
+  profileRows: DbRow[],
+  artworkRows: DbRow[],
+  postRows: DbRow[],
+  commentRows: DbRow[]
+) {
+  const visibleProfiles = profileRows.filter((profile) => !profile.isDemo);
+  const visibleProfileIds = new Set(visibleProfiles.map((profile) => profile.id));
+  const visibleArtworks = artworkRows.filter(
+    (artwork) => !artwork.isDemo && visibleProfileIds.has(String(artwork.artistId))
+  );
+  const visibleArtworkIds = new Set(visibleArtworks.map((artwork) => artwork.id));
+  const visiblePosts = postRows.filter(
+    (post) => !post.isDemo && visibleProfileIds.has(String(post.authorId))
+  );
+  const visiblePostIds = new Set(visiblePosts.map((post) => post.id));
+  const visibleComments = commentRows.filter(
+    (comment) =>
+      visiblePostIds.has(String(comment.postId)) &&
+      visibleProfileIds.has(String(comment.authorId))
+  );
+
+  return {
+    visibleProfiles,
+    visibleProfileIds,
+    visibleArtworks,
+    visibleArtworkIds,
+    visiblePosts,
+    visiblePostIds,
+    visibleComments,
+  };
+}
+
 export async function getPublicCatalog(db: SupabaseDataClient, viewerUid?: string) {
   const [
     profileRows,
@@ -190,39 +223,32 @@ export async function getPublicCatalog(db: SupabaseDataClient, viewerUid?: strin
         )
       : [];
 
-  const visibleProfiles = profileRows.filter((profile) => !profile.is_demo);
-  const visibleProfileIds = new Set(visibleProfiles.map((profile) => profile.id));
-  const visibleArtworks = artworkRows.filter(
-    (artwork) => !artwork.is_demo && visibleProfileIds.has(String(artwork.artist_id))
-  );
-  const visibleArtworkIds = new Set(visibleArtworks.map((artwork) => artwork.id));
-  const visiblePosts = postRows.filter(
-    (post) => !post.is_demo && visibleProfileIds.has(String(post.author_id))
-  );
-  const visiblePostIds = new Set(visiblePosts.map((post) => post.id));
+  const {
+    visibleProfiles,
+    visibleProfileIds,
+    visibleArtworks,
+    visibleArtworkIds,
+    visiblePosts,
+    visiblePostIds,
+    visibleComments,
+  } = filterVisibleCatalogRows(profileRows, artworkRows, postRows, commentRows);
 
   return {
     profiles: visibleProfiles.map((profile) => ({
-      ...fromDatabase<DbRow>(profile),
+      ...profile,
       email: '',
     })),
-    artworks: visibleArtworks.map((artwork) => fromDatabase(artwork)),
-    posts: visiblePosts.map((post) => fromDatabase(post)),
-    comments: commentRows
-      .filter(
-        (comment) =>
-          visiblePostIds.has(String(comment.post_id)) &&
-          visibleProfileIds.has(String(comment.author_id))
-      )
-      .map((comment) => fromDatabase(comment)),
+    artworks: visibleArtworks,
+    posts: visiblePosts,
+    comments: visibleComments,
     followedArtistIds: followRows
-      .filter((follow) => visibleProfileIds.has(String(follow.following_id)))
-      .map((follow) => String(follow.following_id)),
+      .filter((follow) => visibleProfileIds.has(String(follow.followingId)))
+      .map((follow) => String(follow.followingId)),
     likedPostIds: likeRows
-      .filter((like) => visiblePostIds.has(String(like.post_id)))
-      .map((like) => String(like.post_id)),
+      .filter((like) => visiblePostIds.has(String(like.postId)))
+      .map((like) => String(like.postId)),
     savedArtworkIds: savedRows
-      .map((item) => String(item.artwork_id))
+      .map((item) => String(item.artworkId))
       .filter((id) => visibleArtworkIds.has(id)),
   };
 }
