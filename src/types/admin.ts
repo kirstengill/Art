@@ -48,7 +48,10 @@ export interface AdminUserRecord {
   profileId: string | null;
   fullName: string | null;
   handle: string | null;
+  username: string | null;
   role: string | null;
+  accountStatus: string;
+  registrationDate: string;
   createdAt: string;
   artworkCount: number;
   availableArtworkCount: number;

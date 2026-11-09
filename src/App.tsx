@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import {
   BrowserRouter,
   Navigate,
@@ -26,6 +26,7 @@ import { SignupPage } from './pages/SignupPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
 import { AdminPage } from './pages/AdminPage';
 import { ProtectedRoute } from './components/guards/ProtectedRoute';
+import { LoadingStatusIndicator } from './components/ui/LoadingStatusIndicator';
 import { dashboardPathForRole } from './utils/roleRoutes';
 
 const DashboardRedirect: React.FC = () => {
@@ -38,9 +39,19 @@ const DashboardRedirect: React.FC = () => {
 const ScrollAndAnimateRoutes: React.FC = () => {
   const location = useLocation();
   const shouldReduceMotion = useReducedMotion();
+  const previousPath = useRef(location.pathname);
+  const [isNavigating, setIsNavigating] = useState(false);
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [location.pathname]);
+
+  useEffect(() => {
+    if (previousPath.current === location.pathname) return;
+    previousPath.current = location.pathname;
+    setIsNavigating(true);
+    const timeout = window.setTimeout(() => setIsNavigating(false), 500);
+    return () => window.clearTimeout(timeout);
   }, [location.pathname]);
 
   const isImmersivePage = ['/', '/login', '/signin', '/signup', '/auth/callback'].includes(
@@ -49,6 +60,7 @@ const ScrollAndAnimateRoutes: React.FC = () => {
 
   return (
     <>
+      <LoadingStatusIndicator navigating={isNavigating} />
       {!isImmersivePage && <Navbar />}
       <AnimatePresence mode="wait">
         <motion.main

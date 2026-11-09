@@ -26,6 +26,11 @@ import type {
   AdminTimeframe,
 } from '../types/admin';
 import type { PurchaseRequestInput } from '../utils/purchaseRequests';
+import {
+  reportNetworkIssue,
+  reportNetworkRecovery,
+  trackApiRequest,
+} from '../utils/networkStatus';
 
 async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
   const token = await getSupabaseAccessToken();
@@ -35,23 +40,34 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     headers.set('Authorization', `Bearer ${token}`);
   }
 
-  const response = await fetch(path, {
-    ...init,
-    headers,
-  });
+  const finishTracking = trackApiRequest();
+  let receivedResponse = false;
+  try {
+    const response = await fetch(path, {
+      ...init,
+      headers,
+    });
+    receivedResponse = true;
 
-  if (!response.ok) {
-    let errText = 'Request failed.';
-    try {
-      const data = await response.json();
-      if (data?.error) errText = data.error;
-    } catch {
-      // ignore json parse failure
+    if (!response.ok) {
+      let errText = 'Request failed.';
+      try {
+        const data = await response.json();
+        if (data?.error) errText = data.error;
+      } catch {
+        // ignore json parse failure
+      }
+      throw new Error(errText);
     }
-    throw new Error(errText);
-  }
 
-  return response.json() as Promise<T>;
+    return await response.json() as T;
+  } catch (error) {
+    if (!receivedResponse) reportNetworkIssue();
+    throw error;
+  } finally {
+    finishTracking();
+    if (receivedResponse) reportNetworkRecovery();
+  }
 }
 
 export interface CatalogResponse {

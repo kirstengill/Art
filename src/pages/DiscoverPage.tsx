@@ -88,7 +88,7 @@ export const DiscoverPage: React.FC = () => {
                 transition={{ duration: 0.22 }}
                 className="text-xs tracking-[0.2em] uppercase text-[#787066]"
               >
-                Autumn Salon 2026 · Curated Digital Viewing Room
+                ARTIVORA · Curated Digital Viewing Room
               </motion.p>
 
               <motion.h1
@@ -99,7 +99,7 @@ export const DiscoverPage: React.FC = () => {
               >
                 Collect original works{' '}
                 <span className="italic font-normal text-[#8E6C2E]">directly</span>{' '}
-                from contemporary ateliers.
+                from independent ateliers.
               </motion.h1>
 
               <motion.p
@@ -510,7 +510,7 @@ export const DiscoverPage: React.FC = () => {
                 03 / Studio Roster
               </p>
               <h2 className="font-serif text-3xl sm:text-4xl font-semibold text-[#141312] mt-1">
-                Featured Contemporary Artists
+                Featured Artists
               </h2>
             </div>
             <Link

@@ -47,7 +47,7 @@ export const Footer: React.FC = () => {
               ARTIVORA
             </Link>
             <p className="text-sm leading-relaxed max-w-md text-[#5C554C]">
-              A contemporary digital fine-art gallery and collector community connecting
+              A digital fine-art gallery and collector community connecting
               independent ateliers, private collectors, and curatorial voices.
             </p>
           </div>

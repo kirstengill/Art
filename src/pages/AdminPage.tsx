@@ -516,20 +516,21 @@ export const AdminPage: React.FC = () => {
                 <div className="overflow-x-auto rounded-2xl border border-white/15 bg-white/[0.04]">
                   <table className="w-full min-w-[650px] text-left text-sm">
                     <thead className="bg-white/[0.06] text-[10px] uppercase tracking-[0.14em] text-white/55">
-                      <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Account type</th><th className="px-4 py-3">Registered</th><th className="px-4 py-3 text-right">Artworks</th>{section === 'artists' && <><th className="px-4 py-3 text-right">Available</th><th className="px-4 py-3 text-right">Purchase intents</th></>}<th className="px-4 py-3">Profile</th></tr>
+                      <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Account type</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Registered</th><th className="px-4 py-3 text-right">Artworks</th>{section === 'artists' && <><th className="px-4 py-3 text-right">Available</th><th className="px-4 py-3 text-right">Purchase intents</th></>}<th className="px-4 py-3">Profile</th></tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {users.records.map((user, index) => (
                         <tr key={`${user.profileId || 'unlinked'}-${index}`} className="text-white/80">
                           <td className="px-4 py-3"><span className="block">{user.fullName || 'Profile not synced'}</span><span className="text-xs text-white/45">{user.handle ? `@${user.handle}` : ''}</span></td>
                           <td className="px-4 py-3">{user.role ? formatRoleLabel(user.role as 'admin' | 'artist' | 'collector' | 'art_lover') : '—'}</td>
+                          <td className="px-4 py-3 capitalize">{user.accountStatus || '—'}</td>
                           <td className="px-4 py-3">{formatShortDate(user.createdAt)}</td>
                           <td className="px-4 py-3 text-right tabular-nums">{user.artworkCount}</td>
                           {section === 'artists' && <><td className="px-4 py-3 text-right tabular-nums">{user.availableArtworkCount}</td><td className="px-4 py-3 text-right tabular-nums">{user.purchaseIntentCount}</td></>}
                           <td className="px-4 py-3">{user.profileId && user.role === 'artist' ? <Link className="text-[#ead39e] hover:text-white" to={`/artists/${user.profileId}`}>Open <ArrowRight className="ml-1 inline h-3 w-3" /></Link> : '—'}</td>
                         </tr>
                       ))}
-                      {users.records.length === 0 && <tr><td colSpan={section === 'artists' ? 7 : 5} className="px-4 py-8 text-center text-white/55">No matching users.</td></tr>}
+                      {users.records.length === 0 && <tr><td colSpan={section === 'artists' ? 8 : 6} className="px-4 py-8 text-center text-white/55">No matching users.</td></tr>}
                     </tbody>
                   </table>
                 </div>

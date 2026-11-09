@@ -10,6 +10,7 @@ import {
 
 interface TestProfile extends SyncProfileRecord {
   accountStatus: string;
+  discipline: string;
   verified: boolean;
   isDemo: boolean;
 }
@@ -78,6 +79,7 @@ test('creates a first-time artist profile and persists complete private details'
 
   assert.equal(profile.id, 'auth-user-1');
   assert.equal(profile.role, 'artist');
+  assert.equal(profile.discipline, 'Fine Art');
   assert.equal(profiles.size, 1);
   assert.deepEqual(accountDetails.get(profile.id), {
     firstName: 'Ada',
@@ -95,6 +97,7 @@ test('updates existing profiles without replacing non-empty values with blanks',
     username: 'graceartist',
     role: 'artist',
     accountStatus: 'suspended',
+    discipline: 'Fine Art',
     bio: 'A saved biography.',
     location: 'Oslo',
     registrationDate: new Date('2024-01-01T00:00:00.000Z'),
@@ -132,6 +135,7 @@ test('preserves the database role even when auth metadata requests another role'
     username: 'existingadmin',
     role: 'admin',
     accountStatus: 'active',
+    discipline: 'Fine Art',
     bio: '',
     location: '',
     registrationDate: new Date('2024-01-01T00:00:00.000Z'),
@@ -209,6 +213,7 @@ test('creates a new profile with a unique handle when another profile has the sa
     username: 'adaartist',
     role: 'artist',
     accountStatus: 'active',
+    discipline: 'Fine Art',
     bio: '',
     location: '',
     registrationDate: new Date('2024-01-01T00:00:00.000Z'),

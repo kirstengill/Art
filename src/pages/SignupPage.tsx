@@ -12,7 +12,7 @@ import { dashboardPathForRole } from '../utils/roleRoutes';
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   artist: 'Publish original works, set direct or offer pricing, and manage collector inquiries.',
   collector: 'Acquire works directly, submit private offers, and curate saved collections.',
-  art_lover: 'Follow contemporary ateliers, join community discussions, and save favorite works.',
+  art_lover: 'Follow independent ateliers, join community discussions, and save favorite works.',
 };
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];

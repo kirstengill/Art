@@ -187,8 +187,8 @@ export async function getAdminUsers(options: {
     )
     .sort(
       (a, b) =>
-        new Date(String(b.registration_date)).getTime() -
-        new Date(String(a.registration_date)).getTime()
+        new Date(String(b.registration_date || b.created_at)).getTime() -
+        new Date(String(a.registration_date || a.created_at)).getTime()
     );
   const pageRecords = records.slice(offset, offset + pageSize);
   return {
@@ -203,7 +203,7 @@ export async function getAdminUsers(options: {
         username: String(profile.username || ''),
         role: String(profile.role || ''),
         accountStatus: String(profile.account_status || ''),
-        registrationDate: String(profile.registration_date || ''),
+        registrationDate: String(profile.registration_date || profile.created_at || ''),
         createdAt: String(profile.registration_date || profile.created_at || ''),
         artworkCount: userArtworks.length,
         availableArtworkCount: userArtworks.filter((artwork) => artwork.availability === 'available').length,

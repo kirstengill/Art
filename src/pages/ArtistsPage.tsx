@@ -98,7 +98,7 @@ export const ArtistsPage: React.FC = () => {
               Atelier Directory
             </p>
             <h1 className="font-serif text-4xl sm:text-5xl font-semibold text-[#141312] mt-1.5 text-balance">
-              Contemporary Artists
+              Artists
             </h1>
             <p className="text-sm sm:text-base text-[#5C554C] mt-3 leading-relaxed">
               Discover studio practices across painting, carved stone sculpture, darkroom

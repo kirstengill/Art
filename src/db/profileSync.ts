@@ -144,7 +144,7 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
         registrationDate: new Date(),
         bio: params.bio?.trim() || '',
         location: role === 'artist' ? params.location?.trim() || '' : '',
-        discipline: role === 'artist' ? 'Contemporary Fine Art' : 'Private Collection',
+        discipline: role === 'artist' ? 'Fine Art' : 'Private Collection',
         verified: false,
         isDemo: false,
       });

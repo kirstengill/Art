@@ -14,7 +14,7 @@ CREATE TABLE IF NOT EXISTS public.profiles (
   cover_url text,
   bio text NOT NULL DEFAULT '',
   location text NOT NULL DEFAULT '',
-  discipline text NOT NULL DEFAULT 'Contemporary Fine Art',
+  discipline text NOT NULL DEFAULT 'Fine Art',
   verified boolean NOT NULL DEFAULT false,
   is_demo boolean NOT NULL DEFAULT false,
   created_at timestamptz NOT NULL DEFAULT now(),
