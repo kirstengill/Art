@@ -10,30 +10,48 @@ import {
   type AuthRequest,
 } from './src/middleware/auth.ts';
 import {
+  getSupabaseServiceClient,
+} from './src/lib/supabase-server.ts';
+import {
+  getAdminCollectorApprovals,
   getAdminContent,
   getAdminOrders,
   getAdminOverview,
   getAdminUsers,
+  updateAdminCollectorApproval,
   updateAdminOrderStatus,
   type AdminArtworkFilter,
   type AdminContentKind,
   type AdminRoleFilter,
   type AdminTimeframe,
 } from './src/db/adminRepository.ts';
+import type { AdminCollectorApprovalFilter } from './src/types/admin.ts';
 import {
+  addArtworkToExhibition,
   addCommentInDb,
   appendMessageToDb,
   checkArtworkPurchased,
+  createDonationInDb,
+  createExhibitionInDb,
+  createExhibitionSubmissionInDb,
   createOfferInDb,
   createPostInDb,
   createPurchaseIntentInDb,
   createPurchaseRequestInDb,
+  getAllDonations,
   getArtists,
+  getDonationsForArtist,
+  getDonationsForDonor,
+  getExhibitionArtworks,
+  getExhibitionById,
+  getExhibitions,
+  getExhibitionSubmissions,
   getConversationsForParticipant,
   getOrCreateArtworkConversation,
   getPublicCatalog,
   getPurchasesForCollector,
   getPurchasedArtworkIds,
+  removeArtworkFromExhibition,
   removeArtworkListing,
   syncUserProfile,
   toggleFollowInDb,
@@ -41,7 +59,12 @@ import {
   toggleSavedArtworkInDb,
   transitionOfferStatusInDb,
   upsertArtworkListing,
+  updateExhibitionInDb,
+  updateExhibitionSubmissionStatus,
+  deleteExhibitionInDb,
+  fromDatabase,
 } from './src/db/repository.ts';
+import type { ExhibitionStatus } from './src/types/artverse';
 import { PurchaseRequestValidationError } from './src/utils/purchaseRequests.ts';
 
 const __filename = fileURLToPath(import.meta.url);
@@ -467,6 +490,235 @@ function createApp() {
     }
   });
 
+  // ============================================
+  // Donations
+  // ============================================
+  app.post('/api/donations', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const donation = await createDonationInDb(req.supabase, req.user!.uid, req.body);
+      res.status(201).json({ donation });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create donation.';
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.get('/api/donations', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const donations = await getDonationsForDonor(req.supabase, req.user!.uid);
+      res.json({ donations: donations.map((d) => fromDatabase(d)) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load donations.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.get('/api/donations/artist/:artistId', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const donations = await getDonationsForArtist(req.supabase, req.params.artistId);
+      res.json({ donations: donations.map((d) => fromDatabase(d)) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load artist donations.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.get('/api/admin/donations', requireAuth, requireAdmin, async (_req, res) => {
+    try {
+      const db = getSupabaseServiceClient();
+      const donations = await getAllDonations(db);
+      res.json({ donations: donations.map((d) => fromDatabase(d)) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load donations.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  // ============================================
+  // Exhibitions
+  // ============================================
+  app.get('/api/exhibitions', optionalAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const status = typeof req.query.status === 'string' ? (req.query.status as ExhibitionStatus) : undefined;
+      const exhibitions = await getExhibitions(req.supabase, status);
+      res.json({ exhibitions: exhibitions.map((e) => fromDatabase(e)) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load exhibitions.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.get('/api/exhibitions/:id', optionalAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const exhibition = await getExhibitionById(req.supabase, req.params.id);
+      if (!exhibition) {
+        res.status(404).json({ error: 'Exhibition not found.' });
+        return;
+      }
+      res.json({ exhibition: fromDatabase(exhibition) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load exhibition.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/exhibitions', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const exhibition = await createExhibitionInDb(req.supabase, req.user!.uid, req.body);
+      res.status(201).json({ exhibition });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create exhibition.';
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.patch('/api/exhibitions/:id', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const exhibition = await updateExhibitionInDb(req.supabase, req.params.id, req.user!.uid, req.body);
+      res.json({ exhibition });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update exhibition.';
+      const status = message.startsWith('Forbidden:') ? 403 : message === 'Exhibition not found.' ? 404 : 400;
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.delete('/api/exhibitions/:id', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const result = await deleteExhibitionInDb(req.supabase, req.params.id, req.user!.uid);
+      res.json(result);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to delete exhibition.';
+      const status = message.startsWith('Forbidden:') ? 403 : message === 'Exhibition not found.' ? 404 : 400;
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.get('/api/exhibitions/:id/artworks', optionalAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const artworks = await getExhibitionArtworks(req.supabase, req.params.id);
+      res.json({ artworks: artworks.map((a) => fromDatabase(a)) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load exhibition artworks.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/exhibitions/:id/artworks', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const { artworkId } = req.body;
+      if (!artworkId || typeof artworkId !== 'string') {
+        res.status(400).json({ error: 'Artwork ID is required.' });
+        return;
+      }
+      const result = await addArtworkToExhibition(req.supabase, req.params.id, artworkId);
+      res.status(201).json({ result });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to add artwork to exhibition.';
+      const status = message.startsWith('Forbidden:') ? 403 : message.includes('not found') ? 404 : 400;
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.delete('/api/exhibitions/:id/artworks/:artworkId', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const result = await removeArtworkFromExhibition(req.supabase, req.params.id, req.params.artworkId);
+      res.json(result);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to remove artwork from exhibition.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/exhibitions/submissions', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const submission = await createExhibitionSubmissionInDb(req.supabase, req.user!.uid, req.body);
+      res.status(201).json({ submission });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to create submission.';
+      const status = message.startsWith('Forbidden:') ? 403 : 400;
+      res.status(status).json({ error: message });
+    }
+  });
+
+  app.get('/api/exhibitions/:id/submissions', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const submissions = await getExhibitionSubmissions(req.supabase, req.params.id);
+      res.json({ submissions: submissions.map((s) => fromDatabase(s)) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load submissions.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.patch('/api/exhibitions/submissions/:id', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const { status, notes } = req.body;
+      if (!status) {
+        res.status(400).json({ error: 'Status is required.' });
+        return;
+      }
+      const submission = await updateExhibitionSubmissionStatus(
+        req.supabase,
+        req.params.id,
+        req.user!.uid,
+        status,
+        notes
+      );
+      res.json({ submission });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to update submission.';
+      const statusCode = message.startsWith('Forbidden:') ? 403 : message === 'Submission not found.' ? 404 : 400;
+      res.status(statusCode).json({ error: message });
+    }
+  });
+
+  // ============================================
+  // Admin: Collector Approvals
+  // ============================================
+  app.get('/api/admin/collector-approvals', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const filter = typeof req.query.filter === 'string' ? (req.query.filter as AdminCollectorApprovalFilter) : 'all';
+      const search = typeof req.query.search === 'string' ? req.query.search : '';
+      const page = Math.max(1, Math.floor(Number(req.query.page) || 1));
+      const pageSize = Math.min(50, Math.max(1, Math.floor(Number(req.query.pageSize) || 20)));
+      const result = await getAdminCollectorApprovals({ page, pageSize, filter, search });
+      res.json(result);
+    } catch {
+      res.status(500).json({ error: 'Unable to load collector approvals.' });
+    }
+  });
+
+  app.patch('/api/admin/collector-approvals/:id', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const { action, rejectionReason } = req.body;
+      if (action !== 'approve' && action !== 'reject') {
+        res.status(400).json({ error: 'A valid approval action is required.' });
+        return;
+      }
+      const result = await updateAdminCollectorApproval(req.params.id, action, rejectionReason);
+      res.json(result);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to update collector approval.';
+      const status = /not found/i.test(message) ? 404 : /invalid|cannot move|already/i.test(message) ? 400 : 500;
+      res.status(status).json({ error: message });
+    }
+  });
+
   return app;
 }
 
@@ -491,7 +743,7 @@ async function startServer() {
   }
 
   app.listen(PORT, '0.0.0.0', () => {
-    console.log(`ArtVerse server listening on http://0.0.0.0:${PORT}`);
+    console.log(`Louvre Singa server listening on http://0.0.0.0:${PORT}`);
   });
 }
 

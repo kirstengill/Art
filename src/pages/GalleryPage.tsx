@@ -16,6 +16,8 @@ const CATEGORIES: { value: 'all' | ArtworkCategory; label: string }[] = [
   { value: 'sculpture', label: 'Sculpture' },
   { value: 'drawing', label: 'Drawing' },
   { value: 'digital_art', label: 'Digital Art' },
+  { value: 'mixed_media', label: 'Mixed Media' },
+  { value: 'ceramics', label: 'Ceramics' },
 ];
 
 type SortOption = 'newest' | 'price_asc' | 'price_desc' | 'popular';
@@ -355,7 +357,7 @@ export const GalleryPage: React.FC = () => {
             </h2>
             <p className="text-sm text-[#575048]">
               {artworks.length === 0
-                ? 'Check back soon to discover new work from ARTIVORA artists.'
+                ? 'Check back soon to discover new work from Louvre Singa artists.'
                 : 'Try adjusting your search query, category filter, or saved shortlist selection to explore more works in the catalogue.'}
             </p>
             {artworks.length > 0 && (

@@ -39,7 +39,7 @@ export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
   const cratingEstimate = Math.max(180, Math.round(unitAmount * 0.035));
   const whatsappUrl = createdOrder
     ? getWhatsAppHelplineUrl(
-        `Artivora purchase inquiry ${createdOrder.id}: ${artwork.title}`
+        `Louvre Singa purchase inquiry ${createdOrder.id}: ${artwork.title}`
       )
     : undefined;
 
@@ -176,7 +176,7 @@ export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
                   </dl>
 
                   <div className="rounded-xl border border-[#E2D6BD] bg-[#F5EFE2] p-4 text-xs leading-relaxed text-[#4F473D]">
-                    The intended commission is 20% for Artivora and 80% for the artist.
+                    The intended commission is 20% for Louvre Singa and 80% for the artist.
                     Artist payouts are intended only after delivery is confirmed. These
                     steps are not automated or payment-enabled.
                     {whatsappUrl ? (
@@ -186,7 +186,7 @@ export const PurchaseIntentModal: React.FC<PurchaseIntentModalProps> = ({
                         rel="noopener noreferrer"
                         className="mt-3 inline-flex font-medium text-[#76551F] underline underline-offset-2"
                       >
-                        Contact the Artivora administrator on WhatsApp
+                        Contact the Louvre Singa administrator on WhatsApp
                       </a>
                     ) : (
                       <p className="mt-2 text-[#6B655E]">

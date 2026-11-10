@@ -7,6 +7,13 @@ import type {
   CommunityPost,
   Conversation,
   ConversationMessage,
+  Donation,
+  DonationInput,
+  Exhibition,
+  ExhibitionInput,
+  ExhibitionStatus,
+  ExhibitionSubmission,
+  ExhibitionSubmissionInput,
   OrderIntent,
   PurchaseRequestReceipt,
   PostComment,
@@ -15,15 +22,17 @@ import type {
   UserRole,
 } from '../types/artverse';
 import type {
+  AdminArtworkFilter,
+  AdminCollectorApprovalFilter,
+  AdminCollectorApprovalRecord,
   AdminContentKind,
   AdminContentRecord,
   AdminOverview,
   AdminOrderRecord,
   AdminPageResult,
   AdminRoleFilter,
-  AdminUserRecord,
-  AdminArtworkFilter,
   AdminTimeframe,
+  AdminUserRecord,
 } from '../types/admin';
 import type { PurchaseRequestInput } from '../utils/purchaseRequests';
 import {
@@ -269,6 +278,34 @@ export const artverseApi = {
       body: JSON.stringify({ source, status }),
     }),
 
+  fetchAdminCollectorApprovals: (options: {
+    page: number;
+    pageSize: number;
+    filter: AdminCollectorApprovalFilter;
+    search: string;
+  }) => {
+    const params = new URLSearchParams({
+      page: String(options.page),
+      pageSize: String(options.pageSize),
+      filter: options.filter,
+      search: options.search,
+    });
+    return apiFetch<AdminPageResult<AdminCollectorApprovalRecord>>(`/api/admin/collector-approvals?${params}`);
+  },
+
+  updateCollectorApproval: (
+    profileId: string,
+    action: 'approve' | 'reject',
+    rejectionReason?: string
+  ) =>
+    apiFetch<{ id: string; accountStatus: string; collectorApprovedAt: string | null }>(
+      `/api/admin/collector-approvals/${encodeURIComponent(profileId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action, rejectionReason }),
+      }
+    ),
+
   // Purchase-related endpoints
   fetchPurchases: () =>
     apiFetch<{ purchases: Purchase[]; artworks: Artwork[] }>('/api/purchases'),
@@ -278,4 +315,86 @@ export const artverseApi = {
 
   fetchPurchasedArtworkIds: () =>
     apiFetch<{ artworkIds: string[] }>('/api/purchases/artwork-ids'),
+
+  // ============================================
+  // Donations
+  // ============================================
+  createDonation: (payload: DonationInput) =>
+    apiFetch<{ donation: Donation }>('/api/donations', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  fetchDonations: () =>
+    apiFetch<{ donations: Donation[] }>('/api/donations'),
+
+  fetchDonationsForArtist: (artistId: string) =>
+    apiFetch<{ donations: Donation[] }>(`/api/donations/artist/${encodeURIComponent(artistId)}`),
+
+  fetchAdminDonations: () =>
+    apiFetch<{ donations: Donation[] }>('/api/admin/donations'),
+
+  // ============================================
+  // Exhibitions
+  // ============================================
+  fetchExhibitions: (status?: ExhibitionStatus) => {
+    const params = new URLSearchParams();
+    if (status) params.set('status', status);
+    return apiFetch<{ exhibitions: Exhibition[] }>(`/api/exhibitions?${params}`);
+  },
+
+  fetchExhibition: (exhibitionId: string) =>
+    apiFetch<{ exhibition: Exhibition }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`),
+
+  createExhibition: (payload: ExhibitionInput) =>
+    apiFetch<{ exhibition: Exhibition }>('/api/exhibitions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  updateExhibition: (exhibitionId: string, payload: Partial<ExhibitionInput>) =>
+    apiFetch<{ exhibition: Exhibition }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`, {
+      method: 'PATCH',
+      body: JSON.stringify(payload),
+    }),
+
+  deleteExhibition: (exhibitionId: string) =>
+    apiFetch<{ deletedId: string }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`, {
+      method: 'DELETE',
+    }),
+
+  fetchExhibitionArtworks: (exhibitionId: string) =>
+    apiFetch<{ artworks: any[] }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}/artworks`),
+
+  addArtworkToExhibition: (exhibitionId: string, artworkId: string) =>
+    apiFetch<{ result: any }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}/artworks`, {
+      method: 'POST',
+      body: JSON.stringify({ artworkId }),
+    }),
+
+  removeArtworkFromExhibition: (exhibitionId: string, artworkId: string) =>
+    apiFetch<{ removed: boolean }>(
+      `/api/exhibitions/${encodeURIComponent(exhibitionId)}/artworks/${encodeURIComponent(artworkId)}`,
+      { method: 'DELETE' }
+    ),
+
+  createExhibitionSubmission: (payload: ExhibitionSubmissionInput) =>
+    apiFetch<{ submission: ExhibitionSubmission }>('/api/exhibitions/submissions', {
+      method: 'POST',
+      body: JSON.stringify(payload),
+    }),
+
+  fetchExhibitionSubmissions: (exhibitionId: string) =>
+    apiFetch<{ submissions: ExhibitionSubmission[] }>(
+      `/api/exhibitions/${encodeURIComponent(exhibitionId)}/submissions`
+    ),
+
+  updateExhibitionSubmission: (submissionId: string, status: string, notes?: string) =>
+    apiFetch<{ submission: ExhibitionSubmission }>(
+      `/api/exhibitions/submissions/${encodeURIComponent(submissionId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ status, notes }),
+      }
+    ),
 };

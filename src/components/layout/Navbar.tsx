@@ -11,11 +11,12 @@ import { ArrowUpRight, Menu, X, LogOut } from 'lucide-react';
 import { useArtVerse } from '../../context/ArtVerseContext';
 import { formatRoleLabel } from '../../utils/formatters';
 import { dashboardPathForRole } from '../../utils/roleRoutes';
-import artivoraLogo from '../../images/artivora.png';
+import louvreSingaLogo from '../../images/Louvre Singa Art Gallery Logo.png';
 
 const PUBLIC_LINKS = [
   { to: '/', label: 'Home' },
   { to: '/gallery', label: 'Explore' },
+  { to: '/exhibitions', label: 'Exhibitions' },
   { to: '/artists', label: 'Artists' },
   { to: '/community', label: 'Community' },
 ];
@@ -58,7 +59,7 @@ export const Navbar: React.FC = () => {
           to="/"
           className="whitespace-nowrap shrink-0 transition-opacity hover:opacity-90 focus-visible:outline-2 focus-visible:outline-offset-4 focus-visible:outline-[#C59B47]"
         >
-          <img src={artivoraLogo} alt="ARTIVORA Logo" className="h-10 sm:h-12 w-auto mix-blend-mode-lighten" />
+          <img src={louvreSingaLogo} alt="Louvre Singa Logo" className="h-10 sm:h-12 w-auto mix-blend-mode-lighten" />
         </Link>
 
         {/* Desktop Navigation */}
@@ -132,6 +133,23 @@ export const Navbar: React.FC = () => {
                       ? 'Admin Dashboard'
                       : 'Dashboard'}
                 </span>
+              </Link>
+              <Link
+                to="/donations"
+                className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
+                  isActive('/donations')
+                    ? 'text-[#FAF8F3]'
+                    : 'text-[#C8C1B6] hover:text-[#FAF8F3] hover:bg-white/5'
+                }`}
+              >
+                {isActive('/donations') && (
+                  <motion.span
+                    layoutId={shouldReduceMotion ? undefined : 'nav-active'}
+                    className="absolute inset-0 rounded-lg bg-white/10"
+                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                  />
+                )}
+                <span className="relative z-10">Donate</span>
               </Link>
             </>
           )}
@@ -264,11 +282,22 @@ export const Navbar: React.FC = () => {
                         : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
                     }`}
                   >
-                    {currentUser.role === 'artist'
-                      ? 'My Studio'
-                      : currentUser.role === 'admin'
-                        ? 'Admin Dashboard'
-                        : 'Dashboard'}
+                      {currentUser.role === 'artist'
+                        ? 'My Studio'
+                        : currentUser.role === 'admin'
+                          ? 'Admin Dashboard'
+                          : 'Dashboard'}
+                  </Link>
+                  <Link
+                    to="/donations"
+                    onClick={() => setMobileOpen(false)}
+                    className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive('/donations')
+                        ? 'bg-white/10 text-[#FAF8F3]'
+                        : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
+                    }`}
+                  >
+                    Donate
                   </Link>
                   <button
                     onClick={handleLogout}

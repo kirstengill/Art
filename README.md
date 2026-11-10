@@ -1,10 +1,10 @@
-# ARTIVORA — Fine-Art Gallery & Collector Platform
+# LOUVRE SINGA — Fine-Art Gallery & Collector Platform
 
-ARTIVORA is a digital fine-art gallery and collector community where artists publish original works with transparent acquisition modes, collectors purchase or negotiate artwork-linked offers, and art enthusiasts engage with studio dispatches.
+LOUVRE SINGA is a digital fine-art gallery and collector community where artists publish original works with transparent acquisition modes, collectors purchase or negotiate artwork-linked offers, and art enthusiasts engage with studio dispatches.
 
 ## User Roles
 
-ARTIVORA implements a **role-based access control system** with three user types:
+LOUVRE SINGA implements a **role-based access control system** with three user types:
 
 | Role | Can Browse | Can Purchase | Can Upload Artwork | Can Create Posts | Can Negotiate | Has Collection |
 |------|------------|--------------|------------------|-----------------|---------------|----------------|
@@ -52,7 +52,7 @@ ARTIVORA implements a **role-based access control system** with three user types
 - **Authentication**: Supabase Auth is the only account/session provider. Email/password registration and sign-in use the existing Supabase Auth flow; explore remains available without signing in. Public signup accepts Artist, Collector, or Art Lover. The user's role is read from their `public.profiles` row; profile roles cannot be changed through authenticated profile updates.
 - **Artwork storage**: Images go to the existing public `artwork-images` bucket. Uploads are restricted to authenticated artist accounts and a folder named for their Auth user ID; MIME types are JPEG, PNG, WebP, or GIF, up to 10 MB. Artwork metadata references the public Storage URL.
 - **Administrator dashboard**: `/admin` and `/api/admin/*` require an authenticated account whose `public.profiles.role` is `admin`. User lists and analytics are loaded from persistent Supabase profile and content tables through the server API. The API verifies the role from Supabase using the caller's access token before querying administrator data. Administrator roles must be assigned through a trusted database operation. Configure `SUPABASE_SECRET_KEY` only in the trusted server/deployment environment. Never prefix it with `VITE_`.
-- **Transactions**: A purchase request or intent is not a payment. Artivora's intended split is 20% platform / 80% artist, with artist payout only after delivery confirmation, but no payment collection, escrow, delivery verification, or payout integration exists. The admin coordinates requests manually; a request does not reserve or mark artwork as sold. No legal compliance or settlement is asserted.
+- **Transactions**: A purchase request or intent is not a payment. Louvre Singa's intended split is 20% platform / 80% artist, with artist payout only after delivery confirmation, but no payment collection, escrow, delivery verification, or payout integration exists. The admin coordinates requests manually; a request does not reserve or mark artwork as sold. No legal compliance or settlement is asserted.
 - **Schema**: Existing tables and policies in `supabase/migrations/` remain the foundation. The new security migration adds only missing demo fields and tightens profile, artwork, order, and Storage authorization. The old `public.users` mirror table is no longer used; if present from an earlier migration, it is retained rather than dropped to avoid data loss.
 
 ## Getting Started

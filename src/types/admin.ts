@@ -2,6 +2,7 @@ export type AdminTimeframe = 7 | 30 | 90 | 'all';
 export type AdminRoleFilter = 'all' | 'admin' | 'artist' | 'collector' | 'art_lover';
 export type AdminContentKind = 'artworks' | 'community';
 export type AdminArtworkFilter = 'all' | 'direct';
+export type AdminCollectorApprovalFilter = 'all' | 'pending_approval' | 'approved' | 'rejected';
 
 export interface AdminSeriesPoint {
   date: string;
@@ -20,6 +21,8 @@ export interface AdminOverview {
     createdIntents: number;
     cancelledIntents: number;
     completedPurchases: null;
+    donations: number;
+    exhibitions: number;
   };
   payments: {
     configured: boolean;
@@ -92,4 +95,20 @@ export interface AdminOrderRecord {
   currency: string;
   status: string;
   createdAt: string;
+}
+
+export interface AdminCollectorApprovalRecord {
+  profileId: string;
+  fullName: string;
+  handle: string;
+  username: string;
+  email: string;
+  location: string;
+  phoneNumber: string;
+  accountStatus: string;
+  registrationDate: string;
+  createdAt: string;
+  collectorApprovedAt: string | null;
+  collectorApprovedBy: string | null;
+  collectorRejectionReason: string | null;
 }

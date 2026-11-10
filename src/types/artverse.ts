@@ -65,7 +65,9 @@ export type ArtworkCategory =
   | 'photography'
   | 'sculpture'
   | 'drawing'
-  | 'digital_art';
+  | 'digital_art'
+  | 'mixed_media'
+  | 'ceramics';
 
 export type AvailabilityStatus = 'available' | 'reserved' | 'sold';
 
@@ -82,7 +84,7 @@ export type OfferStatus =
   | 'withdrawn'
   | 'expired';
 
-export type AccountStatus = 'active' | 'pending' | 'suspended' | 'deleted';
+export type AccountStatus = 'active' | 'pending' | 'pending_approval' | 'suspended' | 'deleted';
 
 export interface Profile {
   id: string;
@@ -102,6 +104,10 @@ export interface Profile {
   isDemo: boolean;
   createdAt: string;
   updatedAt?: string;
+  // Collector approval fields
+  collectorApprovedAt?: string | null;
+  collectorApprovedBy?: string | null;
+  collectorRejectionReason?: string | null;
 }
 
 export type ArtistProfile = Pick<
@@ -235,6 +241,84 @@ export interface Purchase {
   purchasePrice: number;
   currency: string;
   purchasedAt: string;
+}
+
+export type DonationStatus = 'pending' | 'completed' | 'refunded' | 'failed';
+
+export interface Donation {
+  id: string;
+  donorId: string;
+  artistId: string | null;
+  artworkId: string | null;
+  amount: number;
+  currency: string;
+  message: string | null;
+  isAnonymous: boolean;
+  status: DonationStatus;
+  paymentReference: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface DonationInput {
+  artistId?: string;
+  artworkId?: string;
+  amount: number;
+  currency?: string;
+  message?: string;
+  isAnonymous?: boolean;
+}
+
+export type ExhibitionStatus = 'draft' | 'scheduled' | 'active' | 'archived' | 'cancelled';
+
+export interface Exhibition {
+  id: string;
+  title: string;
+  description: string;
+  curatorId: string | null;
+  coverImageKey: string | null;
+  startDate: string;
+  endDate: string;
+  location: string | null;
+  isVirtual: boolean;
+  virtualUrl: string | null;
+  status: ExhibitionStatus;
+  featured: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ExhibitionInput {
+  title: string;
+  description?: string;
+  coverImageKey?: string | null;
+  startDate: string;
+  endDate: string;
+  location?: string | null;
+  isVirtual?: boolean;
+  virtualUrl?: string | null;
+  status?: ExhibitionStatus;
+  featured?: boolean;
+}
+
+export type ExhibitionSubmissionStatus = 'submitted' | 'under_review' | 'accepted' | 'rejected' | 'withdrawn';
+
+export interface ExhibitionSubmission {
+  id: string;
+  exhibitionId: string;
+  artistId: string;
+  artworkId: string;
+  curatorNotes: string | null;
+  status: ExhibitionSubmissionStatus;
+  submittedAt: string;
+  reviewedAt: string | null;
+  reviewedBy: string | null;
+}
+
+export interface ExhibitionSubmissionInput {
+  exhibitionId: string;
+  artworkId: string;
+  curatorNotes?: string;
 }
 
 export interface ArtworkWithPurchase extends Artwork {

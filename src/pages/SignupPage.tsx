@@ -11,7 +11,7 @@ import { dashboardPathForRole } from '../utils/roleRoutes';
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   artist: 'Publish original works, set direct or offer pricing, and manage collector inquiries.',
-  collector: 'Acquire works directly, submit private offers, and curate saved collections.',
+  collector: 'Acquire works directly, submit private offers, and curate saved collections. Requires admin approval.',
   art_lover: 'Follow independent ateliers, join community discussions, and save favorite works.',
 };
 
@@ -117,7 +117,7 @@ export const SignupPage: React.FC = () => {
         <GlassPanel className="auth-glass-panel space-y-6 p-6 sm:p-9">
           <div className="space-y-2 text-center">
             <Link to="/" className="mb-1 inline-block font-serif text-sm font-semibold tracking-[0.22em] text-white/80">
-              ART UNIVERSE
+              LOUVRE SINGA
             </Link>
             <h1 className="font-serif text-3xl sm:text-4xl font-semibold text-white text-balance">
               Create Your Account

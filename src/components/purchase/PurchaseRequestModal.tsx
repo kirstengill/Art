@@ -137,7 +137,7 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
                       Request received
                     </h3>
                     <p className="text-sm leading-relaxed text-[#5C554C]">
-                      The Artivora administrator will review your request and coordinate
+                      The Louvre Singa administrator will review your request and coordinate
                       the next steps with you. No payment has been taken and this request
                       does not reserve or mark the artwork as sold.
                     </p>
@@ -171,7 +171,7 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
                   </div>
                 </dl>
                 <div className="rounded-xl border border-[#E2D6BD] bg-[#F5EFE2] p-4 text-xs leading-relaxed text-[#4F473D]">
-                  Artivora’s intended split is 20% platform and 80% artist, with artist
+                  Louvre Singa’s intended split is 20% platform and 80% artist, with artist
                   payout only after delivery confirmation. Payment collection, delivery
                   verification, and payouts remain administrator-managed and are not
                   automated.
@@ -195,7 +195,7 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
                   <div className="min-w-0 flex-1">
                     <h3 className="truncate font-serif text-lg font-semibold text-[#141312]">{artwork.title}</h3>
                     <p className="mt-0.5 text-sm text-[#6B655E]">
-                      {artist?.fullName || 'Artivora Artist'}
+                      {artist?.fullName || 'Louvre Singa Artist'}
                       {artist?.handle ? ` · @${artist.handle}` : ''}
                     </p>
                     <p className="mt-1 font-mono text-lg font-semibold tabular-nums text-[#8C6828]">
@@ -208,7 +208,7 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
                 <div className="flex items-start gap-2 rounded-xl border border-[#E2D6BD] bg-[#F5EFE2] p-3.5 text-xs leading-relaxed text-[#4F473D]">
                   <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0 text-[#9E7B3B]" />
                   <p>
-                    This submits a request to the Artivora administrator only. It is not
+                    This submits a request to the Louvre Singa administrator only. It is not
                     a payment, does not contact the artist directly, and does not mark
                     the artwork as sold.
                   </p>

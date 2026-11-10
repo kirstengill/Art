@@ -1,6 +1,6 @@
 -- Migration: 20241027000001_rls_policies
 -- Description: Row Level Security policies for all tables
--- Author: Artivora System
+-- Author: Louvre Singa System
 -- Created: 2024-10-27
 
 -- ============================================

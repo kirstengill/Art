@@ -15,7 +15,7 @@ import {
   PurchaseRequestValidationError,
   type PurchaseRequestInput,
 } from '../utils/purchaseRequests.ts';
-import type { PurchaseRequestReceipt } from '../types/artverse';
+import type { Donation, DonationInput, Exhibition, ExhibitionInput, ExhibitionStatus, ExhibitionSubmission, ExhibitionSubmissionInput, ExhibitionSubmissionStatus, PurchaseRequestReceipt } from '../types/artverse';
 
 type DbRow = Record<string, unknown>;
 
@@ -49,6 +49,8 @@ function fromDatabase<T>(value: unknown): T {
   }
   return value as T;
 }
+
+export { fromDatabase };
 
 function toDatabase(value: object): DbRow {
   return Object.fromEntries(
@@ -282,7 +284,7 @@ export async function upsertArtworkListing(
 ) {
   const owner = await one<DbRow>(db.from('profiles').select('role').eq('id', ownerUid).maybeSingle());
   if (owner?.role !== 'artist') throw new Error('Forbidden: Only artist accounts may publish artwork.');
-  const categories = ['painting', 'photography', 'sculpture', 'drawing', 'digital_art'];
+  const categories = ['painting', 'photography', 'sculpture', 'drawing', 'digital_art', 'mixed_media', 'ceramics'];
   const saleModes = ['buy_now', 'negotiation_only', 'buy_now_and_negotiation'];
   const availability = ['available', 'reserved', 'sold'];
   if (!categories.includes(payload.category)) throw new Error('Invalid artwork category.');
@@ -483,9 +485,15 @@ export async function getOrCreateArtworkConversation(
   collectorUid: string,
   artworkId: string
 ) {
-  const profile = await one<DbRow>(db.from('profiles').select('role').eq('id', collectorUid).maybeSingle());
+  const profile = await one<DbRow>(db.from('profiles').select('role, account_status, collector_approved_at').eq('id', collectorUid).maybeSingle());
   if (!profile || !['collector', 'art_lover'].includes(String(profile.role))) {
     throw new Error('Forbidden: A collector or art lover account is required.');
+  }
+  if (String(profile.role) === 'collector') {
+    const isApproved = String(profile.account_status) === 'active' && profile.collector_approved_at !== null;
+    if (!isApproved) {
+      throw new Error('Your collector account is pending approval. You will be able to contact artists once approved.');
+    }
   }
   const artwork = await one<DbRow>(db.from('artworks').select('*').eq('id', artworkId).maybeSingle());
   if (!artwork) throw new Error('Artwork not found.');
@@ -564,8 +572,11 @@ export async function createOfferInDb(
   if (conversation.collector_id !== params.senderUid) {
     throw new Error('Forbidden: Only collector accounts may submit new offers.');
   }
-  const profile = await one<DbRow>(db.from('profiles').select('role').eq('id', params.senderUid).maybeSingle());
+  const profile = await one<DbRow>(db.from('profiles').select('role, account_status, collector_approved_at').eq('id', params.senderUid).maybeSingle());
   if (profile?.role !== 'collector') throw new Error('Forbidden: Only collector accounts may submit new offers.');
+  if (String(profile.account_status) !== 'active' || profile.collector_approved_at === null) {
+    throw new Error('Your collector account is pending approval. You cannot make offers until approved.');
+  }
   const artwork = await one<DbRow>(db.from('artworks').select('*').eq('id', conversation.artwork_id).maybeSingle());
   if (!artwork) throw new Error('Linked artwork not found.');
   if (artwork.sale_mode === 'buy_now') throw new Error('This artwork is listed for fixed-price purchase only.');
@@ -704,8 +715,11 @@ export async function createPurchaseIntentInDb(
   db: SupabaseDataClient,
   params: { buyerUid: string; artworkId: string; offerId?: string; shippingCity: string; collectorNote: string }
 ) {
-  const buyer = await one<DbRow>(db.from('profiles').select('role').eq('id', params.buyerUid).maybeSingle());
+  const buyer = await one<DbRow>(db.from('profiles').select('role, account_status, collector_approved_at').eq('id', params.buyerUid).maybeSingle());
   if (buyer?.role !== 'collector') throw new Error('Forbidden: A collector account is required to create a purchase intent.');
+  if (String(buyer.account_status) !== 'active' || buyer.collector_approved_at === null) {
+    throw new Error('Your collector account is pending approval. You cannot create purchase intents until approved.');
+  }
   const artwork = await one<DbRow>(db.from('artworks').select('*').eq('id', params.artworkId).maybeSingle());
   if (!artwork) throw new Error('Artwork not found.');
   if (artwork.availability === 'sold') throw new Error('This artwork is no longer available.');
@@ -853,4 +867,241 @@ export async function checkArtworkPurchased(
       db.from('purchases').select('id').eq('artwork_id', artworkId).eq('collector_id', collectorId).maybeSingle()
     )
   );
+}
+
+// ============================================
+// Donations
+// ============================================
+
+export async function createDonationInDb(
+  db: SupabaseDataClient,
+  donorUid: string,
+  payload: DonationInput
+) {
+  const amount = Number(payload.amount);
+  if (!Number.isFinite(amount) || amount <= 0) throw new Error('Donation amount must be positive.');
+  const currency = payload.currency || 'USD';
+
+  const inserted = await one<DbRow>(
+    db
+      .from('donations')
+      .insert({
+        id: `don-${randomUUID()}`,
+        donor_id: donorUid,
+        artist_id: payload.artistId || null,
+        artwork_id: payload.artworkId || null,
+        amount: Math.round(amount),
+        currency,
+        message: payload.message?.trim() || null,
+        is_anonymous: Boolean(payload.isAnonymous),
+        status: 'completed',
+      })
+      .select('*')
+      .single()
+  );
+  return fromDatabase<Donation>(inserted);
+}
+
+export async function getDonationsForDonor(db: SupabaseDataClient, donorId: string) {
+  return many<DbRow>(
+    db.from('donations').select('*').eq('donor_id', donorId).order('created_at', { ascending: false })
+  );
+}
+
+export async function getDonationsForArtist(db: SupabaseDataClient, artistId: string) {
+  return many<DbRow>(
+    db.from('donations').select('*').eq('artist_id', artistId).order('created_at', { ascending: false })
+  );
+}
+
+export async function getAllDonations(db: SupabaseDataClient) {
+  return many<DbRow>(db.from('donations').select('*').order('created_at', { ascending: false }));
+}
+
+// ============================================
+// Exhibitions
+// ============================================
+
+export async function createExhibitionInDb(
+  db: SupabaseDataClient,
+  curatorUid: string,
+  payload: ExhibitionInput
+) {
+  const inserted = await one<DbRow>(
+    db
+      .from('exhibitions')
+      .insert({
+        id: `exh-${randomUUID()}`,
+        title: payload.title.trim(),
+        description: payload.description?.trim() || '',
+        curator_id: curatorUid,
+        cover_image_key: payload.coverImageKey || null,
+        start_date: payload.startDate,
+        end_date: payload.endDate,
+        location: payload.location || null,
+        is_virtual: Boolean(payload.isVirtual),
+        virtual_url: payload.virtualUrl || null,
+        status: payload.status || 'draft',
+        featured: Boolean(payload.featured),
+      })
+      .select('*')
+      .single()
+  );
+  return fromDatabase<Exhibition>(inserted);
+}
+
+export async function getExhibitions(db: SupabaseDataClient, status?: ExhibitionStatus) {
+  let query = db.from('exhibitions').select('*').order('start_date', { ascending: true });
+  if (status) query = query.eq('status', status);
+  return many<DbRow>(query);
+}
+
+export async function getExhibitionById(db: SupabaseDataClient, exhibitionId: string) {
+  return one<DbRow>(db.from('exhibitions').select('*').eq('id', exhibitionId).maybeSingle());
+}
+
+export async function updateExhibitionInDb(
+  db: SupabaseDataClient,
+  exhibitionId: string,
+  curatorUid: string,
+  payload: Partial<ExhibitionInput>
+) {
+  const existing = await one<DbRow>(db.from('exhibitions').select('*').eq('id', exhibitionId).maybeSingle());
+  if (!existing) throw new Error('Exhibition not found.');
+  if (String(existing.curator_id) !== curatorUid) {
+    throw new Error('Forbidden: Only the curator may update this exhibition.');
+  }
+  const updated = await one<DbRow>(
+    db
+      .from('exhibitions')
+      .update({
+        ...(payload.title !== undefined ? { title: payload.title.trim() } : {}),
+        ...(payload.description !== undefined ? { description: payload.description } : {}),
+        ...(payload.coverImageKey !== undefined ? { cover_image_key: payload.coverImageKey } : {}),
+        ...(payload.startDate !== undefined ? { start_date: payload.startDate } : {}),
+        ...(payload.endDate !== undefined ? { end_date: payload.endDate } : {}),
+        ...(payload.location !== undefined ? { location: payload.location } : {}),
+        ...(payload.isVirtual !== undefined ? { is_virtual: payload.isVirtual } : {}),
+        ...(payload.virtualUrl !== undefined ? { virtual_url: payload.virtualUrl } : {}),
+        ...(payload.status !== undefined ? { status: payload.status } : {}),
+        ...(payload.featured !== undefined ? { featured: payload.featured } : {}),
+        updated_at: new Date().toISOString(),
+      })
+      .eq('id', exhibitionId)
+      .select('*')
+      .single()
+  );
+  return fromDatabase<Exhibition>(updated);
+}
+
+export async function deleteExhibitionInDb(db: SupabaseDataClient, exhibitionId: string, curatorUid: string) {
+  const existing = await one<DbRow>(db.from('exhibitions').select('curator_id').eq('id', exhibitionId).maybeSingle());
+  if (!existing) throw new Error('Exhibition not found.');
+  if (String(existing.curator_id) !== curatorUid) {
+    throw new Error('Forbidden: Only the curator may delete this exhibition.');
+  }
+  await execute(db.from('exhibitions').delete().eq('id', exhibitionId));
+  return { deletedId: exhibitionId };
+}
+
+export async function getExhibitionArtworks(db: SupabaseDataClient, exhibitionId: string) {
+  return many<DbRow>(
+    db
+      .from('exhibition_artworks')
+      .select('*, artworks(*)')
+      .eq('exhibition_id', exhibitionId)
+      .order('display_order', { ascending: true })
+  );
+}
+
+export async function addArtworkToExhibition(db: SupabaseDataClient, exhibitionId: string, artworkId: string) {
+  const exhibition = await one<DbRow>(db.from('exhibitions').select('id').eq('id', exhibitionId).maybeSingle());
+  if (!exhibition) throw new Error('Exhibition not found.');
+  const artwork = await one<DbRow>(db.from('artworks').select('id').eq('id', artworkId).maybeSingle());
+  if (!artwork) throw new Error('Artwork not found.');
+  const inserted = await one<DbRow>(
+    db
+      .from('exhibition_artworks')
+      .insert({ exhibition_id: exhibitionId, artwork_id: artworkId })
+      .select('*')
+      .single()
+  );
+  return fromDatabase(inserted);
+}
+
+export async function removeArtworkFromExhibition(db: SupabaseDataClient, exhibitionId: string, artworkId: string) {
+  await execute(
+    db.from('exhibition_artworks').delete().eq('exhibition_id', exhibitionId).eq('artwork_id', artworkId)
+  );
+  return { removed: true };
+}
+
+// ============================================
+// Exhibition Submissions
+// ============================================
+
+export async function createExhibitionSubmissionInDb(
+  db: SupabaseDataClient,
+  artistUid: string,
+  payload: ExhibitionSubmissionInput
+) {
+  const exhibition = await one<DbRow>(db.from('exhibitions').select('id,status').eq('id', payload.exhibitionId).maybeSingle());
+  if (!exhibition) throw new Error('Exhibition not found.');
+  const artwork = await one<DbRow>(db.from('artworks').select('id,artist_id').eq('id', payload.artworkId).maybeSingle());
+  if (!artwork) throw new Error('Artwork not found.');
+  if (String(artwork.artist_id) !== artistUid) {
+    throw new Error('Forbidden: Only the artwork artist may submit it.');
+  }
+
+  const inserted = await one<DbRow>(
+    db
+      .from('exhibition_submissions')
+      .insert({
+        id: `sub-${randomUUID()}`,
+        exhibition_id: payload.exhibitionId,
+        artist_id: artistUid,
+        artwork_id: payload.artworkId,
+        curator_notes: payload.curatorNotes?.trim() || null,
+        status: 'submitted',
+      })
+      .select('*')
+      .single()
+  );
+  return fromDatabase<ExhibitionSubmission>(inserted);
+}
+
+export async function getExhibitionSubmissions(db: SupabaseDataClient, exhibitionId: string) {
+  return many<DbRow>(
+    db.from('exhibition_submissions').select('*').eq('exhibition_id', exhibitionId).order('submitted_at', { ascending: false })
+  );
+}
+
+export async function updateExhibitionSubmissionStatus(
+  db: SupabaseDataClient,
+  submissionId: string,
+  curatorUid: string,
+  status: ExhibitionSubmissionStatus,
+  notes?: string
+) {
+  const submission = await one<DbRow>(
+    db.from('exhibition_submissions').select('*, exhibitions(curator_id)').eq('id', submissionId).maybeSingle()
+  );
+  if (!submission) throw new Error('Submission not found.');
+  const exhibition = (submission as unknown as { exhibitions?: { curator_id: string } }).exhibitions;
+  if (!exhibition || String(exhibition.curator_id) !== curatorUid) {
+    throw new Error('Forbidden: Only the exhibition curator may review submissions.');
+  }
+  const updated = await one<DbRow>(
+    db
+      .from('exhibition_submissions')
+      .update({
+        status,
+        ...(notes !== undefined ? { curator_notes: notes } : {}),
+        ...(status === 'accepted' || status === 'rejected' ? { reviewed_at: new Date().toISOString(), reviewed_by: curatorUid } : {}),
+      })
+      .eq('id', submissionId)
+      .select('*')
+      .single()
+  );
+  return fromDatabase<ExhibitionSubmission>(updated);
 }

@@ -1,4 +1,4 @@
-# Role-Based Access for Artivora
+# Role-Based Access for Louvre Singa
 
 Supabase Auth is the source of user identity and session state. The public signup choices are Artist, Collector, and Art Lover; visitors can use Explore without an account. After sign-in, the application resolves the authenticated user's role from their row in `public.profiles`.
 
@@ -22,4 +22,4 @@ The client may request an Artist, Collector, or Art Lover role during registrati
 
 ## Purchase and payout status
 
-Purchase inquiries create order-intent records and remain unpaid. The administrator mediates transaction arrangements using the configured WhatsApp helpline. The intended commission is 20% for Artivora and 80% for the artist, with artist payout only after delivery confirmation. Payment collection, delivery verification, and payouts have not been integrated; no intent is marked as a completed purchase.
+Purchase inquiries create order-intent records and remain unpaid. The administrator mediates transaction arrangements using the configured WhatsApp helpline. The intended commission is 20% for Louvre Singa and 80% for the artist, with artist payout only after delivery confirmation. Payment collection, delivery verification, and payouts have not been integrated; no intent is marked as a completed purchase.

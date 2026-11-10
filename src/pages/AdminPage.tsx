@@ -5,16 +5,21 @@ import {
   ArrowLeft,
   ArrowRight,
   Brush,
+  CheckCircle,
   CreditCard,
   Image,
   LayoutDashboard,
   LogOut,
   Search,
+  UserCheck,
   Users,
+  XCircle,
 } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { artverseApi } from '../services/artverseApi';
 import type {
+  AdminCollectorApprovalFilter,
+  AdminCollectorApprovalRecord,
   AdminContentKind,
   AdminContentRecord,
   AdminOverview,
@@ -27,7 +32,7 @@ import type {
 import { formatMoney, formatRoleLabel, formatShortDate } from '../utils/formatters';
 import { ArtworkImage } from '../data/artworkImages';
 
-type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders';
+type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders' | 'collector_approval' | 'donations' | 'exhibitions';
 
 const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   intent_created: ['awaiting_payment', 'cancelled'],
@@ -46,6 +51,9 @@ const NAV_ITEMS: Array<{ id: AdminSection; label: string; icon: React.FC<{ class
   { id: 'artists', label: 'Artists', icon: Brush },
   { id: 'content', label: 'Artwork & posts', icon: Image },
   { id: 'orders', label: 'Purchase intents', icon: CreditCard },
+  { id: 'collector_approval', label: 'Collector Approval', icon: UserCheck },
+  { id: 'donations', label: 'Donations', icon: CreditCard },
+  { id: 'exhibitions', label: 'Exhibitions', icon: Image },
 ];
 
 function ErrorNotice({ message }: { message: string }) {
@@ -169,15 +177,20 @@ export const AdminPage: React.FC = () => {
   const [users, setUsers] = useState<AdminPageResult<AdminUserRecord> | null>(null);
   const [content, setContent] = useState<AdminPageResult<AdminContentRecord> | null>(null);
   const [orders, setOrders] = useState<AdminPageResult<AdminOrderRecord> | null>(null);
+  const [collectorApprovals, setCollectorApprovals] = useState<AdminPageResult<AdminCollectorApprovalRecord> | null>(null);
+  const [donations, setDonations] = useState<Array<{ id: string; donorId: string; artistId: string | null; amount: number; currency: string; status: string; createdAt: string }>>([]);
+  const [exhibitions, setExhibitions] = useState<Array<{ id: string; title: string; status: string; featured: boolean; startDate: string; endDate: string; curatorId: string | null }>>([]);
   const [roleFilter, setRoleFilter] = useState<AdminRoleFilter>('all');
   const [contentKind, setContentKind] = useState<AdminContentKind>('artworks');
   const [contentFilter, setContentFilter] = useState<'all' | 'direct'>('all');
+  const [collectorApprovalFilter, setCollectorApprovalFilter] = useState<AdminCollectorApprovalFilter>('all');
   const [search, setSearch] = useState('');
   const [artistSearch, setArtistSearch] = useState('');
   const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
+  const [savingApprovalId, setSavingApprovalId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -272,6 +285,74 @@ export const AdminPage: React.FC = () => {
     };
   }, [page, section]);
 
+  useEffect(() => {
+    if (section !== 'collector_approval') return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const timeout = window.setTimeout(() => {
+      artverseApi.fetchAdminCollectorApprovals({
+        page,
+        pageSize: 20,
+        filter: collectorApprovalFilter,
+        search,
+      })
+        .then((data) => {
+          if (!cancelled) setCollectorApprovals(data);
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load collector approvals.');
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [page, collectorApprovalFilter, search, section]);
+
+  useEffect(() => {
+    if (section !== 'donations') return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    artverseApi.fetchAdminDonations()
+      .then((data) => {
+        if (!cancelled) setDonations(data.donations || []);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load donations.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section]);
+
+  useEffect(() => {
+    if (section !== 'exhibitions') return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    artverseApi.fetchExhibitions()
+      .then((data) => {
+        if (!cancelled) setExhibitions(data.exhibitions || []);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load exhibitions.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [section]);
+
   const title = useMemo(
     () => NAV_ITEMS.find((item) => item.id === section)?.label || 'Overview',
     [section]
@@ -282,6 +363,7 @@ export const AdminPage: React.FC = () => {
     setPage(1);
     setSearch('');
     setArtistSearch('');
+    setCollectorApprovalFilter('all');
   };
 
   const handleOrderStatusChange = async (order: AdminOrderRecord, status: string) => {
@@ -306,6 +388,35 @@ export const AdminPage: React.FC = () => {
     }
   };
 
+  const handleCollectorApprovalChange = async (record: AdminCollectorApprovalRecord, action: 'approve' | 'reject', rejectionReason?: string) => {
+    setSavingApprovalId(record.profileId);
+    setError(null);
+    try {
+      await artverseApi.updateCollectorApproval(record.profileId, action, rejectionReason);
+      setCollectorApprovals((current) =>
+        current
+          ? {
+              ...current,
+              records: current.records.map((item) =>
+                item.profileId === record.profileId
+                  ? {
+                      ...item,
+                      accountStatus: action === 'approve' ? 'active' : 'rejected',
+                      collectorApprovedAt: action === 'approve' ? new Date().toISOString() : item.collectorApprovedAt,
+                      collectorRejectionReason: action === 'reject' ? rejectionReason || '' : item.collectorRejectionReason,
+                    }
+                  : item
+              ),
+            }
+          : current
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update collector approval.');
+    } finally {
+      setSavingApprovalId(null);
+    }
+  };
+
   const handleLogout = async () => {
     await logout();
     navigate('/login', { replace: true });
@@ -321,7 +432,7 @@ export const AdminPage: React.FC = () => {
       <main className="flex min-h-dvh items-center justify-center bg-[#171614] px-4 py-12 text-white">
         <section className="w-full max-w-lg rounded-2xl border border-white/15 bg-white/[0.07] p-7 shadow-2xl backdrop-blur-xl">
           <Link to="/" className="font-serif text-sm tracking-[0.18em] text-white/75">
-            ART UNIVERSE
+            LOUVRE SINGA
           </Link>
           <p className="mt-8 text-[10px] uppercase tracking-[0.24em] text-[#d6bb7e]">
             Restricted area
@@ -357,7 +468,7 @@ export const AdminPage: React.FC = () => {
       <div className="mx-auto flex min-h-[calc(100dvh-4rem)] max-w-[1600px] flex-col lg:flex-row">
         <aside className="border-b border-white/10 bg-black/20 p-4 backdrop-blur-xl lg:w-64 lg:shrink-0 lg:border-b-0 lg:border-r lg:p-6">
           <Link to="/" className="font-serif text-lg tracking-[0.13em] text-white">
-            ART UNIVERSE
+            LOUVRE SINGA
           </Link>
           <p className="mt-1 text-[10px] uppercase tracking-[0.2em] text-white/45">Administration</p>
           <nav aria-label="Administrator navigation" className="mt-5 flex gap-2 overflow-x-auto lg:flex-col">
@@ -441,6 +552,8 @@ export const AdminPage: React.FC = () => {
                 <StatCard label="Artwork listings" value={overview.counts.artworks.toLocaleString()} detail="Published catalogue artwork records" icon={Image} />
                 <StatCard label="Community posts" value={overview.counts.communityPosts.toLocaleString()} detail="Published community posts" icon={Activity} />
                 <StatCard label="Purchase intents" value={overview.counts.purchaseIntents.toLocaleString()} detail={`${overview.counts.pendingPaymentIntents} awaiting payment · ${overview.counts.cancelledIntents} cancelled`} icon={CreditCard} />
+                <StatCard label="Donations" value={overview.counts.donations.toLocaleString()} detail="Donation records received" icon={CreditCard} />
+                <StatCard label="Exhibitions" value={overview.counts.exhibitions.toLocaleString()} detail="Curated exhibition records" icon={Image} />
               </div>
 
               <div className="grid gap-4 xl:grid-cols-2">
@@ -584,7 +697,7 @@ export const AdminPage: React.FC = () => {
           {section === 'orders' && (
             <section className="space-y-4">
               <p className="max-w-3xl text-sm leading-relaxed text-white/60">
-                Requests are coordinated by Artivora. Status updates are manual; they do not charge a payment method, mark artwork as sold, or trigger artist payouts.
+                Requests are coordinated by Louvre Singa. Status updates are manual; they do not charge a payment method, mark artwork as sold, or trigger artist payouts.
               </p>
               {orders && (
                 <div className="overflow-x-auto rounded-2xl border border-white/15 bg-white/[0.04]">
@@ -649,6 +762,215 @@ export const AdminPage: React.FC = () => {
                 </div>
               )}
               {orders && <Pager data={orders} onPage={setPage} />}
+            </section>
+          )}
+
+          {section === 'collector_approval' && (
+            <section className="space-y-4">
+              <p className="max-w-3xl text-sm leading-relaxed text-white/60">
+                Collector accounts require administrator approval before they can make offers, create purchase intents, or access collector features.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <label className="relative min-w-56 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
+                  <input
+                    value={search}
+                    onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+                    placeholder="Search by name, handle, or email"
+                    aria-label="Search collector accounts"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.07] py-2.5 pl-10 pr-3 text-sm text-white placeholder:text-white/40"
+                  />
+                </label>
+                <select
+                  value={collectorApprovalFilter}
+                  onChange={(event) => { setCollectorApprovalFilter(event.target.value as AdminCollectorApprovalFilter); setPage(1); }}
+                  aria-label="Filter by approval status"
+                  className="rounded-lg border border-white/15 bg-[#262420] px-3 text-sm text-white"
+                >
+                  <option value="all">All statuses</option>
+                  <option value="pending_approval">Pending Approval</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                </select>
+              </div>
+              {collectorApprovals && (
+                <div className="overflow-x-auto rounded-2xl border border-white/15 bg-white/[0.04]">
+                  <table className="w-full min-w-[1000px] text-left text-sm">
+                    <thead className="bg-white/[0.06] text-[10px] uppercase tracking-[0.14em] text-white/55">
+                      <tr>
+                        <th className="px-4 py-3">Collector</th>
+                        <th className="px-4 py-3">Contact</th>
+                        <th className="px-4 py-3">Location</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Registered</th>
+                        <th className="px-4 py-3">Approved</th>
+                        <th className="px-4 py-3">Actions</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {collectorApprovals.records.map((record) => (
+                        <tr key={record.profileId} className="text-white/80">
+                          <td className="px-4 py-3">
+                            <span className="block">{record.fullName}</span>
+                            <span className="text-xs text-white/45">@{record.handle}</span>
+                          </td>
+                          <td className="px-4 py-3">
+                            <p className="text-xs text-white/65">{record.email}</p>
+                            <p className="text-xs text-white/55">{record.phoneNumber || 'No phone'}</p>
+                          </td>
+                          <td className="px-4 py-3 text-xs text-white/65">{record.location || '—'}</td>
+                          <td className="px-4 py-3">
+                            {record.accountStatus === 'pending_approval' && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-amber-900/30 px-2.5 py-1 text-xs text-amber-300">
+                                <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
+                                Pending
+                              </span>
+                            )}
+                            {record.accountStatus === 'active' && record.collectorApprovedAt && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-900/30 px-2.5 py-1 text-xs text-emerald-300">
+                                <CheckCircle className="h-3 w-3" /> Approved
+                              </span>
+                            )}
+                            {record.accountStatus === 'rejected' && (
+                              <span className="inline-flex items-center gap-1 rounded-full bg-red-900/30 px-2.5 py-1 text-xs text-red-300">
+                                <XCircle className="h-3 w-3" /> Rejected
+                              </span>
+                            )}
+                          </td>
+                          <td className="px-4 py-3">{formatShortDate(record.registrationDate || record.createdAt)}</td>
+                          <td className="px-4 py-3 text-xs text-white/55">
+                            {record.collectorApprovedAt ? formatShortDate(record.collectorApprovedAt) : '—'}
+                          </td>
+                          <td className="px-4 py-3">
+                            {record.accountStatus === 'pending_approval' && (
+                              <div className="flex gap-2">
+                                <button
+                                  type="button"
+                                  disabled={savingApprovalId === record.profileId}
+                                  onClick={() => handleCollectorApprovalChange(record, 'approve')}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-emerald-900/40 text-emerald-300 hover:bg-emerald-900/60 disabled:opacity-50 transition-colors"
+                                >
+                                  Approve
+                                </button>
+                                <button
+                                  type="button"
+                                  disabled={savingApprovalId === record.profileId}
+                                  onClick={() => {
+                                    const reason = prompt('Enter rejection reason (optional):');
+                                    if (reason !== null) handleCollectorApprovalChange(record, 'reject', reason);
+                                  }}
+                                  className="px-3 py-1.5 text-xs font-medium rounded-lg bg-red-900/40 text-red-300 hover:bg-red-900/60 disabled:opacity-50 transition-colors"
+                                >
+                                  Reject
+                                </button>
+                              </div>
+                            )}
+                            {record.accountStatus === 'active' && record.collectorApprovedAt && (
+                              <span className="text-xs text-white/50">Approved on {formatShortDate(record.collectorApprovedAt)}</span>
+                            )}
+                            {record.accountStatus === 'rejected' && (
+                              <span className="text-xs text-white/50">
+                                Rejected{record.collectorRejectionReason ? `: ${record.collectorRejectionReason}` : ''}
+                              </span>
+                            )}
+                          </td>
+                        </tr>
+                      ))}
+                      {collectorApprovals.records.length === 0 && (
+                        <tr>
+                          <td colSpan={7} className="px-4 py-8 text-center text-white/55">
+                            No collector accounts match these filters.
+                          </td>
+                        </tr>
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+              {collectorApprovals && <Pager data={collectorApprovals} onPage={setPage} />}
+            </section>
+          )}
+
+          {section === 'donations' && (
+            <section className="space-y-4">
+              <p className="max-w-3xl text-sm leading-relaxed text-white/60">
+                Donation records received through Louvre Singa. Funds are settled manually by
+                administrators outside the platform.
+              </p>
+              {donations.length === 0 ? (
+                <div className="rounded-xl border border-white/15 bg-white/[0.04] p-8 text-center text-white/55">
+                  No donation records found.
+                </div>
+              ) : (
+                <div className="overflow-x-auto rounded-2xl border border-white/15 bg-white/[0.04]">
+                  <table className="w-full min-w-[900px] text-left text-sm">
+                    <thead className="bg-white/[0.06] text-[10px] uppercase tracking-[0.14em] text-white/55">
+                      <tr>
+                        <th className="px-4 py-3">Donor</th>
+                        <th className="px-4 py-3">Artist</th>
+                        <th className="px-4 py-3">Amount</th>
+                        <th className="px-4 py-3">Status</th>
+                        <th className="px-4 py-3">Date</th>
+                      </tr>
+                    </thead>
+                    <tbody className="divide-y divide-white/10">
+                      {donations.map((d) => (
+                        <tr key={d.id} className="text-white/80">
+                          <td className="px-4 py-3">{d.donorId.slice(0, 8)}…</td>
+                          <td className="px-4 py-3 text-xs text-white/65">{d.artistId ? d.artistId.slice(0, 8) + '…' : '—'}</td>
+                          <td className="px-4 py-3 font-mono text-xs">{d.amount.toLocaleString()} {d.currency}</td>
+                          <td className="px-4 py-3">
+                            <span className={`inline-flex items-center gap-1 rounded-full px-2.5 py-1 text-xs ${
+                              d.status === 'completed'
+                                ? 'bg-emerald-900/30 text-emerald-300'
+                                : d.status === 'pending'
+                                  ? 'bg-amber-900/30 text-amber-300'
+                                  : 'bg-red-900/30 text-red-300'
+                            }`}>
+                              {d.status}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3">{formatShortDate(d.createdAt)}</td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </section>
+          )}
+
+          {section === 'exhibitions' && (
+            <section className="space-y-4">
+              <p className="max-w-3xl text-sm leading-relaxed text-white/60">
+                Curated exhibitions of Louvre Singa artworks. Administrators and artists can create
+                exhibitions from the public <Link to="/exhibitions" className="text-[#d3b578] underline">Exhibitions</Link> page.
+              </p>
+              {exhibitions.length === 0 ? (
+                <div className="rounded-xl border border-white/15 bg-white/[0.04] p-8 text-center text-white/55">
+                  No exhibitions found.
+                </div>
+              ) : (
+                <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
+                  {exhibitions.map((e) => (
+                    <div key={e.id} className="rounded-xl border border-white/15 bg-white/[0.04] p-5">
+                      <div className="flex items-start justify-between mb-3">
+                        <h3 className="font-serif text-lg font-semibold">{e.title}</h3>
+                        <span className={`inline-flex items-center gap-1 rounded-full px-2 py-0.5 text-[10px] font-medium border ${
+                          e.status === 'active' ? 'bg-emerald-900/30 text-emerald-300 border-emerald-900/50' : 'bg-amber-900/30 text-amber-300 border-amber-900/50'
+                        }`}>
+                          {e.status}
+                        </span>
+                      </div>
+                      <p className="text-sm text-white/60 line-clamp-2 mb-3">{e.startDate} &mdash; {e.endDate}</p>
+                      <div className="mt-auto pt-3 border-t border-white/10 flex justify-between items-center text-xs">
+                        <span className="text-white/55">{e.featured ? 'Featured' : 'Standard'}</span>
+                        <span className="text-white/50">by {e.curatorId ? e.curatorId.slice(0, 6) : '—'}</span>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              )}
             </section>
           )}
         </main>

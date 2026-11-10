@@ -164,7 +164,7 @@ export const DashboardPage: React.FC = () => {
         >
           <div className="flex items-center gap-4 min-w-0">
             <ProfileAvatar
-              name={currentUser?.fullName || 'ARTIVORA Member'}
+              name={currentUser?.fullName || 'Louvre Singa Member'}
               avatarKey={currentUser?.avatarUrl}
               sizeClass="w-12 h-12 sm:w-14 sm:h-14 text-base sm:text-lg"
             />

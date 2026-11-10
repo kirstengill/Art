@@ -360,6 +360,8 @@ export const AddArtworkPage: React.FC = () => {
                   <option value="sculpture">Sculpture</option>
                   <option value="drawing">Drawing</option>
                   <option value="digital_art">Digital Art</option>
+                  <option value="mixed_media">Mixed Media</option>
+                  <option value="ceramics">Ceramics</option>
                 </select>
               </div>
 

@@ -295,7 +295,7 @@ export const CommunityPage: React.FC = () => {
             ) : (
               <div className="rounded-2xl border border-[#E6DFD3] bg-white p-6 sm:p-7">
                 <h2 className="font-serif text-xl font-semibold text-[#141312]">
-                  {currentUser ? 'Enjoy the studio journal' : 'Join the ARTIVORA community'}
+                  {currentUser ? 'Enjoy the studio journal' : 'Join the Louvre Singa community'}
                 </h2>
                 <p className="mt-2 max-w-2xl text-sm leading-relaxed text-[#5C554C]">
                   {currentUser
@@ -360,7 +360,7 @@ export const CommunityPage: React.FC = () => {
                           <div className="flex items-center justify-between gap-4">
                             <div className="flex items-center gap-3.5 min-w-0">
                               <ProfileAvatar
-                                name={author?.fullName || 'ARTIVORA Member'}
+                                name={author?.fullName || 'Louvre Singa Member'}
                                 avatarKey={author?.avatarUrl}
                                 sizeClass="w-11 h-11 text-sm"
                               />
@@ -375,7 +375,7 @@ export const CommunityPage: React.FC = () => {
                                     </Link>
                                   ) : (
                                     <span className="text-sm font-medium text-[#141312] truncate">
-                                      {author?.fullName || 'ARTIVORA Member'}
+                                      {author?.fullName || 'Louvre Singa Member'}
                                     </span>
                                   )}
                                 </div>

@@ -1,6 +1,7 @@
 import { getSupabaseServiceClient } from '../lib/supabase-server.ts';
 import type {
   AdminArtworkFilter,
+  AdminCollectorApprovalFilter,
   AdminContentKind,
   AdminRoleFilter,
   AdminTimeframe,
@@ -78,12 +79,14 @@ function series(rows: Row[], timestamp: string, timeframe: AdminTimeframe) {
 }
 
 export async function getAdminOverview(timeframe: AdminTimeframe) {
-  const [profiles, artworks, posts, orders, purchaseRequests] = await Promise.all([
+  const [profiles, artworks, posts, orders, purchaseRequests, donations, exhibitions] = await Promise.all([
     getAll('profiles'),
     getAll('artworks'),
     getAll('posts'),
     getAll('orders'),
     getAll('purchase_requests', true),
+    getAll('donations', true),
+    getAll('exhibitions', true),
   ]);
   const publicProfiles = profiles.filter(isPublic);
   const publicArtworks = artworks.filter(
@@ -122,6 +125,8 @@ export async function getAdminOverview(timeframe: AdminTimeframe) {
       createdIntents: publicOrders.filter((order) => order.status === 'intent_created').length,
       cancelledIntents: publicOrders.filter((order) => order.status === 'cancelled').length,
       completedPurchases: null,
+      donations: donations.length,
+      exhibitions: exhibitions.length,
     },
     payments: {
       configured: false,
@@ -393,4 +398,116 @@ export async function updateAdminOrderStatus(
     .single();
   if (error) throw new Error(`Unable to update purchase request: ${error.message}`);
   return { id: String(data.id), status: String(data.status) };
+}
+
+export async function getAdminCollectorApprovals(options: {
+  page?: unknown;
+  pageSize?: unknown;
+  filter?: AdminCollectorApprovalFilter;
+  search?: string;
+}) {
+  const { page, pageSize, offset } = getPageParams(options.page, options.pageSize);
+  const db = getSupabaseServiceClient();
+  const search = options.search?.trim().toLocaleLowerCase().slice(0, 100);
+
+  let query = db.from('profiles').select('*').eq('role', 'collector');
+  if (options.filter === 'pending_approval') {
+    query = query.eq('account_status', 'pending_approval');
+  } else if (options.filter === 'approved') {
+    query = query.eq('account_status', 'active').not('collector_approved_at', 'is', null);
+  } else if (options.filter === 'rejected') {
+    query = query.eq('account_status', 'rejected');
+  }
+
+  const { data: allRows, error } = await query;
+  if (error) throw new Error(`Unable to load collector approvals: ${error.message}`);
+
+  let records = (allRows as Row[]).filter((row) => {
+    if (!search) return true;
+    const haystack = [
+      String(row.full_name || ''),
+      String(row.handle || ''),
+      String(row.username || ''),
+      String(row.email || ''),
+    ]
+      .join(' ')
+      .toLocaleLowerCase();
+    return haystack.includes(search);
+  });
+
+  records.sort(
+    (a, b) =>
+      new Date(String(b.created_at || b.registration_date)).getTime() -
+      new Date(String(a.created_at || a.registration_date)).getTime()
+  );
+
+  const pageRecords = records.slice(offset, offset + pageSize);
+  return {
+    records: pageRecords.map((row) => ({
+      profileId: String(row.id),
+      fullName: String(row.full_name || ''),
+      handle: String(row.handle || ''),
+      username: String(row.username || ''),
+      email: String(row.email || ''),
+      location: String(row.location || ''),
+      phoneNumber: String(row.phone_number || ''),
+      accountStatus: String(row.account_status || ''),
+      registrationDate: String(row.registration_date || row.created_at || ''),
+      createdAt: String(row.created_at || ''),
+      collectorApprovedAt: row.collector_approved_at ? String(row.collector_approved_at) : null,
+      collectorApprovedBy: row.collector_approved_by ? String(row.collector_approved_by) : null,
+      collectorRejectionReason: row.collector_rejection_reason
+        ? String(row.collector_rejection_reason)
+        : null,
+    })),
+    page,
+    pageSize,
+    total: records.length,
+  };
+}
+
+export async function updateAdminCollectorApproval(
+  profileId: string,
+  action: 'approve' | 'reject',
+  rejectionReason?: string
+) {
+  const db = getSupabaseServiceClient();
+  const { data: current, error: currentError } = await db
+    .from('profiles')
+    .select('id, role, account_status, collector_approved_at')
+    .eq('id', profileId)
+    .maybeSingle();
+  if (currentError) throw new Error(`Unable to load profile: ${currentError.message}`);
+  if (!current) throw new Error('Collector profile not found.');
+  if (String(current.role) !== 'collector') {
+    throw new Error('Only collector accounts can be approved or rejected.');
+  }
+
+  const now = new Date().toISOString();
+  const updates: Record<string, unknown> = { updated_at: now };
+
+  if (action === 'approve') {
+    updates.account_status = 'active';
+    updates.collector_approved_at = now;
+    updates.collector_approved_by = null;
+    updates.collector_rejection_reason = null;
+  } else {
+    updates.account_status = 'rejected';
+    updates.collector_approved_at = null;
+    updates.collector_approved_by = null;
+    updates.collector_rejection_reason = rejectionReason || null;
+  }
+
+  const { data, error } = await db
+    .from('profiles')
+    .update(updates)
+    .eq('id', profileId)
+    .select('id, account_status, collector_approved_at')
+    .single();
+  if (error) throw new Error(`Unable to update collector approval: ${error.message}`);
+  return {
+    id: String(data.id),
+    accountStatus: String(data.account_status),
+    collectorApprovedAt: data.collector_approved_at ? String(data.collector_approved_at) : null,
+  };
 }

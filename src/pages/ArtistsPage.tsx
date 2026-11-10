@@ -153,7 +153,7 @@ export const ArtistsPage: React.FC = () => {
             </h2>
             <p className="text-sm text-[#5C554C]">
               {artists.length === 0
-                ? 'Artist profiles will appear here as artists join Artivora.'
+                ? 'Artist profiles will appear here as artists join Louvre Singa.'
                 : 'Try a different search or clear the current filter.'}
             </p>
             {artists.length > 0 && (

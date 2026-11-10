@@ -104,8 +104,8 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
     params.fullName?.trim() ||
     current?.fullName?.trim() ||
     providedEmail?.split('@')[0].replace(/[._-]/g, ' ') ||
-    'Artivora Artist';
-  const email = providedEmail || current?.email || `${uid}@artverse.user`;
+    'Louvre Singa Artist';
+  const email = providedEmail || current?.email || `${uid}@louversinga.user`;
   const role = current?.role || validRole || 'collector';
 
   const username =
@@ -140,7 +140,7 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
         handle,
         username,
         role,
-        accountStatus: 'active',
+        accountStatus: role === 'collector' ? 'pending_approval' : 'active',
         registrationDate: new Date(),
         bio: params.bio?.trim() || '',
         location: role === 'artist' ? params.location?.trim() || '' : '',

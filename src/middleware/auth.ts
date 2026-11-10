@@ -2,6 +2,7 @@ import type { Request, Response, NextFunction } from 'express';
 import {
   getSupabaseAuthClient,
   getSupabaseDataClient,
+  getSupabaseServiceClient,
   type SupabaseDataClient,
   verifySupabaseAccessToken,
 } from '../lib/supabase-server.ts';
@@ -79,6 +80,42 @@ export const requireAuth = async (
     }
     req.user = user;
     req.supabase = getSupabaseDataClient(token);
+
+    // Server-side pending collector / suspended account restriction (auth hook).
+    // Use the service client so RLS on profiles never blocks this authorization check.
+    // A profile-lookup error must not block sign-in; enforcement happens per-route too.
+    let profile: { role?: string; account_status?: string; collector_approved_at?: string | null } | null = null;
+    try {
+      const { data, error } = await getSupabaseServiceClient()
+        .from('profiles')
+        .select('role, account_status, collector_approved_at')
+        .eq('id', user.uid)
+        .maybeSingle();
+      if (error) {
+        console.warn('Unable to verify account status from the Supabase profile:', error.message);
+      } else {
+        profile = data ?? null;
+      }
+    } catch (err) {
+      console.warn('Supabase profile lookup failed during auth:', err);
+    }
+    // No profile yet (first sign-in before sync): allow through; sync creates it.
+    if (!profile) {
+      next();
+      return;
+    }
+    if (
+      profile.account_status === 'pending_approval' ||
+      profile.account_status === 'suspended'
+    ) {
+      res.status(403).json({
+        error:
+          profile.account_status === 'suspended'
+            ? 'Your account has been suspended. Contact Louvre Singa support.'
+            : 'Your collector account is pending approval. You will be able to access the gallery once an administrator approves your account.',
+      });
+      return;
+    }
     next();
   } catch (error) {
     if (error instanceof Error && error.message.includes('not configured')) {

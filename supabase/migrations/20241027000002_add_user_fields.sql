@@ -1,6 +1,6 @@
 -- Migration: 20241027000002_add_user_fields
 -- Description: Add username, account_status, registration_date fields to profiles and user_account_details
--- Author: Artivora System
+-- Author: Louvre Singa System
 -- Created: 2024-10-27
 
 -- ============================================

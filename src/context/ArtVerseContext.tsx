@@ -25,6 +25,13 @@ import type {
   CommunityPost,
   Conversation,
   ConversationMessage,
+  Donation,
+  DonationInput,
+  Exhibition,
+  ExhibitionInput,
+  ExhibitionStatus,
+  ExhibitionSubmission,
+  ExhibitionSubmissionInput,
   OrderIntent,
   PostComment,
   Profile,
@@ -42,6 +49,8 @@ interface ArtVerseContextValue {
   offers: ArtworkOffer[];
   orderIntents: OrderIntent[];
   purchases: Purchase[];
+  donations: Donation[];
+  exhibitions: Exhibition[];
   savedArtworkIds: string[];
   followedArtistIds: string[];
   likedPostIds: string[];
@@ -56,6 +65,8 @@ interface ArtVerseContextValue {
   catalogError: string | null;
   threadError: string | null;
   purchaseError: string | null;
+  donationError: string | null;
+  exhibitionError: string | null;
   refreshCatalog: () => Promise<void>;
   refreshConversations: () => Promise<void>;
   refreshPurchases: () => Promise<void>;
@@ -107,6 +118,15 @@ interface ArtVerseContextValue {
     shippingCity: string;
     collectorNote: string;
   }) => Promise<OrderIntent>;
+  fetchDonations: () => Promise<void>;
+  createDonation: (payload: DonationInput) => Promise<Donation>;
+  fetchExhibitions: (status?: ExhibitionStatus) => Promise<void>;
+  createExhibition: (payload: ExhibitionInput) => Promise<Exhibition>;
+  updateExhibition: (exhibitionId: string, payload: Partial<ExhibitionInput>) => Promise<Exhibition>;
+  deleteExhibition: (exhibitionId: string) => Promise<void>;
+  createExhibitionSubmission: (payload: ExhibitionSubmissionInput) => Promise<ExhibitionSubmission>;
+  fetchExhibitionSubmissions: (exhibitionId: string) => Promise<ExhibitionSubmission[]>;
+  updateExhibitionSubmission: (submissionId: string, status: string, notes?: string) => Promise<ExhibitionSubmission>;
   getProfileById: (id: string) => Profile | undefined;
   getArtworkById: (id: string) => Artwork | undefined;
   getIsPurchased: (artworkId: string) => boolean;
@@ -165,6 +185,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [offers, setOffers] = useState<ArtworkOffer[]>([]);
   const [orderIntents, setOrderIntents] = useState<OrderIntent[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [donations, setDonations] = useState<Donation[]>([]);
+  const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [savedArtworkIds, setSavedArtworkIds] = useState<string[]>([]);
   const [followedArtistIds, setFollowedArtistIds] = useState<string[]>([]);
   const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
@@ -179,6 +201,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [donationError, setDonationError] = useState<string | null>(null);
+  const [exhibitionError, setExhibitionError] = useState<string | null>(null);
   const profileSyncTasks = useRef(new Map<string, Promise<Profile>>());
   const activeAuthUserId = useRef<string | null>(null);
 
@@ -770,6 +794,153 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     [artworks, authMode, currentUser]
   );
 
+  const fetchDonations = useCallback(async () => {
+    if (authMode !== 'authenticated' || !currentUser) {
+      setDonations([]);
+      return;
+    }
+    setDonationError(null);
+    try {
+      const data = await artverseApi.fetchDonations();
+      setDonations(data.donations || []);
+    } catch (err) {
+      setDonationError(err instanceof Error ? err.message : 'Unable to load donations.');
+      setDonations([]);
+    }
+  }, [authMode, currentUser]);
+
+  const createDonation = useCallback(
+    async (payload: DonationInput): Promise<Donation> => {
+      requireAuthenticatedUser(authMode, currentUser);
+      setDonationError(null);
+      try {
+        const { donation } = await artverseApi.createDonation(payload);
+        setDonations((prev) => [donation, ...prev]);
+        return donation;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to create donation.';
+        setDonationError(message);
+        throw err;
+      }
+    },
+    [authMode, currentUser]
+  );
+
+  const fetchExhibitions = useCallback(async (status?: ExhibitionStatus) => {
+    setExhibitionError(null);
+    try {
+      const data = await artverseApi.fetchExhibitions(status);
+      setExhibitions(data.exhibitions || []);
+    } catch (err) {
+      setExhibitionError(err instanceof Error ? err.message : 'Unable to load exhibitions.');
+      setExhibitions([]);
+    }
+  }, []);
+
+  const createExhibition = useCallback(
+    async (payload: ExhibitionInput): Promise<Exhibition> => {
+      requireAuthenticatedUser(authMode, currentUser);
+      setExhibitionError(null);
+      try {
+        const { exhibition } = await artverseApi.createExhibition(payload);
+        setExhibitions((prev) => [exhibition, ...prev]);
+        return exhibition;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to create exhibition.';
+        setExhibitionError(message);
+        throw err;
+      }
+    },
+    [authMode, currentUser]
+  );
+
+  const updateExhibition = useCallback(
+    async (exhibitionId: string, payload: Partial<ExhibitionInput>): Promise<Exhibition> => {
+      requireAuthenticatedUser(authMode, currentUser);
+      setExhibitionError(null);
+      try {
+        const { exhibition } = await artverseApi.updateExhibition(exhibitionId, payload);
+        setExhibitions((prev) =>
+          prev.map((e) => (e.id === exhibitionId ? exhibition : e))
+        );
+        return exhibition;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to update exhibition.';
+        setExhibitionError(message);
+        throw err;
+      }
+    },
+    [authMode, currentUser]
+  );
+
+  const deleteExhibition = useCallback(
+    async (exhibitionId: string): Promise<void> => {
+      requireAuthenticatedUser(authMode, currentUser);
+      setExhibitionError(null);
+      try {
+        await artverseApi.deleteExhibition(exhibitionId);
+        setExhibitions((prev) => prev.filter((e) => e.id !== exhibitionId));
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to delete exhibition.';
+        setExhibitionError(message);
+        throw err;
+      }
+    },
+    [authMode, currentUser]
+  );
+
+  const createExhibitionSubmission = useCallback(
+    async (payload: ExhibitionSubmissionInput): Promise<ExhibitionSubmission> => {
+      requireAuthenticatedUser(authMode, currentUser);
+      setExhibitionError(null);
+      try {
+        const { submission } = await artverseApi.createExhibitionSubmission(payload);
+        return submission;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to submit to exhibition.';
+        setExhibitionError(message);
+        throw err;
+      }
+    },
+    [authMode, currentUser]
+  );
+
+  const fetchExhibitionSubmissions = useCallback(
+    async (exhibitionId: string): Promise<ExhibitionSubmission[]> => {
+      requireAuthenticatedUser(authMode, currentUser);
+      setExhibitionError(null);
+      try {
+        const data = await artverseApi.fetchExhibitionSubmissions(exhibitionId);
+        return data.submissions || [];
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to load submissions.';
+        setExhibitionError(message);
+        throw err;
+      }
+    },
+    [authMode, currentUser]
+  );
+
+  const updateExhibitionSubmission = useCallback(
+    async (
+      submissionId: string,
+      status: string,
+      notes?: string
+    ): Promise<ExhibitionSubmission> => {
+      requireAuthenticatedUser(authMode, currentUser);
+      setExhibitionError(null);
+      try {
+        const { submission } = await artverseApi.updateExhibitionSubmission(submissionId, status, notes);
+        return submission;
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to update submission.';
+        setExhibitionError(message);
+        throw err;
+      }
+    },
+    [authMode, currentUser]
+  );
+
   const getProfileById = useCallback(
     (id: string) => profiles.find((p) => p.id === id),
     [profiles]
@@ -798,6 +969,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       offers,
       orderIntents,
       purchases,
+      donations,
+      exhibitions,
       savedArtworkIds,
       followedArtistIds,
       likedPostIds,
@@ -812,6 +985,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       catalogError,
       threadError,
       purchaseError,
+      donationError,
+      exhibitionError,
       refreshCatalog: loadCatalog,
       refreshConversations,
       refreshPurchases,
@@ -830,6 +1005,15 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       makeOffer,
       respondToOffer,
       createOrderIntent,
+      fetchDonations,
+      createDonation,
+      fetchExhibitions,
+      createExhibition,
+      updateExhibition,
+      deleteExhibition,
+      createExhibitionSubmission,
+      fetchExhibitionSubmissions,
+      updateExhibitionSubmission,
       getProfileById,
       getArtworkById,
       getIsPurchased,
@@ -858,6 +1042,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       catalogError,
       threadError,
       purchaseError,
+      donationError,
+      exhibitionError,
       loadCatalog,
       refreshConversations,
       refreshPurchases,
@@ -876,6 +1062,15 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       makeOffer,
       respondToOffer,
       createOrderIntent,
+      fetchDonations,
+      createDonation,
+      fetchExhibitions,
+      createExhibition,
+      updateExhibition,
+      deleteExhibition,
+      createExhibitionSubmission,
+      fetchExhibitionSubmissions,
+      updateExhibitionSubmission,
       getProfileById,
       getArtworkById,
       getIsPurchased,

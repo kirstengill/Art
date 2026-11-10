@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react';
 import lapisArtwork from '../assets/images/art_lapis_refraction_1792993241626.jpg';
-import artivoraLogo from '../images/artivora.png';
+import louvreSingaLogo from '../images/Louvre Singa Art Gallery Logo.png';
 
 const NAV_LINKS = [
   { to: '/', label: 'Home' },
@@ -70,8 +70,8 @@ export const LandingPage: React.FC = () => {
           className="flex items-center justify-center gap-2"
         >
           <img 
-            src={artivoraLogo} 
-            alt="ARTIVORA Logo" 
+            src={louvreSingaLogo} 
+            alt="Louvre Singa Logo" 
             className="block h-14 w-auto object-contain sm:h-16"
             style={{ 
               background: 'transparent',
@@ -196,7 +196,7 @@ export const LandingPage: React.FC = () => {
             <span className="sr-only">Every Masterpiece Tells a Story</span>
           </h1>
           <p className="mt-7 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">
-            Explore extraordinary artwork, discover talented artists, and celebrate creativity. Whether you're an artist, collector, or art lover, <strong className="text-white">ARTIVORA</strong> brings you closer to the beauty of art.
+            Explore extraordinary artwork, discover talented artists, and celebrate creativity. Whether you're an artist, collector, or art lover, <strong className="text-white">Louvre Singa</strong> brings you closer to the beauty of art.
           </p>
           <div className="mt-9 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
             <Link
@@ -222,7 +222,7 @@ export const LandingPage: React.FC = () => {
       </div>
 
       <p className="absolute bottom-6 right-6 z-10 hidden text-[10px] uppercase tracking-[0.22em] text-white/70 sm:block">
-        ARTIVORA, beyond the ordinary
+        Louvre Singa, beyond the ordinary
       </p>
     </section>
   );

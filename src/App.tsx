@@ -24,6 +24,8 @@ import { CollectedGalleryPage } from './pages/CollectedGalleryPage';
 import { LoginPage } from './pages/LoginPage';
 import { SignupPage } from './pages/SignupPage';
 import { AuthCallbackPage } from './pages/AuthCallbackPage';
+import { DonationPage } from './pages/DonationPage';
+import { ExhibitionPage } from './pages/ExhibitionPage';
 import { AdminPage } from './pages/AdminPage';
 import { ProtectedRoute } from './components/guards/ProtectedRoute';
 import { LoadingStatusIndicator } from './components/ui/LoadingStatusIndicator';
@@ -100,6 +102,8 @@ const ScrollAndAnimateRoutes: React.FC = () => {
             <Route path="/signup" element={<SignupPage />} />
             <Route path="/auth/callback" element={<AuthCallbackPage />} />
             <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminPage /></ProtectedRoute>} />
+            <Route path="/exhibitions" element={<ExhibitionPage />} />
+            <Route path="/donations" element={<ProtectedRoute><DonationPage /></ProtectedRoute>} />
             <Route path="*" element={<Navigate to="/" replace />} />
           </Routes>
         </motion.main>

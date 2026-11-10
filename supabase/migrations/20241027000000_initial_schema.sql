@@ -1,6 +1,6 @@
 -- Migration: 20241027000000_initial_schema
--- Description: Initial database schema for Artivora with user management, profiles, and all related tables
--- Author: Artivora System
+-- Description: Initial database schema for Louvre Singa with user management, profiles, and all related tables
+-- Author: Louvre Singa System
 -- Created: 2024-10-27
 
 -- ============================================

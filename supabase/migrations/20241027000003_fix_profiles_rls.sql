@@ -1,6 +1,6 @@
 -- Migration: 20241027000003_fix_profiles_rls
 -- Description: Allow public access to eligible artist profiles without exposing private fields
--- Author: Artivora System
+-- Author: Louvre Singa System
 -- Created: 2024-10-27
 
 -- ============================================

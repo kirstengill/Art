@@ -88,7 +88,7 @@ export const DiscoverPage: React.FC = () => {
                 transition={{ duration: 0.22 }}
                 className="text-xs tracking-[0.2em] uppercase text-[#787066]"
               >
-                ARTIVORA · Curated Digital Viewing Room
+                Louvre Singa · Curated Digital Viewing Room
               </motion.p>
 
               <motion.h1
@@ -108,7 +108,7 @@ export const DiscoverPage: React.FC = () => {
                 transition={{ duration: 0.32, delay: 0.1, ease: [0.16, 1, 0.3, 1] }}
                 className="text-base sm:text-lg text-[#575048] leading-relaxed max-w-xl"
               >
-                ARTIVORA unites independent fine artists, discerning private
+                Louvre Singa unites independent fine artists, discerning private
                 collectors, and studio dialogue—pairing transparent gallery pricing
                 with live artwork-linked offer negotiation.
               </motion.p>
@@ -525,7 +525,7 @@ export const DiscoverPage: React.FC = () => {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
             {artists.length === 0 ? (
               <p className="col-span-full py-10 text-center text-sm text-[#6B655E]">
-                Artist profiles will appear here as artists join ARTIVORA.
+                Artist profiles will appear here as artists join Louvre Singa.
               </p>
             ) : artists.map((artist, idx) => {
               const isFollowing = followedArtistIds.includes(artist.id);
@@ -661,7 +661,7 @@ export const DiscoverPage: React.FC = () => {
                   <div className="space-y-3">
                     <div className="flex items-center gap-2.5 text-xs text-[#787066]">
                       <span className="font-medium text-[#141312]">
-                        {author?.fullName || 'ARTIVORA Member'}
+                        {author?.fullName || 'Louvre Singa Member'}
                       </span>
                       <span aria-hidden="true">·</span>
                       <span>{formatShortDate(post.createdAt)}</span>
