@@ -48,6 +48,7 @@ ARTIVORA implements a **role-based access control system** with three user types
 ## Architecture & Database Setup
 
 - **Supabase is the single persistent backend**: Supabase Postgres stores profiles, private account details, artwork, community activity, saved collections, inquiries/offers, purchase intents, and administrator-only purchase requests. The Express API uses the caller's verified Supabase access token for ordinary operations and the server-only Supabase secret for trusted operations.
+- **Vercel deployment**: `api/[...path].ts` exposes the Express API as a Vercel Function; the non-API routes continue to serve the Vite SPA. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Vercel for the browser build, and `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or the matching `VITE_` variables) for the API function. Apply the Supabase migrations so public read access for active artist profiles and artworks is configured. Redeploy after changing environment variables.
 - **Authentication**: Supabase Auth is the only account/session provider. Email/password registration and sign-in use the existing Supabase Auth flow; explore remains available without signing in. Public signup accepts Artist, Collector, or Art Lover. The user's role is read from their `public.profiles` row; profile roles cannot be changed through authenticated profile updates.
 - **Artwork storage**: Images go to the existing public `artwork-images` bucket. Uploads are restricted to authenticated artist accounts and a folder named for their Auth user ID; MIME types are JPEG, PNG, WebP, or GIF, up to 10 MB. Artwork metadata references the public Storage URL.
 - **Administrator dashboard**: `/admin` and `/api/admin/*` require an authenticated account whose `public.profiles.role` is `admin`. User lists and analytics are loaded from persistent Supabase profile and content tables through the server API. The API verifies the role from Supabase using the caller's access token before querying administrator data. Administrator roles must be assigned through a trusted database operation. Configure `SUPABASE_SECRET_KEY` only in the trusted server/deployment environment. Never prefix it with `VITE_`.
@@ -72,6 +73,8 @@ Copy `.env.example` to `.env` and populate the required placeholders (never comm
 - `VITE_HELPLINE_WHATSAPP_URL`, `VITE_HELPLINE_X_URL`, `VITE_HELPLINE_ETSY_URL` (optional official HTTPS destinations for the footer icons)
 
 `GEMINI_API_KEY` and `APP_URL` remain available for the existing AI/hosting integrations. No separately hosted PostgreSQL instance or database login credentials are required.
+
+For Vercel, add the required variables under **Project Settings → Environment Variables** for each deployment environment, then trigger a new deployment. The browser variables must be present at build time; the API variables must be available to the function at runtime.
 
 ### Supabase Auth Setup
 

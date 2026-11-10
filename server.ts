@@ -47,9 +47,8 @@ import { PurchaseRequestValidationError } from './src/utils/purchaseRequests.ts'
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
-async function startServer() {
+function createApp() {
   const app = express();
-  const PORT = Number(process.env.PORT || 3000);
 
   app.use(express.json({ limit: '6mb' }));
 
@@ -468,6 +467,15 @@ async function startServer() {
     }
   });
 
+  return app;
+}
+
+export const app = createApp();
+export default app;
+
+async function startServer() {
+  const PORT = Number(process.env.PORT || 3000);
+
   if (process.env.NODE_ENV !== 'production') {
     const vite = await createViteServer({
       server: { middlewareMode: true },
@@ -487,4 +495,6 @@ async function startServer() {
   });
 }
 
-startServer();
+if (process.env.VERCEL !== '1') {
+  void startServer();
+}
