@@ -123,7 +123,7 @@ function createApp() {
 
   app.get('/api/catalog', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const profile = await getSupabaseServiceClient()
+      const { data: profile } = await getSupabaseServiceClient()
         .from('profiles')
         .select('role')
         .eq('id', req.user!.uid)
@@ -142,7 +142,7 @@ function createApp() {
 
   app.get('/api/artists', requireAuth, async (req: AuthRequest, res) => {
     try {
-      const profile = await getSupabaseServiceClient()
+      const { data: profile } = await getSupabaseServiceClient()
         .from('profiles')
         .select('role')
         .eq('id', req.user!.uid)

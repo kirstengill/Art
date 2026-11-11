@@ -1,25 +1,25 @@
 import React from 'react';
 import { Link } from 'react-router-dom';
-import { MessageCircle, ShoppingBag, Twitter } from 'lucide-react';
+import { FaInstagram, FaTiktok, FaWhatsapp } from 'react-icons/fa6';
 
 const HELPLINE_LINKS = [
   {
     label: 'WhatsApp',
     href: import.meta.env.VITE_HELPLINE_WHATSAPP_URL,
-    icon: MessageCircle,
+    icon: FaWhatsapp,
     domains: ['wa.me', 'whatsapp.com'],
   },
   {
-    label: 'X / Twitter',
-    href: import.meta.env.VITE_HELPLINE_X_URL,
-    icon: Twitter,
-    domains: ['x.com', 'twitter.com'],
+    label: 'TikTok',
+    href: import.meta.env.VITE_HELPLINE_TIKTOK_URL,
+    icon: FaTiktok,
+    domains: ['tiktok.com'],
   },
   {
-    label: 'Etsy',
-    href: import.meta.env.VITE_HELPLINE_ETSY_URL,
-    icon: ShoppingBag,
-    domains: ['etsy.com'],
+    label: 'Instagram',
+    href: import.meta.env.VITE_HELPLINE_INSTAGRAM_URL,
+    icon: FaInstagram,
+    domains: ['instagram.com'],
   },
 ].flatMap(({ href, domains, ...link }) => {
   if (!href) return [];
@@ -118,8 +118,8 @@ export const Footer: React.FC = () => {
             <p className="text-xs leading-relaxed">
               Connect with Louvre Singa through our configured social channels.
             </p>
-            <div className="flex flex-wrap gap-2">
-              {HELPLINE_LINKS.map(({ label, href, icon: Icon }) => (
+            <div className="flex flex-wrap gap-2 ">
+              {/* {HELPLINE_LINKS.map(({ label, href, icon: Icon }) => (
                 <a
                   key={label}
                   href={href}
@@ -131,21 +131,45 @@ export const Footer: React.FC = () => {
                 >
                   <Icon aria-hidden="true" className="h-4 w-4" />
                 </a>
-              ))}
+              ))} */}
+                <a
+        href="https://www.instagram.com/your_username/"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="Instagram"
+      >
+        <FaInstagram size={25}/>
+      </a>
+        <a
+        href="https://www.instagram.com/your_username/"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="TikTok"
+      >
+        <FaTiktok size={25}/>
+      </a>
+        <a
+        href="https://www.instagram.com/your_username/"
+        target="_blank"
+        rel="noopener noreferrer"
+        aria-label="WhatsApp"
+      >
+        <FaWhatsapp size={25}/>
+      </a>
             </div>
-            {HELPLINE_LINKS.length < 3 && (
+            {/* {HELPLINE_LINKS.length < 3 && (
               <p className="text-[11px] text-[#7A7267]">
                 {HELPLINE_LINKS.length === 0
                   ? 'Social links will appear when configured.'
                   : 'Some social links are not configured yet.'}
               </p>
-            )}
+            )} */}
           </div>
         </div>
 
         <div className="pt-6 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 text-xs text-[#7A7267]">
           <p>© {new Date().getFullYear()} Louvre Singa Fine Art Platform. All rights reserved.</p>
-          <p>Antwerp · Pietrasanta · Stockholm · London · Zurich</p>
+          <p>Entebbe . Kampala . Uganda</p>
         </div>
       </div>
     </footer>
