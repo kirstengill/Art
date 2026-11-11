@@ -18,6 +18,16 @@ export class PurchaseRequestValidationError extends Error {
   }
 }
 
+export class PurchaseWorkflowError extends Error {
+  constructor(
+    message: string,
+    readonly statusCode: number
+  ) {
+    super(message);
+    this.name = 'PurchaseWorkflowError';
+  }
+}
+
 export function isArtworkDirectlyPurchasable(
   availability: AvailabilityStatus | string,
   saleMode: SaleMode | string

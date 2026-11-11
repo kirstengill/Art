@@ -60,14 +60,18 @@ export const ROLE_PERMISSIONS: Record<AccountRole, {
   },
 };
 
-export type ArtworkCategory =
-  | 'painting'
-  | 'photography'
-  | 'sculpture'
-  | 'drawing'
-  | 'digital_art'
-  | 'mixed_media'
-  | 'ceramics';
+export const ARTWORK_CATEGORIES = [
+  'ceramics',
+  'mixed_media',
+  'sculpture',
+  'painting',
+  'photography',
+  'drawing',
+  'digital_art',
+  'other',
+] as const;
+
+export type ArtworkCategory = (typeof ARTWORK_CATEGORIES)[number];
 
 export type AvailabilityStatus = 'available' | 'reserved' | 'sold';
 
@@ -233,14 +237,43 @@ export interface PurchaseRequestReceipt {
   createdAt: string;
 }
 
+export interface PurchaseRequest {
+  id: string;
+  artworkId: string | null;
+  artworkTitle: string;
+  artworkImage: string;
+  artistName: string;
+  amount: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+  adminDecidedAt: string | null;
+}
+
 export interface Purchase {
   id: string;
   artworkId: string;
   collectorId: string;
   orderId: string;
+  purchaseRequestId: string | null;
   purchasePrice: number;
   currency: string;
+  paymentStatus: 'pending' | 'confirmed';
+  paymentConfirmedAt: string | null;
+  deliveryStatus: 'pending' | 'confirmed';
+  deliveryConfirmedAt: string | null;
   purchasedAt: string;
+}
+
+export interface UserNotification {
+  id: string;
+  recipientId: string;
+  type: string;
+  title: string;
+  body: string;
+  linkUrl: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 export type DonationStatus = 'pending' | 'completed' | 'refunded' | 'failed';

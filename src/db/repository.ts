@@ -10,11 +10,12 @@ import {
   type SyncUserProfileParams,
 } from './profileSync.ts';
 import {
-  isArtworkDirectlyPurchasable,
   parsePurchaseRequestInput,
   PurchaseRequestValidationError,
+  PurchaseWorkflowError,
   type PurchaseRequestInput,
 } from '../utils/purchaseRequests.ts';
+import { ARTWORK_CATEGORIES } from '../types/artverse';
 import type { Donation, DonationInput, Exhibition, ExhibitionInput, ExhibitionStatus, ExhibitionSubmission, ExhibitionSubmissionInput, ExhibitionSubmissionStatus, PurchaseRequestReceipt } from '../types/artverse';
 
 type DbRow = Record<string, unknown>;
@@ -77,7 +78,12 @@ async function many<T>(
 }
 
 function requireImageKey(imageKey: string): void {
-  if (!imageKey || imageKey.startsWith('data:image/')) {
+  if (
+    typeof imageKey !== 'string' ||
+    !imageKey ||
+    imageKey.startsWith('data:image/') ||
+    !storageObjectPath(imageKey)
+  ) {
     throw new Error('Artwork images must be uploaded to Supabase Storage before publishing.');
   }
 }
@@ -284,12 +290,19 @@ export async function upsertArtworkListing(
 ) {
   const owner = await one<DbRow>(db.from('profiles').select('role').eq('id', ownerUid).maybeSingle());
   if (owner?.role !== 'artist') throw new Error('Forbidden: Only artist accounts may publish artwork.');
-  const categories = ['painting', 'photography', 'sculpture', 'drawing', 'digital_art', 'mixed_media', 'ceramics'];
-  const saleModes = ['buy_now', 'negotiation_only', 'buy_now_and_negotiation'];
-  const availability = ['available', 'reserved', 'sold'];
-  if (!categories.includes(payload.category)) throw new Error('Invalid artwork category.');
-  if (!saleModes.includes(payload.saleMode)) throw new Error('Invalid sale mode.');
-  if (!availability.includes(payload.availability)) throw new Error('Invalid availability status.');
+  if (!ARTWORK_CATEGORIES.some((category) => category === payload.category)) {
+    throw new Error('Invalid artwork category.');
+  }
+  const price = Number(payload.price);
+  if (!Number.isFinite(price) || price < 50) {
+    throw new Error('Enter a valid listing price of at least 50.');
+  }
+  if (typeof payload.title !== 'string' || payload.title.trim().length < 2) {
+    throw new Error('Artwork title must contain at least 2 characters.');
+  }
+  if (typeof payload.description !== 'string' || payload.description.trim().length < 20) {
+    throw new Error('Artwork description must contain at least 20 characters.');
+  }
   requireImageKey(payload.imageKey);
 
   const values = {
@@ -299,10 +312,10 @@ export async function upsertArtworkListing(
     medium: payload.medium.trim(),
     dimensions: payload.dimensions.trim(),
     year: payload.year,
-    price: payload.price,
+    price: Math.round(price),
     currency: payload.currency || 'USD',
-    availability: payload.availability,
-    saleMode: payload.saleMode,
+    availability: 'available',
+    saleMode: 'buy_now',
     imageKey: payload.imageKey,
     provenance: payload.provenance?.trim() || 'Direct from the artist studio',
     editionInfo: payload.editionInfo?.trim() || 'Unique 1 of 1 original work',
@@ -311,11 +324,12 @@ export async function upsertArtworkListing(
   if (payload.id) {
     const existing = await one<DbRow>(db.from('artworks').select('*').eq('id', payload.id).maybeSingle());
     if (!existing) throw new Error('Artwork listing not found.');
-    if (existing.artist_id !== ownerUid) {
+    if (existing.artistId !== ownerUid) {
       throw new Error('Forbidden: Only the creator artist may edit this artwork.');
     }
+    values.availability = String(existing.availability || 'available');
     values.provenance = payload.provenance?.trim() || String(existing.provenance);
-    values.editionInfo = payload.editionInfo?.trim() || String(existing.edition_info);
+    values.editionInfo = payload.editionInfo?.trim() || String(existing.editionInfo);
     return one(
       db
         .from('artworks')
@@ -350,17 +364,57 @@ export async function removeArtworkListing(
 ) {
   const artwork = await one<DbRow>(db.from('artworks').select('*').eq('id', artworkId).maybeSingle());
   if (!artwork) throw new Error('Artwork not found.');
-  if (artwork.is_demo) throw new Error('This artwork is not available for inquiries.');
-  if (artwork.artist_id !== ownerUid) {
+  if (artwork.isDemo) throw new Error('This artwork is not available for inquiries.');
+  if (artwork.artistId !== ownerUid) {
     throw new Error('Forbidden: Only the artwork owner may delete this listing.');
   }
-  const objectPath = storageObjectPath(String(artwork.image_key || ''));
+  await ensureArtworkHasNoPurchase(getSupabaseServiceClient(), artworkId);
+  const objectPath = storageObjectPath(String(artwork.imageKey || ''));
   if (objectPath) {
     const { error } = await db.storage.from('artwork-images').remove([objectPath]);
     if (error) throw new Error(`Unable to remove artwork image: ${error.message}`);
   }
   await execute(db.from('artworks').delete().eq('id', artworkId).eq('artist_id', ownerUid));
   return { deletedId: artworkId };
+}
+
+export async function removeAdminArtworkListing(
+  db: SupabaseDataClient,
+  artworkId: string
+) {
+  const { data: artwork, error: lookupError } = await db
+    .from('artworks')
+    .select('image_key')
+    .eq('id', artworkId)
+    .maybeSingle();
+  if (lookupError) throw new Error(lookupError.message);
+  if (!artwork) throw new Error('Artwork not found.');
+  await ensureArtworkHasNoPurchase(db, artworkId);
+
+  const objectPath = storageObjectPath(String(artwork.image_key || ''));
+  if (objectPath) {
+    const { error } = await db.storage.from('artwork-images').remove([objectPath]);
+    if (error) throw new Error(`Unable to remove artwork image: ${error.message}`);
+  }
+
+  const { data: deleted, error: deleteError } = await db
+    .from('artworks')
+    .delete()
+    .eq('id', artworkId)
+    .select('id')
+    .maybeSingle();
+  if (deleteError) throw new Error(deleteError.message);
+  if (!deleted) throw new Error('Artwork was not deleted. Administrator access is required.');
+  return { deletedId: artworkId };
+}
+
+async function ensureArtworkHasNoPurchase(db: SupabaseDataClient, artworkId: string) {
+  const purchase = await one<DbRow>(
+    db.from('purchases').select('id').eq('artwork_id', artworkId).maybeSingle()
+  );
+  if (purchase) {
+    throw new Error('This artwork has an approved purchase and cannot be permanently deleted.');
+  }
 }
 
 export async function toggleSavedArtworkInDb(db: SupabaseDataClient, ownerUid: string, artworkId: string) {
@@ -758,82 +812,48 @@ export async function createPurchaseIntentInDb(
 }
 
 export async function createPurchaseRequestInDb(
+  db: SupabaseDataClient,
   input: unknown
 ): Promise<PurchaseRequestReceipt> {
   const params: PurchaseRequestInput = parsePurchaseRequestInput(input);
-  const db = getSupabaseServiceClient();
-  const { data: existing, error: existingError } = await db
-    .from('purchase_requests')
-    .select('id,status,amount,currency,created_at')
-    .eq('request_id', params.requestId)
-    .maybeSingle();
-  if (existingError) throw new Error(existingError.message);
-  if (existing) return fromDatabase<PurchaseRequestReceipt>(existing);
-
-  const artwork = await one<DbRow>(
-    db.from('artworks').select('*').eq('id', params.artworkId).maybeSingle()
-  );
-  if (!artwork || artwork.is_demo) {
-    throw new PurchaseRequestValidationError('This artwork is not available for purchase.');
+  const { data, error } = await db.rpc('submit_purchase_request', {
+    p_request_id: params.requestId,
+    p_artwork_id: params.artworkId,
+    p_buyer_name: params.buyerName,
+    p_buyer_phone: params.buyerPhone,
+    p_buyer_email: params.buyerEmail,
+    p_delivery_location: params.deliveryLocation,
+    p_delivery_address: params.deliveryAddress,
+    p_instructions: params.instructions,
+  });
+  if (error) {
+    if (error.code === '42501') {
+      throw new PurchaseWorkflowError(error.message, 403);
+    }
+    if (error.code === 'P0001' || error.code === '22023') {
+      throw new PurchaseRequestValidationError(error.message);
+    }
+    if (error.code === '23505') {
+      throw new PurchaseWorkflowError(error.message, 409);
+    }
+    throw new Error(`Unable to save purchase request: ${error.message}`);
   }
-  if (
-    !isArtworkDirectlyPurchasable(String(artwork.availability), String(artwork.sale_mode))
-  ) {
-    throw new PurchaseRequestValidationError('This artwork is not currently available for direct purchase.');
+  if (!data || typeof data !== 'object') {
+    throw new Error('Supabase did not return the saved purchase request.');
   }
-
-  const artist = await one<DbRow>(
-    db
-      .from('profiles')
-      .select('id,full_name,handle,role,account_status,is_demo')
-      .eq('id', String(artwork.artist_id))
-      .maybeSingle()
-  );
-  if (
-    !artist ||
-    artist.role !== 'artist' ||
-    artist.account_status !== 'active' ||
-    artist.is_demo
-  ) {
-    throw new PurchaseRequestValidationError('This artwork is not available for purchase.');
-  }
-
-  const { data, error } = await db
-    .from('purchase_requests')
-    .insert({
-      id: `pr-${randomUUID()}`,
-      request_id: params.requestId,
-      artwork_id: artwork.id,
-      artist_id: artist.id,
-      buyer_name: params.buyerName,
-      buyer_phone: params.buyerPhone,
-      buyer_email: params.buyerEmail,
-      delivery_location: params.deliveryLocation,
-      delivery_address: params.deliveryAddress,
-      instructions: params.instructions,
-      artwork_title: String(artwork.title),
-      artwork_image: String(artwork.image_key),
-      artist_name: String(artist.full_name || ''),
-      artist_handle: String(artist.handle || ''),
-      amount: Number(artwork.price),
-      currency: String(artwork.currency),
-      status: 'pending',
-    })
-    .select('id,status,amount,currency,created_at')
-    .single();
-
-  if (error?.code === '23505') {
-    const { data: duplicate, error: duplicateError } = await db
-      .from('purchase_requests')
-      .select('id,status,amount,currency,created_at')
-      .eq('request_id', params.requestId)
-      .maybeSingle();
-    if (duplicateError) throw new Error(duplicateError.message);
-    if (duplicate) return fromDatabase<PurchaseRequestReceipt>(duplicate);
-  }
-  if (error) throw new Error(error.message);
-  if (!data) throw new Error('Supabase did not return the saved purchase request.');
   return fromDatabase<PurchaseRequestReceipt>(data);
+}
+
+export async function getPurchaseRequestsForCollector(collectorId: string) {
+  const requests = await many<DbRow>(
+    getSupabaseServiceClient()
+      .from('purchase_requests')
+      .select('id,artwork_id,artwork_title,artwork_image,artist_name,amount,currency,status,created_at,admin_decided_at')
+      .eq('collector_id', collectorId)
+      .order('created_at', { ascending: false })
+      .limit(100)
+  );
+  return requests.map((request) => fromDatabase(request));
 }
 
 export async function getPurchasesForCollector(db: SupabaseDataClient, collectorId: string) {
@@ -842,12 +862,45 @@ export async function getPurchasesForCollector(db: SupabaseDataClient, collector
   );
   if (!purchases.length) return { purchases: [], artworks: [] };
   const artworks = await many(
-    db.from('artworks').select('*').in('id', purchases.map((purchase) => String(purchase.artwork_id)))
+    getSupabaseServiceClient()
+      .from('artworks')
+      .select('*')
+      .in('id', purchases.map((purchase) => String(purchase.artwork_id)))
   );
   return {
     purchases: purchases.map((purchase) => fromDatabase(purchase)),
     artworks: artworks.map((artwork) => fromDatabase(artwork)),
   };
+}
+
+export async function getNotificationsForUser(db: SupabaseDataClient, userId: string) {
+  const notifications = await many<DbRow>(
+    db
+      .from('notifications')
+      .select('*')
+      .eq('recipient_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(50)
+  );
+  return notifications.map((notification) => fromDatabase(notification));
+}
+
+export async function markNotificationRead(
+  db: SupabaseDataClient,
+  userId: string,
+  notificationId: string
+) {
+  const notification = await one<DbRow>(
+    db
+      .from('notifications')
+      .update({ is_read: true })
+      .eq('id', notificationId)
+      .eq('recipient_id', userId)
+      .select('*')
+      .maybeSingle()
+  );
+  if (!notification) throw new Error('Notification not found.');
+  return notification;
 }
 
 export async function getPurchasedArtworkIds(db: SupabaseDataClient, collectorId: string): Promise<string[]> {

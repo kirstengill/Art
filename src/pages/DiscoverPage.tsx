@@ -371,10 +371,10 @@ export const DiscoverPage: React.FC = () => {
         {isLoadingCatalog ? (
           <ArtworkGridSkeleton
             count={4}
-            columnsClass="grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6"
+            columnsClass="grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6"
           />
         ) : (
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
             {featuredWorks.map((work, idx) => (
               <motion.div
                 key={work.id}
@@ -522,7 +522,7 @@ export const DiscoverPage: React.FC = () => {
             </Link>
           </motion.div>
 
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+          <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-4">
             {artists.length === 0 ? (
               <p className="col-span-full py-10 text-center text-sm text-[#6B655E]">
                 Artist profiles will appear here as artists join Louvre Singa.

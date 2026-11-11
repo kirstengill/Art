@@ -238,9 +238,13 @@ export async function getAdminContent(options: {
     getAll('profiles'),
     getAll(options.kind === 'community' ? 'posts' : 'artworks'),
   ]);
-  const profileById = new Map(profiles.filter(isPublic).map((profile) => [String(profile.id), profile]));
+  const profileById = new Map(
+    profiles
+      .filter((profile) => options.kind === 'artworks' || isPublic(profile))
+      .map((profile) => [String(profile.id), profile])
+  );
   const records = entries
-    .filter(isPublic)
+    .filter((entry) => options.kind === 'artworks' || isPublic(entry))
     .map((entry) => {
       const profile = profileById.get(
         String(options.kind === 'community' ? entry.author_id : entry.artist_id)
@@ -287,26 +291,23 @@ export async function getAdminContent(options: {
 
 export async function getAdminOrders(options: { page?: unknown; pageSize?: unknown }) {
   const { page, pageSize, offset } = getPageParams(options.page, options.pageSize);
-  const [profiles, artworks, orders, purchaseRequests] = await Promise.all([
+  const [profiles, artworks, orders, purchases] = await Promise.all([
     getAll('profiles'),
     getAll('artworks'),
     getAll('orders'),
-    getAll('purchase_requests', true),
+    getAll('purchases'),
   ]);
   const profileById = new Map(profiles.filter(isPublic).map((profile) => [String(profile.id), profile]));
   const artworkById = new Map(artworks.map((artwork) => [String(artwork.id), artwork]));
-  const records: Array<Row & { source: 'order_intent' | 'purchase_request' }> = [
-    ...orders
-      .filter((order) => profileById.has(String(order.buyer_id)))
-      .map((order): Row & { source: 'order_intent' } => ({
-        ...order,
-        source: 'order_intent',
-      })),
-    ...purchaseRequests.map((request): Row & { source: 'purchase_request' } => ({
-      ...request,
-      source: 'purchase_request',
-    })),
-  ]
+  const purchaseOrderIds = new Set(
+    purchases
+      .filter((purchase) => purchase.purchase_request_id)
+      .map((purchase) => String(purchase.order_id))
+  );
+  const records: Array<Row & { source: 'order_intent' }> = orders
+    .filter((order) => !purchaseOrderIds.has(String(order.id)))
+    .filter((order) => profileById.has(String(order.buyer_id)))
+    .map((order): Row & { source: 'order_intent' } => ({ ...order, source: 'order_intent' }))
     .sort(
       (a, b) =>
         new Date(String(b.created_at)).getTime() - new Date(String(a.created_at)).getTime()
@@ -315,7 +316,7 @@ export async function getAdminOrders(options: { page?: unknown; pageSize?: unkno
     records: records.slice(offset, offset + pageSize).map((order) => ({
       id: String(order.id),
       source: order.source,
-      artworkId: String(order.artwork_id),
+      artworkId: typeof order.artwork_id === 'string' ? order.artwork_id : null,
       artworkTitle: String(
         order.artwork_title ||
           order.artwork_title_snapshot ||
@@ -354,6 +355,66 @@ export async function getAdminOrders(options: { page?: unknown; pageSize?: unkno
   };
 }
 
+export async function getAdminPurchaseRequests(options: { page?: unknown; pageSize?: unknown }) {
+  const { page, pageSize, offset } = getPageParams(options.page, options.pageSize);
+  const [profiles, artworks, requests, purchases, orders] = await Promise.all([
+    getAll('profiles'),
+    getAll('artworks'),
+    getAll('purchase_requests', true),
+    getAll('purchases'),
+    getAll('orders'),
+  ]);
+  const profileById = new Map(profiles.map((profile) => [String(profile.id), profile]));
+  const artworkById = new Map(artworks.map((artwork) => [String(artwork.id), artwork]));
+  const purchaseByRequestId = new Map(
+    purchases
+      .filter((purchase) => purchase.purchase_request_id)
+      .map((purchase) => [String(purchase.purchase_request_id), purchase])
+  );
+  const orderById = new Map(orders.map((order) => [String(order.id), order]));
+  const records = requests.sort(
+    (a, b) =>
+      new Date(String(b.created_at)).getTime() - new Date(String(a.created_at)).getTime()
+  );
+
+  return {
+    records: records.slice(offset, offset + pageSize).map((request) => {
+      const artwork = artworkById.get(String(request.artwork_id));
+      const purchase = purchaseByRequestId.get(String(request.id));
+      const order = purchase ? orderById.get(String(purchase.order_id)) : undefined;
+      const artist = profileById.get(String(request.artist_id));
+      return {
+        id: String(request.id),
+        artworkId: typeof request.artwork_id === 'string' ? request.artwork_id : null,
+        artworkTitle: String(request.artwork_title || artwork?.title || ''),
+        artworkImage: String(request.artwork_image || artwork?.image_key || '') || null,
+        artistId: String(request.artist_id || ''),
+        artistName: String(request.artist_name || artist?.full_name || ''),
+        collectorId: typeof request.collector_id === 'string' ? request.collector_id : null,
+        buyerName: String(request.buyer_name || ''),
+        buyerPhone: String(request.buyer_phone || ''),
+        buyerEmail: String(request.buyer_email || ''),
+        deliveryLocation: String(request.delivery_location || ''),
+        deliveryAddress: String(request.delivery_address || ''),
+        instructions: String(request.instructions || ''),
+        amount: Number(request.amount),
+        currency: String(request.currency || ''),
+        status: String(request.status || ''),
+        createdAt: String(request.created_at || ''),
+        adminDecidedAt: typeof request.admin_decided_at === 'string' ? request.admin_decided_at : null,
+        paymentStatus: typeof purchase?.payment_status === 'string' ? purchase.payment_status : null,
+        paymentConfirmedAt: typeof purchase?.payment_confirmed_at === 'string' ? purchase.payment_confirmed_at : null,
+        deliveryStatus: typeof purchase?.delivery_status === 'string' ? purchase.delivery_status : null,
+        deliveryConfirmedAt: typeof purchase?.delivery_confirmed_at === 'string' ? purchase.delivery_confirmed_at : null,
+        orderStatus: typeof order?.status === 'string' ? order.status : null,
+      };
+    }),
+    page,
+    pageSize,
+    total: records.length,
+  };
+}
+
 const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   intent_created: ['awaiting_payment', 'cancelled'],
   awaiting_payment: ['cancelled'],
@@ -367,32 +428,29 @@ const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
 
 export async function updateAdminOrderStatus(
   orderId: string,
-  source: 'purchase_request' | 'order_intent',
   nextStatus: string
 ) {
   if (!Object.hasOwn(ORDER_STATUS_TRANSITIONS, nextStatus)) {
     throw new Error('Invalid purchase request status.');
   }
   const db = getSupabaseServiceClient();
-  const table = source === 'purchase_request' ? 'purchase_requests' : 'orders';
   const { data: current, error: currentError } = await db
-    .from(table)
-    .select('id,status')
+    .from('orders')
+    .select('id,status,purchase_request_id')
     .eq('id', orderId)
     .maybeSingle();
   if (currentError) throw new Error(`Unable to load purchase request: ${currentError.message}`);
   if (!current) throw new Error('Purchase request not found.');
+  if (current.purchase_request_id) {
+    throw new Error('Approved purchase requests must be managed from the Purchase Requests section.');
+  }
   if (!ORDER_STATUS_TRANSITIONS[String(current.status)]?.includes(nextStatus)) {
     throw new Error(`A purchase request cannot move from ${String(current.status)} to ${nextStatus}.`);
   }
 
-  const updates =
-    source === 'purchase_request'
-      ? { status: nextStatus, updated_at: new Date().toISOString() }
-      : { status: nextStatus };
   const { data, error } = await db
-    .from(table)
-    .update(updates)
+    .from('orders')
+    .update({ status: nextStatus })
     .eq('id', orderId)
     .select('id,status')
     .single();

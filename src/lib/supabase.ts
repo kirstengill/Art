@@ -205,3 +205,62 @@ export function subscribeToConversationRealtime(
     )
     .subscribe();
 }
+
+export function subscribeToUserNotifications(
+  userId: string,
+  onInsert: () => void
+): RealtimeChannel | null {
+  if (!supabase) return null;
+
+  return supabase
+    .channel(`notifications:${userId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: 'INSERT',
+        schema: 'public',
+        table: 'notifications',
+        filter: `recipient_id=eq.${userId}`,
+      },
+      () => onInsert()
+    )
+    .subscribe();
+}
+
+export function subscribeToArtworkChanges(onChange: () => void): RealtimeChannel | null {
+  if (!supabase) return null;
+
+  return supabase
+    .channel('public-artwork-changes')
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'artworks',
+      },
+      () => onChange()
+    )
+    .subscribe();
+}
+
+export function subscribeToCollectorPurchases(
+  collectorId: string,
+  onChange: () => void
+): RealtimeChannel | null {
+  if (!supabase) return null;
+
+  return supabase
+    .channel(`purchases:${collectorId}`)
+    .on(
+      'postgres_changes',
+      {
+        event: '*',
+        schema: 'public',
+        table: 'purchases',
+        filter: `collector_id=eq.${collectorId}`,
+      },
+      () => onChange()
+    )
+    .subscribe();
+}

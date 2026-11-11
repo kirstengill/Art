@@ -27,7 +27,7 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
 }) => {
   const shouldReduceMotion = useReducedMotion();
   const id = useId();
-  const { currentUser } = useArtVerse();
+  const { currentUser, refreshNotifications, refreshPurchaseRequests } = useArtVerse();
   const [buyerName, setBuyerName] = useState('');
   const [buyerPhone, setBuyerPhone] = useState('');
   const [buyerEmail, setBuyerEmail] = useState('');
@@ -64,6 +64,10 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
     event.preventDefault();
     if (submitting || createdOrder) return;
     setError(null);
+    if (currentUser?.role !== 'collector') {
+      setError('Sign in with an approved collector account to submit a purchase request.');
+      return;
+    }
     setSubmitting(true);
     try {
       const { order } = await artverseApi.createPurchaseRequest({
@@ -77,6 +81,8 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
         instructions,
       });
       setCreatedOrder(order);
+      void refreshNotifications();
+      void refreshPurchaseRequests();
     } catch (submitError) {
       setError(
         submitError instanceof Error
@@ -138,8 +144,9 @@ export const PurchaseRequestModal: React.FC<PurchaseRequestModalProps> = ({
                     </h3>
                     <p className="text-sm leading-relaxed text-[#5C554C]">
                       The Louvre Singa administrator will review your request and coordinate
-                      the next steps with you. No payment has been taken and this request
-                      does not reserve or mark the artwork as sold.
+                      the next steps with you. Your request is awaiting approval. No payment
+                      has been taken; the artwork remains available until an administrator
+                      approves a request.
                     </p>
                   </div>
                 </div>

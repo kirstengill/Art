@@ -50,7 +50,7 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
       <motion.article
         whileHover={shouldReduceMotion ? undefined : { y: -8, scale: 1.02 }}
         transition={{ duration: 0.4, ease: [0.16, 1, 0.3, 1] }}
-        className="group relative flex flex-col bg-[#141312] border border-white/10 rounded-2xl overflow-hidden transition-all duration-300 hover:border-[#B38B40] hover:shadow-[0_20px_60px_-20px_rgba(179,139,64,0.15)]"
+        className="group relative flex min-w-0 flex-col overflow-hidden rounded-xl border border-white/10 bg-[#141312] transition-all duration-300 hover:border-[#B38B40] hover:shadow-[0_20px_60px_-20px_rgba(179,139,64,0.15)] sm:rounded-2xl"
       >
         {/* Artwork Image */}
         <div className={`relative ${aspectClass} overflow-hidden bg-[#1E1C1A]`}>
@@ -63,7 +63,11 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
               transition={{ duration: 0.5, ease: [0.16, 1, 0.3, 1] }}
               className="w-full h-full"
             >
-              <ArtworkImage imageKey={artwork.imageKey} alt={artwork.title} />
+              <ArtworkImage
+                imageKey={artwork.imageKey}
+                alt={artwork.title}
+                className="h-full w-full object-contain"
+              />
             </motion.div>
           </Link>
 
@@ -75,28 +79,28 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
             onClick={handleToggleSave}
             aria-label={isSaved ? 'Remove from saved collection' : 'Save to collection'}
             aria-pressed={isSaved}
-            className="absolute top-3.5 right-3.5 z-20 w-10 h-10 rounded-full flex items-center justify-center transition-all duration-200"
+            className="absolute right-2 top-2 z-20 flex h-9 w-9 items-center justify-center rounded-full transition-all duration-200 sm:right-3.5 sm:top-3.5 sm:h-10 sm:w-10"
             style={{
               background: isSaved ? 'rgba(179, 139, 64, 0.95)' : 'rgba(255, 255, 255, 0.15)',
               color: isSaved ? '#141312' : '#FAF8F3',
               border: '1px solid rgba(255, 255, 255, 0.2)',
             }}
           >
-            <Bookmark className={`w-4 h-4 ${isSaved ? 'fill-[#141312]' : ''}`} />
+            <Bookmark className={`h-4 w-4 ${isSaved ? 'fill-[#141312]' : ''}`} />
           </motion.button>
 
           {/* Status Badge */}
-          <div className="absolute top-3.5 left-3.5 z-20">
+          <div className="absolute left-2 top-2 z-20 sm:left-3.5 sm:top-3.5">
             {isForSale ? (
-              <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-[#B38B40] text-[#141312] border border-white/30">
+              <span className="rounded-md border border-white/30 bg-[#B38B40] px-1.5 py-1 text-[8px] font-medium uppercase tracking-wide text-[#141312] backdrop-blur-md sm:rounded-lg sm:px-2.5 sm:text-[10px]">
                 For Sale
               </span>
             ) : artwork.availability === 'sold' ? (
-              <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-red-500/90 text-white border border-white/30">
+              <span className="rounded-md border border-white/30 bg-red-500/90 px-1.5 py-1 text-[8px] font-medium uppercase tracking-wide text-white backdrop-blur-md sm:rounded-lg sm:px-2.5 sm:text-[10px]">
                 Sold
               </span>
             ) : (
-              <span className="px-2.5 py-1 text-[10px] font-medium uppercase tracking-wide rounded-lg backdrop-blur-md bg-[#8B5CF6] text-white border border-white/30">
+              <span className="rounded-md border border-white/30 bg-[#8B5CF6] px-1.5 py-1 text-[8px] font-medium uppercase tracking-wide text-white backdrop-blur-md sm:rounded-lg sm:px-2.5 sm:text-[10px]">
                 Community
               </span>
             )}
@@ -104,15 +108,15 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
         </div>
 
         {/* Artwork Details */}
-        <div className="p-5 flex-1 flex flex-col gap-4 bg-[#1E1C1A]">
-          <div className="space-y-2">
-            <div className="flex items-center gap-1.5 text-xs text-[#B38B40]">
+        <div className="flex flex-1 flex-col gap-3 bg-[#1E1C1A] p-3 sm:gap-4 sm:p-5">
+          <div className="min-w-0 space-y-1.5 sm:space-y-2">
+            <div className="flex min-w-0 items-center gap-1 text-[10px] text-[#B38B40] sm:gap-1.5 sm:text-xs">
               <span>{formatCategoryLabel(artwork.category)}</span>
               <span aria-hidden="true">·</span>
               <span>{artwork.year}</span>
             </div>
 
-            <h3 className="font-serif text-xl sm:text-2xl font-semibold text-[#FAF8F3] leading-snug group-hover:text-[#B38B40] transition-colors">
+            <h3 className="break-words font-serif text-base font-semibold leading-snug text-[#FAF8F3] transition-colors group-hover:text-[#B38B40] sm:text-xl lg:text-2xl">
               <Link
                 to={`/artwork/${artwork.id}`}
                 className="hover:text-[#B38B40] transition-colors"
@@ -122,8 +126,8 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
             </h3>
 
             {artist && (
-              <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full overflow-hidden border border-white/20">
+              <div className="flex min-w-0 items-center gap-2">
+                <div className="h-7 w-7 shrink-0 overflow-hidden rounded-full border border-white/20 sm:h-8 sm:w-8">
                   {artist.avatarUrl ? (
                     <img
                       src={artist.avatarUrl}
@@ -136,13 +140,13 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
                     </div>
                   )}
                 </div>
-                <span className="text-sm text-[#C8C1B6]">{artist.fullName}</span>
+                <span className="truncate text-xs text-[#C8C1B6] sm:text-sm">{artist.fullName}</span>
               </div>
             )}
           </div>
 
-          <div className="flex items-center justify-between pt-2 border-t border-white/10">
-            <p className="font-mono text-lg font-semibold text-[#B38B40] tabular-nums">
+          <div className="flex flex-wrap items-center justify-between gap-2 border-t border-white/10 pt-2">
+            <p className="min-w-0 font-mono text-sm font-semibold text-[#B38B40] tabular-nums sm:text-lg">
               {formatMoney(artwork.price, artwork.currency)}
             </p>
             
@@ -152,7 +156,7 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
                 onClick={handlePurchaseClick}
-                className="flex items-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
+                className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-200 sm:rounded-xl sm:px-4 sm:text-sm"
                 style={{
                   background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
                   color: '#FAF8F3',
@@ -160,7 +164,7 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
                   boxShadow: '0 4px 16px rgba(179, 139, 64, 0.3)',
                 }}
               >
-                <ShoppingCart className="w-4 h-4" />
+                <ShoppingCart className="h-4 w-4" />
                 <span>Buy</span>
               </motion.button>
             )}
@@ -171,14 +175,14 @@ export const ArtworkCard: React.FC<ArtworkCardProps> = ({
                 whileHover={shouldReduceMotion ? undefined : { scale: 1.05 }}
                 whileTap={shouldReduceMotion ? undefined : { scale: 0.95 }}
                 onClick={() => navigate(`/artwork/${artwork.id}`)}
-                className="flex items-center gap-1.5 py-2.5 px-4 text-sm font-medium rounded-xl transition-all duration-200 whitespace-nowrap"
+                className="flex min-h-11 shrink-0 items-center gap-1.5 rounded-lg px-2.5 py-2 text-xs font-medium transition-all duration-200 sm:rounded-xl sm:px-4 sm:text-sm"
                 style={{
                   background: 'rgba(255, 255, 255, 0.1)',
                   color: '#FAF8F3',
                   border: '1px solid rgba(255, 255, 255, 0.2)',
                 }}
               >
-                <Eye className="w-4 h-4" />
+                <Eye className="h-4 w-4" />
                 <span>View Details</span>
               </motion.button>
             )}

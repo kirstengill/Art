@@ -342,8 +342,8 @@ export const GalleryPage: React.FC = () => {
                 count={gridDensity === 'salon' ? 4 : 6}
                 columnsClass={
                   gridDensity === 'salon'
-                    ? 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-2 gap-9'
-                    : 'grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7'
+                    ? 'grid-cols-2 lg:grid-cols-2 gap-3 sm:gap-6'
+                    : 'grid-cols-2 lg:grid-cols-3 gap-3 sm:gap-6'
                 }
                 aspectClass={
                   gridDensity === 'salon' ? 'aspect-[4/3]' : 'aspect-[4/5]'

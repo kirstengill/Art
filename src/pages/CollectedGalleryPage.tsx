@@ -17,8 +17,7 @@ interface CollectedArtwork extends Artwork {
 export const CollectedGalleryPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();
   const {
-    artworks,
-    getArtworkById,
+    purchases: contextPurchases,
     currentUser,
     authMode,
   } = useArtVerse();
@@ -41,14 +40,20 @@ export const CollectedGalleryPage: React.FC = () => {
         setLoading(true);
         setError(null);
         
-        const { purchases } = await artverseApi.fetchPurchases();
+        const { purchases, artworks: purchasedArtworkRecords } = await artverseApi.fetchPurchases();
         if (!active) return;
 
-        // Combine purchases with artwork data
+        const artworkById = new Map(purchasedArtworkRecords.map((artwork) => [artwork.id, artwork]));
         const combined = purchases.map((purchase) => {
-          const artwork = getArtworkById(purchase.artworkId);
+          const artwork = artworkById.get(purchase.artworkId);
           if (artwork) {
-            return { ...artwork, purchase };
+            return {
+              ...artwork,
+              price: purchase.purchasePrice,
+              currency: purchase.currency,
+              availability: 'sold' as const,
+              purchase,
+            };
           }
           return null;
         }).filter(Boolean) as CollectedArtwork[];
@@ -68,7 +73,7 @@ export const CollectedGalleryPage: React.FC = () => {
     return () => {
       active = false;
     };
-  }, [authMode, currentUser, getArtworkById]);
+  }, [authMode, contextPurchases, currentUser]);
 
   const totalSpent = purchasedArtworks.reduce(
     (sum, item) => sum + (item.purchase?.purchasePrice || item.price),
@@ -189,7 +194,7 @@ export const CollectedGalleryPage: React.FC = () => {
               >
                 <ArtworkGridSkeleton
                   count={6}
-                  columnsClass="grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7"
+                  columnsClass="grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3"
                   aspectClass="aspect-[4/5]"
                 />
               </motion.div>
@@ -244,7 +249,12 @@ export const CollectedGalleryPage: React.FC = () => {
                           ease: [0.16, 1, 0.3, 1],
                         }}
                       >
-                        <ArtworkCard artwork={art} />
+                        <div className="space-y-2.5">
+                          <ArtworkCard artwork={art} />
+                          <p className="rounded-lg border border-[#E6DFD3] bg-white px-3 py-2 text-xs capitalize text-[#5C554C]">
+                            Purchase approved · Payment {art.purchase.paymentStatus} · Delivery {art.purchase.deliveryStatus}
+                          </p>
+                        </div>
                       </motion.div>
                     ))}
                   </AnimatePresence>

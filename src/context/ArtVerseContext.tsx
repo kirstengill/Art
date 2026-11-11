@@ -11,6 +11,9 @@ import type { User as SupabaseUser } from '@supabase/supabase-js';
 import {
   isSupabaseConfigured,
   supabase,
+  subscribeToArtworkChanges,
+  subscribeToCollectorPurchases,
+  subscribeToUserNotifications,
   uploadArtworkImage,
 } from '../lib/supabase';
 import { artverseApi } from '../services/artverseApi';
@@ -36,6 +39,8 @@ import type {
   PostComment,
   Profile,
   Purchase,
+  PurchaseRequest,
+  UserNotification,
   UserRole,
 } from '../types/artverse';
 
@@ -49,6 +54,9 @@ interface ArtVerseContextValue {
   offers: ArtworkOffer[];
   orderIntents: OrderIntent[];
   purchases: Purchase[];
+  purchaseArtworks: Artwork[];
+  purchaseRequests: PurchaseRequest[];
+  notifications: UserNotification[];
   donations: Donation[];
   exhibitions: Exhibition[];
   savedArtworkIds: string[];
@@ -65,11 +73,16 @@ interface ArtVerseContextValue {
   catalogError: string | null;
   threadError: string | null;
   purchaseError: string | null;
+  purchaseRequestError: string | null;
+  notificationError: string | null;
   donationError: string | null;
   exhibitionError: string | null;
   refreshCatalog: () => Promise<void>;
   refreshConversations: () => Promise<void>;
   refreshPurchases: () => Promise<void>;
+  refreshPurchaseRequests: () => Promise<void>;
+  refreshNotifications: () => Promise<void>;
+  markNotificationRead: (notificationId: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
   signUpWithEmail: (params: {
     email: string;
@@ -186,6 +199,9 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [offers, setOffers] = useState<ArtworkOffer[]>([]);
   const [orderIntents, setOrderIntents] = useState<OrderIntent[]>([]);
   const [purchases, setPurchases] = useState<Purchase[]>([]);
+  const [purchaseArtworks, setPurchaseArtworks] = useState<Artwork[]>([]);
+  const [purchaseRequests, setPurchaseRequests] = useState<PurchaseRequest[]>([]);
+  const [notifications, setNotifications] = useState<UserNotification[]>([]);
   const [donations, setDonations] = useState<Donation[]>([]);
   const [exhibitions, setExhibitions] = useState<Exhibition[]>([]);
   const [savedArtworkIds, setSavedArtworkIds] = useState<string[]>([]);
@@ -202,6 +218,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [catalogError, setCatalogError] = useState<string | null>(null);
   const [threadError, setThreadError] = useState<string | null>(null);
   const [purchaseError, setPurchaseError] = useState<string | null>(null);
+  const [purchaseRequestError, setPurchaseRequestError] = useState<string | null>(null);
+  const [notificationError, setNotificationError] = useState<string | null>(null);
   const [donationError, setDonationError] = useState<string | null>(null);
   const [exhibitionError, setExhibitionError] = useState<string | null>(null);
   const profileSyncTasks = useRef(new Map<string, Promise<Profile>>());
@@ -322,6 +340,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const refreshPurchases = useCallback(async () => {
     if (authMode !== 'authenticated' || !currentUser || currentUser.role !== 'collector') {
       setPurchases([]);
+      setPurchaseArtworks([]);
       setPurchasedArtworkIds([]);
       return;
     }
@@ -331,17 +350,117 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     try {
       const data = await artverseApi.fetchPurchases();
       setPurchases(data.purchases || []);
+      setPurchaseArtworks(data.artworks || []);
       setPurchasedArtworkIds(data.purchases ? data.purchases.map((p: Purchase) => p.artworkId) : []);
     } catch (err) {
       setPurchaseError(
         err instanceof Error ? err.message : 'Unable to load your purchases.'
       );
       setPurchases([]);
+      setPurchaseArtworks([]);
       setPurchasedArtworkIds([]);
     } finally {
       setIsLoadingPurchases(false);
     }
   }, [authMode, currentUser]);
+
+  const refreshPurchaseRequests = useCallback(async () => {
+    if (authMode !== 'authenticated' || !currentUser || currentUser.role !== 'collector') {
+      setPurchaseRequests([]);
+      setPurchaseRequestError(null);
+      return;
+    }
+    setPurchaseRequestError(null);
+    try {
+      const data = await artverseApi.fetchPurchaseRequests();
+      setPurchaseRequests(data.requests || []);
+    } catch (err) {
+      setPurchaseRequestError(
+        err instanceof Error ? err.message : 'Unable to load your purchase requests.'
+      );
+      setPurchaseRequests([]);
+    }
+  }, [authMode, currentUser]);
+
+  const refreshNotifications = useCallback(async () => {
+    if (authMode !== 'authenticated' || !currentUser) {
+      setNotifications([]);
+      setNotificationError(null);
+      return;
+    }
+    setNotificationError(null);
+    try {
+      const data = await artverseApi.fetchNotifications();
+      setNotifications(data.notifications || []);
+    } catch (err) {
+      setNotificationError(
+        err instanceof Error ? err.message : 'Unable to load notifications.'
+      );
+      setNotifications([]);
+    }
+  }, [authMode, currentUser]);
+
+  const markNotificationRead = useCallback(
+    async (notificationId: string) => {
+      requireAuthenticatedUser(authMode, currentUser);
+      const { notification } = await artverseApi.markNotificationRead(notificationId);
+      setNotifications((previous) =>
+        previous.map((item) => item.id === notification.id ? notification : item)
+      );
+    },
+    [authMode, currentUser]
+  );
+
+  useEffect(() => {
+    if (!currentUser || authMode !== 'authenticated') {
+      setPurchaseRequests([]);
+      setNotifications([]);
+      setPurchaseRequestError(null);
+      setNotificationError(null);
+      return;
+    }
+
+    let active = true;
+    const channel = subscribeToUserNotifications(currentUser.id, () => {
+      if (!active) return;
+      void refreshNotifications();
+      if (currentUser.role === 'collector') {
+        void refreshPurchaseRequests();
+        void refreshPurchases();
+      }
+    });
+    const purchaseChannel = currentUser.role === 'collector'
+      ? subscribeToCollectorPurchases(currentUser.id, () => {
+          if (active) void refreshPurchases();
+        })
+      : null;
+    void refreshNotifications();
+    if (currentUser.role === 'collector') {
+      void refreshPurchaseRequests();
+      void refreshPurchases();
+    }
+
+    return () => {
+      active = false;
+      if (channel && supabase) void supabase.removeChannel(channel);
+      if (purchaseChannel && supabase) void supabase.removeChannel(purchaseChannel);
+    };
+  }, [
+    authMode,
+    currentUser,
+    refreshNotifications,
+    refreshPurchaseRequests,
+    refreshPurchases,
+  ]);
+
+  useEffect(() => {
+    const channel = subscribeToArtworkChanges(() => {
+      void loadCatalog();
+    });
+    return () => {
+      if (channel && supabase) void supabase.removeChannel(channel);
+    };
+  }, [loadCatalog]);
 
   const refreshConversations = useCallback(async () => {
     const startedAt = Date.now();
@@ -404,6 +523,11 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
         setFollowedArtistIds([]);
         setLikedPostIds([]);
         setOrderIntents([]);
+        setPurchases([]);
+        setPurchaseArtworks([]);
+        setPurchasedArtworkIds([]);
+        setPurchaseRequests([]);
+        setNotifications([]);
         setConversations([]);
         setMessages([]);
         setOffers([]);
@@ -541,6 +665,11 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     setFollowedArtistIds([]);
     setLikedPostIds([]);
     setOrderIntents([]);
+    setPurchases([]);
+    setPurchaseArtworks([]);
+    setPurchasedArtworkIds([]);
+    setPurchaseRequests([]);
+    setNotifications([]);
     setConversations([]);
     setMessages([]);
     setOffers([]);
@@ -998,6 +1127,9 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       offers,
       orderIntents,
       purchases,
+      purchaseArtworks,
+      purchaseRequests,
+      notifications,
       donations,
       exhibitions,
       savedArtworkIds,
@@ -1014,11 +1146,16 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       catalogError,
       threadError,
       purchaseError,
+      purchaseRequestError,
+      notificationError,
       donationError,
       exhibitionError,
       refreshCatalog: loadCatalog,
       refreshConversations,
       refreshPurchases,
+      refreshPurchaseRequests,
+      refreshNotifications,
+      markNotificationRead,
       signInWithEmail,
       signUpWithEmail,
       logout,
@@ -1058,6 +1195,9 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       offers,
       orderIntents,
       purchases,
+      purchaseArtworks,
+      purchaseRequests,
+      notifications,
       savedArtworkIds,
       followedArtistIds,
       likedPostIds,
@@ -1072,11 +1212,16 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       catalogError,
       threadError,
       purchaseError,
+      purchaseRequestError,
+      notificationError,
       donationError,
       exhibitionError,
       loadCatalog,
       refreshConversations,
       refreshPurchases,
+      refreshPurchaseRequests,
+      refreshNotifications,
+      markNotificationRead,
       signInWithEmail,
       signUpWithEmail,
       logout,

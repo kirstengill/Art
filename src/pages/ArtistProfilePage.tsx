@@ -178,7 +178,7 @@ export const ArtistProfilePage: React.FC = () => {
               No public works currently listed in this artist’s viewing room.
             </div>
           ) : (
-            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-7">
+            <div className="grid min-w-0 grid-cols-2 gap-3 sm:gap-6 lg:grid-cols-3">
               {artistWorks.map((work, idx) => (
                 <motion.div
                   key={work.id}

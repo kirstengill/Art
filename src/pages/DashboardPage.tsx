@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
-import { Edit3, Eye, LogOut, Plus, Trash2 } from 'lucide-react';
+import { Bell, CheckCheck, Edit3, Eye, LogOut, PackageCheck, Plus, Trash2 } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
 import {
@@ -10,6 +10,7 @@ import {
   formatMoney,
   formatOfferStatusLabel,
   formatRoleLabel,
+  formatShortDate,
   formatSaleModeLabel,
 } from '../utils/formatters';
 import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
@@ -22,6 +23,13 @@ export const DashboardPage: React.FC = () => {
     artworks,
     offers,
     orderIntents,
+    purchaseRequests,
+    purchaseRequestError,
+    purchases,
+    purchaseArtworks,
+    notifications,
+    notificationError,
+    markNotificationRead,
     savedArtworkIds,
     followedArtistIds,
     posts,
@@ -35,6 +43,7 @@ export const DashboardPage: React.FC = () => {
 
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [notificationActionError, setNotificationActionError] = useState<string | null>(null);
 
   const managedOwnerId = currentUser?.id;
 
@@ -63,6 +72,17 @@ export const DashboardPage: React.FC = () => {
     } finally {
       setDeletingId(null);
       setConfirmDeleteId(null);
+    }
+  };
+
+  const handleMarkNotificationRead = async (notificationId: string) => {
+    setNotificationActionError(null);
+    try {
+      await markNotificationRead(notificationId);
+    } catch (err) {
+      setNotificationActionError(
+        err instanceof Error ? err.message : 'Unable to update notification.'
+      );
     }
   };
 
@@ -98,19 +118,19 @@ export const DashboardPage: React.FC = () => {
               sub: 'Works in your personal shortlist',
             },
             {
+              label: 'Purchase Requests',
+              value: String(purchaseRequests.length),
+              sub: 'Awaiting or past administrator decisions',
+            },
+            {
+              label: 'My Purchases',
+              value: String(purchases.length),
+              sub: 'Approved purchases, saved across sessions',
+            },
+            {
               label: 'Negotiation Intents',
               value: String(orderIntents.length),
               sub: 'Created during this session only',
-            },
-            {
-              label: 'Artists Followed',
-              value: String(followedArtistIds.length),
-              sub: 'Studios in your network',
-            },
-            {
-              label: 'Artwork to Explore',
-              value: String(artworks.length),
-              sub: 'Browse the public catalogue',
             },
           ]
         : [
@@ -492,17 +512,17 @@ export const DashboardPage: React.FC = () => {
                 {role === 'artist'
                   ? 'Recent Collector Offers'
                   : role === 'collector'
-                    ? 'Negotiation Purchase Intents'
+                    ? 'Purchase Requests & Notifications'
                     : 'Explore the Community'}
               </h2>
               <Link
-                to={role === 'artist' ? '/messages' : role === 'collector' ? '/gallery' : '/community'}
+                to={role === 'artist' ? '/messages' : role === 'collector' ? '/collection' : '/community'}
                 className="text-xs font-medium text-[#8C6828] hover:text-[#141312] transition-colors whitespace-nowrap"
               >
                 {role === 'artist'
                   ? 'Open Negotiation Desk →'
                   : role === 'collector'
-                    ? 'Discover Artwork →'
+                    ? 'My Purchases →'
                     : 'Open Community →'}
               </Link>
             </div>
@@ -542,29 +562,84 @@ export const DashboardPage: React.FC = () => {
                   );
                 })}
               </div>
-            ) : role === 'collector' ? orderIntents.length === 0 ? (
-              <p className="text-sm leading-relaxed text-[#6B655E]">
-                Negotiation intents created during this session appear here. The existing collector API does not provide a persistent purchase-request list.
-              </p>
-            ) : (
-              <div className="divide-y divide-[#ECE6DA]">
-                {orderIntents.slice(0, 4).map((intent) => {
-                  const artwork = getArtworkById(intent.artworkId);
-                  return (
-                    <div key={intent.id} className="flex items-center justify-between gap-3 py-3.5 first:pt-0 last:pb-0">
-                      <div className="min-w-0">
-                        <Link to={`/artwork/${intent.artworkId}`} className="block truncate font-serif text-lg font-semibold text-[#141312] hover:text-[#B38B40]">
-                          {artwork?.title || 'Artwork'}
-                        </Link>
-                        <p className="text-xs text-[#6B655E]">Intent status: {intent.status.replaceAll('_', ' ')}</p>
-                      </div>
-                      <p className="shrink-0 font-mono text-sm text-[#141312]">{formatMoney(intent.amount, intent.currency)}</p>
+            ) : role === 'collector' ? (
+              <div className="space-y-5">
+                {purchaseRequestError && (
+                  <p role="alert" className="rounded-lg border border-red-300/40 bg-red-50 px-3 py-2 text-xs text-[#992E24]">
+                    {purchaseRequestError}
+                  </p>
+                )}
+                <div>
+                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7A7267]">
+                    Recent requests
+                  </h3>
+                  {purchaseRequests.length === 0 ? (
+                    <p className="mt-2 text-sm text-[#6B655E]">Your submitted requests and their decisions will appear here.</p>
+                  ) : (
+                    <div className="mt-2 divide-y divide-[#ECE6DA]">
+                      {purchaseRequests.slice(0, 4).map((request) => (
+                        <div key={request.id} className="flex items-center justify-between gap-3 py-3 first:pt-1">
+                          <div className="flex min-w-0 items-center gap-3">
+                            {request.artworkImage && (
+                              <div className="h-10 w-10 shrink-0 overflow-hidden rounded-lg border border-[#E6DFD3]">
+                                <ArtworkImage imageKey={request.artworkImage} alt={request.artworkTitle} className="h-full w-full object-cover" />
+                              </div>
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate font-serif text-base font-semibold text-[#141312]">{request.artworkTitle}</p>
+                              <p className="text-xs capitalize text-[#6B655E]">
+                                {request.status} · {formatMoney(request.amount, request.currency)}
+                              </p>
+                            </div>
+                          </div>
+                          <span className="shrink-0 text-[10px] text-[#7A7267]">{formatShortDate(request.createdAt)}</span>
+                        </div>
+                      ))}
                     </div>
-                  );
-                })}
-                <p className="pt-3 text-xs leading-relaxed text-[#6B655E]">
-                  These session-only negotiation intents are not admin-mediated purchase requests and do not confirm payment, delivery, or ownership.
-                </p>
+                  )}
+                </div>
+                <div className="border-t border-[#ECE6DA] pt-4">
+                  <div className="flex items-center justify-between gap-2">
+                    <h3 className="inline-flex items-center gap-1.5 text-[10px] font-semibold uppercase tracking-[0.16em] text-[#7A7267]">
+                      <Bell className="h-3.5 w-3.5" />
+                      Notifications
+                    </h3>
+                    <span className="text-[10px] text-[#7A7267]">
+                      {notifications.filter((notification) => !notification.isRead).length} unread
+                    </span>
+                  </div>
+                  {notificationError && (
+                    <p role="alert" className="mt-2 text-xs text-[#992E24]">{notificationError}</p>
+                  )}
+                  {notificationActionError && (
+                    <p role="alert" className="mt-2 text-xs text-[#992E24]">{notificationActionError}</p>
+                  )}
+                  {notifications.length === 0 ? (
+                    <p className="mt-2 text-sm text-[#6B655E]">Purchase updates will appear here.</p>
+                  ) : (
+                    <div className="mt-2 space-y-2">
+                      {notifications.slice(0, 4).map((notification) => (
+                        <div key={notification.id} className={`flex items-start gap-2 rounded-lg p-2.5 ${notification.isRead ? 'bg-[#FAF8F3]' : 'bg-[#F5EFE2]'}`}>
+                          <div className="min-w-0 flex-1">
+                            <p className="text-xs font-medium text-[#302B25]">{notification.title}</p>
+                            <p className="mt-0.5 text-xs leading-relaxed text-[#6B655E]">{notification.body}</p>
+                            <p className="mt-1 text-[10px] text-[#8A8175]">{formatShortDate(notification.createdAt)}</p>
+                          </div>
+                          {!notification.isRead && (
+                            <button
+                              type="button"
+                              aria-label={`Mark ${notification.title} as read`}
+                              onClick={() => void handleMarkNotificationRead(notification.id)}
+                              className="shrink-0 rounded-md p-1.5 text-[#8C6828] hover:bg-white"
+                            >
+                              <CheckCheck className="h-4 w-4" />
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             ) : (
               <p className="text-sm leading-relaxed text-[#6B655E]">
@@ -638,6 +713,70 @@ export const DashboardPage: React.FC = () => {
             )}
           </motion.div>
         </section>
+
+        {role === 'collector' && (
+          <section className="space-y-5">
+            <div className="flex items-end justify-between gap-4 border-b border-[#E6DFD3] pb-4">
+              <div>
+                <h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#141312]">
+                  My Purchases
+                </h2>
+                <p className="mt-1 text-xs text-[#6B655E]">
+                  Approved artworks and their current payment and delivery stages.
+                </p>
+              </div>
+              <Link
+                to="/collection"
+                className="text-xs font-medium text-[#8C6828] hover:text-[#141312] transition-colors whitespace-nowrap"
+              >
+                View all purchases →
+              </Link>
+            </div>
+            {purchases.length === 0 ? (
+              <div className="rounded-2xl border border-[#E6DFD3] bg-white p-6 text-sm text-[#6B655E]">
+                Approved purchase requests will appear here.
+              </div>
+            ) : (
+              <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                {purchases.slice(0, 3).map((purchase) => {
+                  const artwork = purchaseArtworks.find((item) => item.id === purchase.artworkId);
+                  const artist = artwork ? getProfileById(artwork.artistId) : undefined;
+                  return (
+                    <article key={purchase.id} className="flex gap-3 rounded-2xl border border-[#E6DFD3] bg-white p-4">
+                      {artwork ? (
+                        <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-[#E6DFD3]">
+                          <ArtworkImage imageKey={artwork.imageKey} alt={artwork.title} className="h-full w-full object-cover" />
+                        </div>
+                      ) : (
+                        <div className="flex h-16 w-16 shrink-0 items-center justify-center rounded-xl bg-[#F3EFE6] text-[#8C6828]">
+                          <PackageCheck className="h-6 w-6" />
+                        </div>
+                      )}
+                      <div className="min-w-0 flex-1">
+                        {artwork ? (
+                          <Link to={`/artwork/${artwork.id}`} className="block truncate font-serif text-base font-semibold text-[#141312] hover:text-[#B38B40]">
+                            {artwork.title}
+                          </Link>
+                        ) : (
+                          <p className="truncate font-serif text-base font-semibold text-[#141312]">Purchased artwork</p>
+                        )}
+                        <p className="mt-0.5 truncate text-xs text-[#6B655E]">
+                          {artist?.fullName || 'Artist'}{artwork ? ` · ${formatCategoryLabel(artwork.category)}` : ''}
+                        </p>
+                        <p className="mt-1 font-mono text-sm font-medium text-[#141312]">
+                          {formatMoney(purchase.purchasePrice, purchase.currency)}
+                        </p>
+                        <p className="mt-1 text-[10px] capitalize text-[#6B655E]">
+                          Approved · Payment {purchase.paymentStatus} · Delivery {purchase.deliveryStatus}
+                        </p>
+                      </div>
+                    </article>
+                  );
+                })}
+              </div>
+            )}
+          </section>
+        )}
       </div>
     </div>
   );

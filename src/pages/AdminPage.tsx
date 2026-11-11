@@ -6,11 +6,13 @@ import {
   ArrowRight,
   Brush,
   CheckCircle,
+  CheckCircle2,
   CreditCard,
   Image,
   LayoutDashboard,
   LogOut,
   Search,
+  Trash2,
   UserCheck,
   Users,
   XCircle,
@@ -24,6 +26,7 @@ import type {
   AdminContentRecord,
   AdminOverview,
   AdminOrderRecord,
+  AdminPurchaseRequestRecord,
   AdminPageResult,
   AdminRoleFilter,
   AdminTimeframe,
@@ -32,7 +35,7 @@ import type {
 import { formatMoney, formatRoleLabel, formatShortDate } from '../utils/formatters';
 import { ArtworkImage } from '../data/artworkImages';
 
-type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders' | 'collector_approval' | 'donations' | 'exhibitions';
+type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders' | 'purchase_requests' | 'collector_approval' | 'donations' | 'exhibitions';
 
 const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   intent_created: ['awaiting_payment', 'cancelled'],
@@ -50,7 +53,8 @@ const NAV_ITEMS: Array<{ id: AdminSection; label: string; icon: React.FC<{ class
   { id: 'users', label: 'Users', icon: Users },
   { id: 'artists', label: 'Artists', icon: Brush },
   { id: 'content', label: 'Artwork & posts', icon: Image },
-  { id: 'orders', label: 'Purchase intents', icon: CreditCard },
+  { id: 'orders', label: 'Order intents', icon: CreditCard },
+  { id: 'purchase_requests', label: 'Purchase Requests', icon: CreditCard },
   { id: 'collector_approval', label: 'Collector Approval', icon: UserCheck },
   { id: 'donations', label: 'Donations', icon: CreditCard },
   { id: 'exhibitions', label: 'Exhibitions', icon: Image },
@@ -170,13 +174,14 @@ function Pager({
 
 export const AdminPage: React.FC = () => {
   const navigate = useNavigate();
-  const { logout } = useArtVerse();
+  const { logout, refreshCatalog, notifications } = useArtVerse();
   const [section, setSection] = useState<AdminSection>('overview');
   const [timeframe, setTimeframe] = useState<AdminTimeframe>(30);
   const [overview, setOverview] = useState<AdminOverview | null>(null);
   const [users, setUsers] = useState<AdminPageResult<AdminUserRecord> | null>(null);
   const [content, setContent] = useState<AdminPageResult<AdminContentRecord> | null>(null);
   const [orders, setOrders] = useState<AdminPageResult<AdminOrderRecord> | null>(null);
+  const [purchaseRequests, setPurchaseRequests] = useState<AdminPageResult<AdminPurchaseRequestRecord> | null>(null);
   const [collectorApprovals, setCollectorApprovals] = useState<AdminPageResult<AdminCollectorApprovalRecord> | null>(null);
   const [donations, setDonations] = useState<Array<{ id: string; donorId: string; artistId: string | null; amount: number; currency: string; status: string; createdAt: string }>>([]);
   const [exhibitions, setExhibitions] = useState<Array<{ id: string; title: string; status: string; featured: boolean; startDate: string; endDate: string; curatorId: string | null }>>([]);
@@ -190,7 +195,9 @@ export const AdminPage: React.FC = () => {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
+  const [savingPurchaseRequestId, setSavingPurchaseRequestId] = useState<string | null>(null);
   const [savingApprovalId, setSavingApprovalId] = useState<string | null>(null);
+  const [deletingArtworkId, setDeletingArtworkId] = useState<string | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -286,6 +293,26 @@ export const AdminPage: React.FC = () => {
   }, [page, section]);
 
   useEffect(() => {
+    if (section !== 'purchase_requests') return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    artverseApi.fetchAdminPurchaseRequests(page, 20)
+      .then((data) => {
+        if (!cancelled) setPurchaseRequests(data);
+      })
+      .catch((err: unknown) => {
+        if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load purchase requests.');
+      })
+      .finally(() => {
+        if (!cancelled) setLoading(false);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [notifications, page, section]);
+
+  useEffect(() => {
     if (section !== 'collector_approval') return;
     let cancelled = false;
     setLoading(true);
@@ -370,7 +397,7 @@ export const AdminPage: React.FC = () => {
     setSavingOrderId(order.id);
     setError(null);
     try {
-      const updated = await artverseApi.updateAdminOrderStatus(order.id, order.source, status);
+      const updated = await artverseApi.updateAdminOrderStatus(order.id, status);
       setOrders((current) =>
         current
           ? {
@@ -385,6 +412,51 @@ export const AdminPage: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Unable to update purchase request.');
     } finally {
       setSavingOrderId(null);
+    }
+  };
+
+  const refreshAdminPurchaseRequests = async () => {
+    const data = await artverseApi.fetchAdminPurchaseRequests(page, 20);
+    setPurchaseRequests(data);
+  };
+
+  const handlePurchaseRequestDecision = async (
+    record: AdminPurchaseRequestRecord,
+    decision: 'approve' | 'reject'
+  ) => {
+    if (
+      decision === 'approve' &&
+      !window.confirm(
+        `Approve the request for "${record.artworkTitle}"? This will mark the artwork sold, add it to the collector's My Purchases, and prevent further purchase requests. Payment and delivery will remain unconfirmed.`
+      )
+    ) {
+      return;
+    }
+    setSavingPurchaseRequestId(record.id);
+    setError(null);
+    try {
+      await artverseApi.decideAdminPurchaseRequest(record.id, decision);
+      await refreshAdminPurchaseRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update purchase request.');
+    } finally {
+      setSavingPurchaseRequestId(null);
+    }
+  };
+
+  const handlePurchaseFulfillment = async (
+    record: AdminPurchaseRequestRecord,
+    action: 'confirm_payment' | 'confirm_delivery'
+  ) => {
+    setSavingPurchaseRequestId(record.id);
+    setError(null);
+    try {
+      await artverseApi.updateAdminPurchaseFulfillment(record.id, action);
+      await refreshAdminPurchaseRequests();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update payment or delivery status.');
+    } finally {
+      setSavingPurchaseRequestId(null);
     }
   };
 
@@ -414,6 +486,37 @@ export const AdminPage: React.FC = () => {
       setError(err instanceof Error ? err.message : 'Unable to update collector approval.');
     } finally {
       setSavingApprovalId(null);
+    }
+  };
+
+  const handleDeleteArtwork = async (record: AdminContentRecord) => {
+    if (
+      record.kind !== 'artwork' ||
+      !window.confirm(
+        `Permanently delete "${record.title || 'Untitled artwork'}" and its stored image for everyone? This cannot be undone. Items with an approved purchase cannot be deleted so transaction records remain intact.`
+      )
+    ) {
+      return;
+    }
+
+    setDeletingArtworkId(record.id);
+    setError(null);
+    try {
+      const { deletedId } = await artverseApi.deleteAdminArtwork(record.id);
+      setContent((current) =>
+        current
+          ? {
+              ...current,
+              records: current.records.filter((item) => item.id !== deletedId),
+              total: Math.max(0, current.total - 1),
+            }
+          : current
+      );
+      await refreshCatalog();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to delete artwork.');
+    } finally {
+      setDeletingArtworkId(null);
     }
   };
 
@@ -683,7 +786,20 @@ export const AdminPage: React.FC = () => {
                         {record.kind === 'artwork' && (
                           <p className="mt-3 text-xs text-white/75">{record.saleMode === 'negotiation_only' ? 'Offer only' : 'For sale'} · {record.availability} · {record.price !== null ? formatMoney(record.price, record.currency || 'USD') : 'No price'}</p>
                         )}
-                        <Link to={record.kind === 'artwork' ? `/artwork/${record.id}` : record.artworkId ? `/artwork/${record.artworkId}` : `/artists/${record.artistId}`} className="mt-4 inline-block text-xs text-[#ead39e] hover:text-white">View public page <ArrowRight className="ml-1 inline h-3 w-3" /></Link>
+                        <div className="mt-4 flex flex-wrap items-center justify-between gap-3">
+                          <Link to={record.kind === 'artwork' ? `/artwork/${record.id}` : record.artworkId ? `/artwork/${record.artworkId}` : `/artists/${record.artistId}`} className="inline-block text-xs text-[#ead39e] hover:text-white">View public page <ArrowRight className="ml-1 inline h-3 w-3" /></Link>
+                          {record.kind === 'artwork' && (
+                            <button
+                              type="button"
+                              onClick={() => void handleDeleteArtwork(record)}
+                              disabled={deletingArtworkId !== null}
+                              className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-red-300/30 px-3 py-2 text-xs font-medium text-red-100 transition-colors hover:bg-red-500/15 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                              {deletingArtworkId === record.id ? 'Deleting…' : 'Delete artwork'}
+                            </button>
+                          )}
+                        </div>
                       </div>
                     </article>
                   ))}
@@ -697,7 +813,7 @@ export const AdminPage: React.FC = () => {
           {section === 'orders' && (
             <section className="space-y-4">
               <p className="max-w-3xl text-sm leading-relaxed text-white/60">
-                Requests are coordinated by Louvre Singa. Status updates are manual; they do not charge a payment method, mark artwork as sold, or trigger artist payouts.
+                These are collector-created order intents. Admin-mediated artwork purchase requests are managed separately in Purchase Requests.
               </p>
               {orders && (
                 <div className="overflow-x-auto rounded-2xl border border-white/15 bg-white/[0.04]">
@@ -716,8 +832,12 @@ export const AdminPage: React.FC = () => {
                                 </div>
                               )}
                               <div>
-                                <Link to={`/artwork/${order.artworkId}`} className="font-medium text-white hover:text-[#ead39e]">{order.artworkTitle}</Link>
-                                <p className="text-xs text-white/45">{order.source === 'purchase_request' ? 'Visitor request' : 'Collector intent'}</p>
+                                {order.artworkId ? (
+                                  <Link to={`/artwork/${order.artworkId}`} className="font-medium text-white hover:text-[#ead39e]">{order.artworkTitle}</Link>
+                                ) : (
+                                  <p className="font-medium text-white">{order.artworkTitle}</p>
+                                )}
+                                <p className="text-xs text-white/45">Collector intent</p>
                               </div>
                             </div>
                           </td>
@@ -762,6 +882,149 @@ export const AdminPage: React.FC = () => {
                 </div>
               )}
               {orders && <Pager data={orders} onPage={setPage} />}
+            </section>
+          )}
+
+          {section === 'purchase_requests' && (
+            <section className="space-y-5">
+              <p className="max-w-4xl text-sm leading-relaxed text-white/65">
+                Review collector requests here. Approval marks the artwork sold and adds it to the collector’s purchases. Record payment and delivery as separate manual steps; artist payouts are not automated.
+              </p>
+              <p className="max-w-4xl rounded-xl border border-[#d6bb7e]/20 bg-[#d6bb7e]/[0.07] p-4 text-xs leading-relaxed text-white/60">
+                Confirm payment only after Louvre Singa has received it. Confirm delivery only after successful delivery is verified. The platform retains 20%; the artist’s 80% share is handled manually after delivery confirmation.
+              </p>
+              <div className="space-y-4">
+                {purchaseRequests?.records.map((record) => {
+                  const saving = savingPurchaseRequestId === record.id;
+                  const isPending = record.status === 'pending';
+                  const isApproved = record.status === 'approved';
+                  const paymentConfirmed = record.paymentStatus === 'confirmed';
+                  const deliveryConfirmed = record.deliveryStatus === 'confirmed';
+                  return (
+                    <article key={record.id} className="rounded-2xl border border-white/15 bg-white/[0.045] p-4 sm:p-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex min-w-0 items-start gap-3">
+                          {record.artworkImage && (
+                            <div className="h-16 w-16 shrink-0 overflow-hidden rounded-xl border border-white/10">
+                              <ArtworkImage imageKey={record.artworkImage} alt={record.artworkTitle} className="h-full w-full object-cover" />
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              {record.artworkId ? (
+                                <Link to={`/artwork/${record.artworkId}`} className="font-serif text-lg font-semibold text-white hover:text-[#ead39e]">
+                                  {record.artworkTitle}
+                                </Link>
+                              ) : (
+                                <h2 className="font-serif text-lg font-semibold text-white">{record.artworkTitle}</h2>
+                              )}
+                              <span className={`rounded-full px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wide ${
+                                isPending ? 'bg-amber-400/15 text-amber-100' :
+                                  isApproved ? 'bg-emerald-400/15 text-emerald-100' :
+                                    'bg-white/10 text-white/60'
+                              }`}>
+                                {record.status.replaceAll('_', ' ')}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-white/55">Artist: {record.artistName || '—'} · Requested {formatShortDate(record.createdAt)}</p>
+                            <p className="mt-1 font-mono text-sm font-medium text-[#ead39e]">
+                              {formatMoney(record.amount, record.currency)} {record.currency}
+                            </p>
+                          </div>
+                        </div>
+                        {isPending && (
+                          <div className="flex shrink-0 flex-wrap gap-2">
+                            <button
+                              type="button"
+                              disabled={saving || !record.collectorId || !record.artworkId}
+                              onClick={() => void handlePurchaseRequestDecision(record, 'approve')}
+                              className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/25 disabled:cursor-not-allowed disabled:opacity-45"
+                            >
+                              <CheckCircle2 className="h-3.5 w-3.5" />
+                              {saving ? 'Saving…' : 'Approve'}
+                            </button>
+                            <button
+                              type="button"
+                              disabled={saving}
+                              onClick={() => void handlePurchaseRequestDecision(record, 'reject')}
+                              className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100 transition-colors hover:bg-red-500/20 disabled:cursor-not-allowed disabled:opacity-50"
+                            >
+                              <XCircle className="h-3.5 w-3.5" />
+                              Reject
+                            </button>
+                          </div>
+                        )}
+                      </div>
+
+                      {isPending && (!record.collectorId || !record.artworkId) && (
+                        <p className="mt-3 rounded-lg border border-amber-200/15 bg-amber-100/[0.05] p-3 text-xs text-amber-100/80">
+                          This legacy request is missing a linked collector or artwork, so it cannot be approved. It can still be rejected and remains in the record.
+                        </p>
+                      )}
+
+                      <div className="mt-4 grid gap-3 border-t border-white/10 pt-4 sm:grid-cols-2">
+                        <div className="rounded-xl bg-black/15 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-white/45">Collector</p>
+                          <p className="mt-1 text-sm text-white/85">{record.buyerName || '—'}</p>
+                          <p className="mt-0.5 text-xs text-white/55">{record.buyerPhone || 'No phone provided'}</p>
+                          {record.buyerEmail && <p className="mt-0.5 break-all text-xs text-white/55">{record.buyerEmail}</p>}
+                        </div>
+                        <div className="rounded-xl bg-black/15 p-3">
+                          <p className="text-[10px] uppercase tracking-[0.14em] text-white/45">Delivery details</p>
+                          <p className="mt-1 text-sm text-white/85">{record.deliveryLocation || '—'}</p>
+                          <p className="mt-0.5 whitespace-pre-wrap text-xs text-white/55">{record.deliveryAddress || '—'}</p>
+                          {record.instructions && <p className="mt-1 whitespace-pre-wrap text-xs text-white/45">Note: {record.instructions}</p>}
+                        </div>
+                      </div>
+
+                      {isApproved && (
+                        <div className="mt-4 flex flex-col gap-3 border-t border-white/10 pt-4 sm:flex-row sm:items-center sm:justify-between">
+                          <div className="flex flex-wrap gap-x-5 gap-y-2 text-xs text-white/65">
+                            <span>Payment: <strong className="text-white">{paymentConfirmed ? 'Confirmed' : 'Pending'}</strong></span>
+                            <span>Delivery: <strong className="text-white">{deliveryConfirmed ? 'Confirmed' : 'Pending'}</strong></span>
+                          </div>
+                          <div className="flex flex-wrap gap-2">
+                            {!paymentConfirmed && (
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => void handlePurchaseFulfillment(record, 'confirm_payment')}
+                                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                              >
+                                <CreditCard className="h-3.5 w-3.5" />
+                                {saving ? 'Saving…' : 'Confirm payment received'}
+                              </button>
+                            )}
+                            {paymentConfirmed && !deliveryConfirmed && (
+                              <button
+                                type="button"
+                                disabled={saving}
+                                onClick={() => void handlePurchaseFulfillment(record, 'confirm_delivery')}
+                                className="inline-flex min-h-10 items-center gap-2 rounded-lg border border-white/20 px-3 py-2 text-xs font-medium text-white hover:bg-white/10 disabled:opacity-50"
+                              >
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                {saving ? 'Saving…' : 'Confirm delivery'}
+                              </button>
+                            )}
+                            {deliveryConfirmed && (
+                              <span className="inline-flex min-h-10 items-center gap-2 rounded-lg bg-emerald-500/10 px-3 py-2 text-xs font-medium text-emerald-100">
+                                <CheckCircle className="h-3.5 w-3.5" />
+                                Delivery confirmed
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
+                    </article>
+                  );
+                })}
+                {purchaseRequests && purchaseRequests.records.length === 0 && (
+                  <p className="rounded-xl border border-dashed border-white/20 p-8 text-center text-sm text-white/55">
+                    No purchase requests have been submitted.
+                  </p>
+                )}
+              </div>
+              {purchaseRequests && <Pager data={purchaseRequests} onPage={setPage} />}
             </section>
           )}
 

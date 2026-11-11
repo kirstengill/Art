@@ -15,10 +15,12 @@ import type {
   ExhibitionSubmission,
   ExhibitionSubmissionInput,
   OrderIntent,
+  PurchaseRequest,
   PurchaseRequestReceipt,
   PostComment,
   Profile,
   Purchase,
+  UserNotification,
   UserRole,
 } from '../types/artverse';
 import type {
@@ -29,6 +31,7 @@ import type {
   AdminContentRecord,
   AdminOverview,
   AdminOrderRecord,
+  AdminPurchaseRequestRecord,
   AdminPageResult,
   AdminRoleFilter,
   AdminTimeframe,
@@ -94,7 +97,7 @@ export interface ArtistsResponse {
 }
 
 export const artverseApi = {
-  fetchCatalog: () => apiFetch<CatalogResponse>('/api/catalog'),
+  fetchCatalog: () => apiFetch<CatalogResponse>('/api/catalog', { cache: 'no-store' }),
   fetchArtists: () => apiFetch<ArtistsResponse>('/api/artists'),
 
   syncProfile: (payload: {
@@ -122,6 +125,11 @@ export const artverseApi = {
 
   deleteArtwork: (artworkId: string) =>
     apiFetch<{ deletedId: string }>(`/api/artworks/${artworkId}`, {
+      method: 'DELETE',
+    }),
+
+  deleteAdminArtwork: (artworkId: string) =>
+    apiFetch<{ deletedId: string }>(`/api/admin/artworks/${artworkId}`, {
       method: 'DELETE',
     }),
 
@@ -221,6 +229,18 @@ export const artverseApi = {
       body: JSON.stringify(payload),
     }),
 
+  fetchPurchaseRequests: () =>
+    apiFetch<{ requests: PurchaseRequest[] }>('/api/purchase-requests', { cache: 'no-store' }),
+
+  fetchNotifications: () =>
+    apiFetch<{ notifications: UserNotification[] }>('/api/notifications', { cache: 'no-store' }),
+
+  markNotificationRead: (notificationId: string) =>
+    apiFetch<{ notification: UserNotification }>(
+      `/api/notifications/${encodeURIComponent(notificationId)}/read`,
+      { method: 'PATCH' }
+    ),
+
   fetchAdminOverview: (timeframe: AdminTimeframe) =>
     apiFetch<AdminOverview>(
       `/api/admin/overview?timeframe=${encodeURIComponent(timeframe)}`
@@ -268,15 +288,48 @@ export const artverseApi = {
     return apiFetch<AdminPageResult<AdminOrderRecord>>(`/api/admin/orders?${params}`);
   },
 
-  updateAdminOrderStatus: (
-    orderId: string,
-    source: AdminOrderRecord['source'],
-    status: string
-  ) =>
+  updateAdminOrderStatus: (orderId: string, status: string) =>
     apiFetch<{ id: string; status: string }>(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ source, status }),
+      body: JSON.stringify({ status }),
     }),
+
+  fetchAdminPurchaseRequests: (page: number, pageSize: number) => {
+    const params = new URLSearchParams({
+      page: String(page),
+      pageSize: String(pageSize),
+    });
+    return apiFetch<AdminPageResult<AdminPurchaseRequestRecord>>(
+      `/api/admin/purchase-requests?${params}`,
+      { cache: 'no-store' }
+    );
+  },
+
+  decideAdminPurchaseRequest: (requestId: string, decision: 'approve' | 'reject') =>
+    apiFetch<{ result: { id: string; status: string } }>(
+      `/api/admin/purchase-requests/${encodeURIComponent(requestId)}`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ decision }),
+      }
+    ),
+
+  updateAdminPurchaseFulfillment: (
+    requestId: string,
+    action: 'confirm_payment' | 'confirm_delivery'
+  ) =>
+    apiFetch<{ result: {
+      id: string;
+      status: string;
+      paymentStatus: string;
+      deliveryStatus: string;
+    } }>(
+      `/api/admin/purchase-requests/${encodeURIComponent(requestId)}/fulfillment`,
+      {
+        method: 'PATCH',
+        body: JSON.stringify({ action }),
+      }
+    ),
 
   fetchAdminCollectorApprovals: (options: {
     page: number;

@@ -79,8 +79,8 @@ export interface AdminContentRecord {
 
 export interface AdminOrderRecord {
   id: string;
-  source: 'purchase_request' | 'order_intent';
-  artworkId: string;
+  source: 'order_intent';
+  artworkId: string | null;
   artworkTitle: string;
   artworkImage: string | null;
   artistId: string;
@@ -95,6 +95,32 @@ export interface AdminOrderRecord {
   currency: string;
   status: string;
   createdAt: string;
+}
+
+export interface AdminPurchaseRequestRecord {
+  id: string;
+  artworkId: string | null;
+  artworkTitle: string;
+  artworkImage: string | null;
+  artistId: string;
+  artistName: string;
+  collectorId: string | null;
+  buyerName: string;
+  buyerPhone: string;
+  buyerEmail: string;
+  deliveryLocation: string;
+  deliveryAddress: string;
+  instructions: string;
+  amount: number;
+  currency: string;
+  status: string;
+  createdAt: string;
+  adminDecidedAt: string | null;
+  paymentStatus: string | null;
+  paymentConfirmedAt: string | null;
+  deliveryStatus: string | null;
+  deliveryConfirmedAt: string | null;
+  orderStatus: string | null;
 }
 
 export interface AdminCollectorApprovalRecord {

@@ -3,25 +3,18 @@ import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowLeft, Eye, Upload, X } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
-import { ArtworkImage, STUDIO_PRESET_OPTIONS } from '../data/artworkImages';
-import type {
-  ArtworkCategory,
-  AvailabilityStatus,
-  SaleMode,
-} from '../types/artverse';
+import { ArtworkImage } from '../data/artworkImages';
+import { ARTWORK_CATEGORIES, type ArtworkCategory } from '../types/artverse';
 import {
-  formatAvailabilityLabel,
   formatCategoryLabel,
   formatMoney,
-  formatSaleModeLabel,
 } from '../utils/formatters';
 import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
 
 interface ValidationErrors {
   title?: string;
   description?: string;
-  medium?: string;
-  dimensions?: string;
+  category?: string;
   year?: string;
   price?: string;
   imageKey?: string;
@@ -46,18 +39,13 @@ export const AddArtworkPage: React.FC = () => {
 
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
-  const [category, setCategory] = useState<ArtworkCategory>('painting');
+  const [category, setCategory] = useState<ArtworkCategory | ''>('');
   const [medium, setMedium] = useState('');
   const [dimensions, setDimensions] = useState('');
   const [year, setYear] = useState<string>(String(new Date().getFullYear()));
-  const [price, setPrice] = useState<string>('4800');
+  const [price, setPrice] = useState<string>('');
   const [currency, setCurrency] = useState<string>('USD');
-  const [availability, setAvailability] =
-    useState<AvailabilityStatus>('available');
-  const [saleMode, setSaleMode] = useState<SaleMode>(
-    'buy_now_and_negotiation'
-  );
-  const [imageKey, setImageKey] = useState<string>('hero_gilded_horizon');
+  const [imageKey, setImageKey] = useState<string>('');
   const [provenance, setProvenance] = useState<string>(
     'Direct from the artist studio; signed Certificate of Authenticity included.'
   );
@@ -80,9 +68,12 @@ export const AddArtworkPage: React.FC = () => {
       setYear(String(existingArtwork.year));
       setPrice(String(existingArtwork.price));
       setCurrency(existingArtwork.currency);
-      setAvailability(existingArtwork.availability);
-      setSaleMode(existingArtwork.saleMode);
-      setImageKey(existingArtwork.imageKey);
+      setImageKey(
+        existingArtwork.imageKey.includes('/storage/v1/object/public/artwork-images/') ||
+          (!existingArtwork.imageKey.includes('://') && existingArtwork.imageKey.includes('/'))
+          ? existingArtwork.imageKey
+          : ''
+      );
       setProvenance(existingArtwork.provenance);
       setEditionInfo(existingArtwork.editionInfo);
     }
@@ -125,15 +116,12 @@ export const AddArtworkPage: React.FC = () => {
       next.description =
         'Provide a curatorial description of at least 20 characters.';
     }
-    if (!medium.trim()) {
-      next.medium = 'Specify the medium and support (e.g., Oil on linen).';
-    }
-    if (!dimensions.trim()) {
-      next.dimensions = 'Enter physical dimensions (e.g., 100 × 80 cm).';
+    if (!category) {
+      next.category = 'Select an artwork category.';
     }
     const parsedYear = Number(year);
     const maxYear = new Date().getFullYear() + 1;
-    if (!Number.isInteger(parsedYear) || parsedYear < 1850 || parsedYear > maxYear) {
+    if (year && (!Number.isInteger(parsedYear) || parsedYear < 1850 || parsedYear > maxYear)) {
       next.year = `Enter a valid creation year between 1850 and ${maxYear}.`;
     }
     const parsedPrice = Number(price);
@@ -156,7 +144,7 @@ export const AddArtworkPage: React.FC = () => {
 
   const handlePublish = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!validate()) return;
+    if (!validate() || !category) return;
 
     setSubmitError(null);
     setSaving(true);
@@ -168,11 +156,11 @@ export const AddArtworkPage: React.FC = () => {
         category,
         medium,
         dimensions,
-        year: Number(year),
+        year: year ? Number(year) : new Date().getFullYear(),
         price: Math.round(Number(price)),
         currency,
-        availability,
-        saleMode,
+        availability: existingArtwork?.availability || 'available',
+        saleMode: 'buy_now',
         imageKey,
         provenance,
         editionInfo,
@@ -258,35 +246,17 @@ export const AddArtworkPage: React.FC = () => {
                   Upload Image File
                   <input
                     type="file"
-                    accept="image/*"
+                    accept="image/jpeg,image/png,image/webp"
                     onChange={handleFileUpload}
                     className="sr-only"
                   />
                 </label>
-                <span className="text-xs text-[#7A7267]">
-                  or select a studio archival plate preset:
-                </span>
               </div>
-
-              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 pt-1">
-                {STUDIO_PRESET_OPTIONS.map((preset) => {
-                  const active = imageKey === preset.key;
-                  return (
-                    <button
-                      key={preset.key}
-                      type="button"
-                      onClick={() => setImageKey(preset.key)}
-                      className={`relative px-3 py-2 text-left text-xs rounded-xl border transition-colors truncate ${
-                        active
-                          ? 'bg-[#F5EFE2] border-[#B38B40] text-[#141312] font-medium'
-                          : 'bg-[#FAF8F3] border-[#E6DFD3] text-[#5C554C] hover:border-[#CBBFA8]'
-                      }`}
-                    >
-                      {preset.label}
-                    </button>
-                  );
-                })}
-              </div>
+              {imageKey && (
+                <p className="text-xs text-[#6B655E]">
+                  Artwork photograph selected.
+                </p>
+              )}
               {errors.imageKey && (
                 <p role="alert" className="text-xs text-[#992E24]">
                   {errors.imageKey}
@@ -305,6 +275,7 @@ export const AddArtworkPage: React.FC = () => {
               <input
                 id="artwork-title"
                 type="text"
+                required
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="e.g., Study in Raw Umber VII"
@@ -328,6 +299,7 @@ export const AddArtworkPage: React.FC = () => {
               <textarea
                 id="artwork-description"
                 rows={4}
+                required
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
                 placeholder="Describe materials, surface texture, framing, and conceptual context..."
@@ -352,17 +324,22 @@ export const AddArtworkPage: React.FC = () => {
                 <select
                   id="artwork-category"
                   value={category}
-                  onChange={(e) => setCategory(e.target.value as ArtworkCategory)}
+                  required
+                  onChange={(e) => setCategory(e.target.value as ArtworkCategory | '')}
                   className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
                 >
-                  <option value="painting">Painting</option>
-                  <option value="photography">Photography</option>
-                  <option value="sculpture">Sculpture</option>
-                  <option value="drawing">Drawing</option>
-                  <option value="digital_art">Digital Art</option>
-                  <option value="mixed_media">Mixed Media</option>
-                  <option value="ceramics">Ceramics</option>
+                  <option value="">Select a category</option>
+                  {ARTWORK_CATEGORIES.map((item) => (
+                    <option key={item} value={item}>
+                      {formatCategoryLabel(item)}
+                    </option>
+                  ))}
                 </select>
+                {errors.category && (
+                  <p role="alert" className="text-xs text-[#992E24]">
+                    {errors.category}
+                  </p>
+                )}
               </div>
 
               <div className="space-y-1.5">
@@ -370,7 +347,7 @@ export const AddArtworkPage: React.FC = () => {
                   htmlFor="artwork-medium"
                   className="block text-xs font-medium text-[#3B352F]"
                 >
-                  Medium & Support *
+                  Medium & Support
                 </label>
                 <input
                   id="artwork-medium"
@@ -380,11 +357,6 @@ export const AddArtworkPage: React.FC = () => {
                   placeholder="e.g., Oil and cold wax on linen"
                   className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
                 />
-                {errors.medium && (
-                  <p role="alert" className="text-xs text-[#992E24]">
-                    {errors.medium}
-                  </p>
-                )}
               </div>
             </div>
 
@@ -395,7 +367,7 @@ export const AddArtworkPage: React.FC = () => {
                   htmlFor="artwork-dimensions"
                   className="block text-xs font-medium text-[#3B352F]"
                 >
-                  Dimensions *
+                  Dimensions
                 </label>
                 <input
                   id="artwork-dimensions"
@@ -405,11 +377,6 @@ export const AddArtworkPage: React.FC = () => {
                   placeholder="e.g., 120 × 95 cm"
                   className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
                 />
-                {errors.dimensions && (
-                  <p role="alert" className="text-xs text-[#992E24]">
-                    {errors.dimensions}
-                  </p>
-                )}
               </div>
 
               <div className="space-y-1.5">
@@ -417,7 +384,7 @@ export const AddArtworkPage: React.FC = () => {
                   htmlFor="artwork-year"
                   className="block text-xs font-medium text-[#3B352F]"
                 >
-                  Creation Year *
+                  Creation Year
                 </label>
                 <input
                   id="artwork-year"
@@ -434,8 +401,8 @@ export const AddArtworkPage: React.FC = () => {
               </div>
             </div>
 
-            {/* Price, Currency & Availability */}
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+            {/* Price and currency */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div className="space-y-1.5">
                 <label
                   htmlFor="artwork-price"
@@ -447,6 +414,7 @@ export const AddArtworkPage: React.FC = () => {
                   id="artwork-price"
                   type="number"
                   min={50}
+                  required
                   value={price}
                   onChange={(e) => setPrice(e.target.value)}
                   className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl font-mono text-sm text-[#141312] tabular-nums focus:outline-none focus:border-[#B38B40] transition-colors"
@@ -478,71 +446,11 @@ export const AddArtworkPage: React.FC = () => {
                 </select>
               </div>
 
-              <div className="space-y-1.5">
-                <label
-                  htmlFor="artwork-availability"
-                  className="block text-xs font-medium text-[#3B352F]"
-                >
-                  Availability
-                </label>
-                <select
-                  id="artwork-availability"
-                  value={availability}
-                  onChange={(e) =>
-                    setAvailability(e.target.value as AvailabilityStatus)
-                  }
-                  className="w-full px-4 py-2.5 bg-[#FAF8F3] border border-[#D8D0C1] rounded-xl text-sm text-[#141312] focus:outline-none focus:border-[#B38B40] transition-colors"
-                >
-                  <option value="available">Available</option>
-                  <option value="reserved">Reserved</option>
-                  <option value="sold">Sold / Acquired</option>
-                </select>
-              </div>
             </div>
 
-            {/* Sale Mode Selection */}
-            <div className="space-y-2">
-              <span className="block text-xs font-medium text-[#3B352F]">
-                Collector Acquisition Mode *
-              </span>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                {[
-                  {
-                    value: 'buy_now' as const,
-                    title: 'Buy Now',
-                    desc: 'Fixed gallery price only',
-                  },
-                  {
-                    value: 'negotiation_only' as const,
-                    title: 'Negotiation Only',
-                    desc: 'Private collector offers',
-                  },
-                  {
-                    value: 'buy_now_and_negotiation' as const,
-                    title: 'Buy Now + Offer',
-                    desc: 'Direct purchase or offer',
-                  },
-                ].map((opt) => {
-                  const active = saleMode === opt.value;
-                  return (
-                    <button
-                      key={opt.value}
-                      type="button"
-                      onClick={() => setSaleMode(opt.value)}
-                      className={`relative p-3.5 rounded-xl border text-left transition-colors ${
-                        active
-                          ? 'bg-[#F5EFE2] border-[#B38B40] text-[#141312]'
-                          : 'bg-[#FAF8F3] border-[#E6DFD3] text-[#5C554C] hover:border-[#CBBFA8]'
-                      }`}
-                    >
-                      <p className="text-xs font-semibold text-[#141312]">
-                        {opt.title}
-                      </p>
-                      <p className="text-[11px] text-[#6B655E] mt-0.5">{opt.desc}</p>
-                    </button>
-                  );
-                })}
-              </div>
+            <div className="rounded-xl border border-[#E6DFD3] bg-[#FAF8F3] px-4 py-3 text-xs leading-relaxed text-[#6B655E]">
+              New listings are automatically available at the stated price.
+              Collectors submit purchase requests to Artivora administrators for coordination.
             </div>
 
             {submitError && (
@@ -604,7 +512,7 @@ export const AddArtworkPage: React.FC = () => {
               </div>
               <div className="p-6 space-y-3">
                 <div className="flex items-center gap-1.5 text-xs text-[#7A7267] tabular-nums">
-                  <span>{formatCategoryLabel(category)}</span>
+                  <span>{category ? formatCategoryLabel(category) : 'Category'}</span>
                   <span aria-hidden="true">·</span>
                   <span>{year || '2026'}</span>
                 </div>
@@ -620,8 +528,7 @@ export const AddArtworkPage: React.FC = () => {
                     {formatMoney(Number(price) || 0, currency)} {currency}
                   </span>
                   <span className="text-xs text-[#6B655E]">
-                    {formatAvailabilityLabel(availability)} ·{' '}
-                    {formatSaleModeLabel(saleMode)}
+                    Available · Administrator-mediated purchase request
                   </span>
                 </div>
               </div>
@@ -670,7 +577,7 @@ export const AddArtworkPage: React.FC = () => {
                 <div className="space-y-4">
                   <div>
                     <p className="text-xs text-[#7A7267] tabular-nums">
-                      {formatCategoryLabel(category)} · {year}
+                      {category ? formatCategoryLabel(category) : 'Category'} · {year}
                     </p>
                     <h3 className="font-serif text-2xl font-semibold text-[#141312] mt-1">
                       {title}
@@ -687,8 +594,7 @@ export const AddArtworkPage: React.FC = () => {
                       {formatMoney(Number(price) || 0, currency)} {currency}
                     </p>
                     <p className="text-xs text-[#6B655E]">
-                      {formatAvailabilityLabel(availability)} ·{' '}
-                      {formatSaleModeLabel(saleMode)}
+                      Available · Administrator-mediated purchase request
                     </p>
                   </div>
                 </div>

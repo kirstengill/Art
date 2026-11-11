@@ -16,6 +16,7 @@ import {
   getAdminContent,
   getAdminOrders,
   getAdminOverview,
+  getAdminPurchaseRequests,
   getAdminUsers,
   updateAdminCollectorApproval,
   updateAdminOrderStatus,
@@ -47,11 +48,15 @@ import {
   getExhibitionSubmissions,
   getConversationsForParticipant,
   getOrCreateArtworkConversation,
+  getNotificationsForUser,
   getPublicCatalog,
   getPurchasesForCollector,
+  getPurchaseRequestsForCollector,
   getPurchasedArtworkIds,
+  markNotificationRead,
   removeArtworkFromExhibition,
   removeArtworkListing,
+  removeAdminArtworkListing,
   syncUserProfile,
   toggleFollowInDb,
   togglePostLikeInDb,
@@ -64,7 +69,10 @@ import {
   fromDatabase,
 } from './src/db/repository.ts';
 import type { ExhibitionStatus } from './src/types/artverse';
-import { PurchaseRequestValidationError } from './src/utils/purchaseRequests.ts';
+import {
+  PurchaseRequestValidationError,
+  PurchaseWorkflowError,
+} from './src/utils/purchaseRequests.ts';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
@@ -122,6 +130,7 @@ function createApp() {
   });
 
   app.get('/api/catalog', requireAuth, async (req: AuthRequest, res) => {
+    res.setHeader('Cache-Control', 'no-store');
     try {
       const { data: profile } = await getSupabaseServiceClient()
         .from('profiles')
@@ -228,8 +237,29 @@ function createApp() {
     }
   });
 
+  app.delete('/api/admin/artworks/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      res.json(await removeAdminArtworkListing(getSupabaseServiceClient(), req.params.id));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to delete artwork.';
+      if (/approved purchase/i.test(message)) {
+        res.status(409).json({ error: message });
+        return;
+      }
+      if (/not found/i.test(message)) {
+        res.status(404).json({ error: message });
+        return;
+      }
+      console.error('Administrator artwork deletion failed.');
+      res.status(500).json({ error: 'Unable to delete artwork.' });
+    }
+  });
+
   app.get('/api/admin/orders', requireAuth, requireAdmin, async (req, res) => {
     try {
+      res.setHeader('Cache-Control', 'no-store');
       res.json(
         await getAdminOrders({
           page: req.query.page,
@@ -244,20 +274,11 @@ function createApp() {
 
   app.patch('/api/admin/orders/:id', requireAuth, requireAdmin, async (req, res) => {
     try {
-      if (
-        typeof req.body?.status !== 'string' ||
-        (req.body.source !== 'purchase_request' && req.body.source !== 'order_intent')
-      ) {
-        res.status(400).json({ error: 'A valid purchase request source and status are required.' });
+      if (typeof req.body?.status !== 'string') {
+        res.status(400).json({ error: 'A valid order status is required.' });
         return;
       }
-      res.json(
-        await updateAdminOrderStatus(
-          req.params.id,
-          req.body.source,
-          req.body.status
-        )
-      );
+      res.json(await updateAdminOrderStatus(req.params.id, req.body.status));
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Unable to update purchase request.';
       const status = /not found/i.test(message) ? 404 : /cannot move|invalid purchase request status/i.test(message) ? 400 : 500;
@@ -267,6 +288,93 @@ function createApp() {
       });
     }
   });
+
+  app.get('/api/admin/purchase-requests', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      res.json(await getAdminPurchaseRequests({
+        page: req.query.page,
+        pageSize: req.query.pageSize,
+      }));
+    } catch {
+      console.error('Admin purchase request query failed.');
+      res.status(500).json({ error: 'Unable to load purchase requests.' });
+    }
+  });
+
+  app.patch(
+    '/api/admin/purchase-requests/:id',
+    requireAuth,
+    requireAdmin,
+    async (req: AuthRequest, res) => {
+      if (!req.supabase) {
+        res.status(503).json({ error: 'Supabase database access is not configured.' });
+        return;
+      }
+      const decision = req.body?.decision;
+      if (decision !== 'approve' && decision !== 'reject') {
+        res.status(400).json({ error: 'Decision must be approve or reject.' });
+        return;
+      }
+      try {
+        const { data, error } = await req.supabase.rpc('decide_purchase_request', {
+          p_request_id: req.params.id,
+          p_decision: decision,
+        });
+        if (error) {
+          const status =
+            error.code === '42501' ? 403 :
+              error.code === 'P0002' ? 404 :
+                error.code === 'P0001' ? 409 :
+                  error.code === '22023' ? 400 : 500;
+          if (status === 500) console.error('Purchase request decision failed.');
+          res.status(status).json({ error: error.message });
+          return;
+        }
+        res.json({ result: fromDatabase(data) });
+      } catch {
+        console.error('Purchase request decision could not be completed.');
+        res.status(500).json({ error: 'Unable to update purchase request.' });
+      }
+    }
+  );
+
+  app.patch(
+    '/api/admin/purchase-requests/:id/fulfillment',
+    requireAuth,
+    requireAdmin,
+    async (req: AuthRequest, res) => {
+      if (!req.supabase) {
+        res.status(503).json({ error: 'Supabase database access is not configured.' });
+        return;
+      }
+      const action = req.body?.action;
+      if (action !== 'confirm_payment' && action !== 'confirm_delivery') {
+        res.status(400).json({ error: 'A valid fulfillment action is required.' });
+        return;
+      }
+      try {
+        const { data, error } = await req.supabase.rpc('update_purchase_fulfillment', {
+          p_request_id: req.params.id,
+          p_action: action,
+        });
+        if (error) {
+          const status =
+            error.code === '42501' ? 403 :
+              error.code === 'P0002' ? 404 :
+                error.code === 'P0001' ? 409 :
+                  error.code === '22023' ? 400 : 500;
+          if (status === 500) console.error('Purchase fulfillment update failed.');
+          res.status(status).json({ error: error.message });
+          return;
+        }
+        res.json({ result: fromDatabase(data) });
+      } catch {
+        console.error('Purchase fulfillment update could not be completed.');
+        res.status(500).json({ error: 'Unable to update payment or delivery status.' });
+      }
+    }
+  );
 
   app.post('/api/artworks', requireAuth, async (req: AuthRequest, res) => {
     try {
@@ -303,7 +411,7 @@ function createApp() {
       res.json(result);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to remove artwork.';
-      const status = message.startsWith('Forbidden:') ? 403 : 400;
+      const status = message.startsWith('Forbidden:') ? 403 : /approved purchase/i.test(message) ? 409 : 400;
       res.status(status).json({ error: message });
     }
   });
@@ -462,20 +570,73 @@ function createApp() {
     }
   });
 
-  app.post('/api/purchase-requests', async (req, res) => {
+  app.post('/api/purchase-requests', requireAuth, async (req: AuthRequest, res) => {
     res.setHeader('Cache-Control', 'no-store');
     try {
-      const order = await createPurchaseRequestInDb(req.body);
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const order = await createPurchaseRequestInDb(req.supabase, req.body);
       res.status(201).json({ order });
     } catch (error: unknown) {
       if (error instanceof PurchaseRequestValidationError) {
         res.status(400).json({ error: error.message });
         return;
       }
-      console.error('Public purchase request could not be saved.');
-      res.status(503).json({
-        error: 'Unable to submit your request right now. Please try again later.',
-      });
+      if (error instanceof PurchaseWorkflowError) {
+        res.status(error.statusCode).json({ error: error.message });
+        return;
+      }
+      console.error('Purchase request could not be saved.');
+      res.status(500).json({ error: 'Unable to submit your request right now. Please try again later.' });
+    }
+  });
+
+  app.get('/api/purchase-requests', requireAuth, async (req: AuthRequest, res) => {
+    if (!req.supabase) {
+      res.status(503).json({ error: 'Supabase database access is not configured.' });
+      return;
+    }
+    try {
+      res.setHeader('Cache-Control', 'no-store');
+      const { data: profile, error } = await req.supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', req.user!.uid)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      if (profile?.role !== 'collector') {
+        res.status(403).json({ error: 'Collector access is required.' });
+        return;
+      }
+      res.json({ requests: await getPurchaseRequestsForCollector(req.user!.uid) });
+    } catch (error: unknown) {
+      console.error('Collector purchase request query failed.');
+      res.status(500).json({ error: 'Unable to load your purchase requests.' });
+    }
+  });
+
+  app.get('/api/notifications', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      res.setHeader('Cache-Control', 'no-store');
+      res.json({ notifications: await getNotificationsForUser(req.supabase, req.user!.uid) });
+    } catch {
+      console.error('User notification query failed.');
+      res.status(500).json({ error: 'Unable to load notifications.' });
+    }
+  });
+
+  app.patch('/api/notifications/:id/read', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const notification = await markNotificationRead(
+        req.supabase,
+        req.user!.uid,
+        req.params.id
+      );
+      res.json({ notification });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to update notification.';
+      res.status(/not found/i.test(message) ? 404 : 500).json({ error: message });
     }
   });
 
@@ -490,6 +651,7 @@ function createApp() {
   app.get('/api/purchases', requireAuth, async (req: AuthRequest, res) => {
     try {
       if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      res.setHeader('Cache-Control', 'no-store');
       const data = await getPurchasesForCollector(req.supabase, req.user!.uid);
       res.json(data);
     } catch (error: unknown) {

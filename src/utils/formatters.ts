@@ -27,6 +27,7 @@ export function formatCategoryLabel(category: ArtworkCategory): string {
     digital_art: 'Digital Art',
     mixed_media: 'Mixed Media',
     ceramics: 'Ceramics',
+    other: 'Other',
   };
   return map[category] || category;
 }
