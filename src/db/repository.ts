@@ -16,7 +16,7 @@ import {
   type PurchaseRequestInput,
 } from '../utils/purchaseRequests.ts';
 import { ARTWORK_CATEGORIES } from '../types/artverse';
-import type { Donation, DonationInput, Exhibition, ExhibitionInput, ExhibitionStatus, ExhibitionSubmission, ExhibitionSubmissionInput, ExhibitionSubmissionStatus, PurchaseRequestReceipt } from '../types/artverse';
+import type { Artwork, Donation, DonationInput, Exhibition, ExhibitionInput, ExhibitionStatus, ExhibitionSubmission, ExhibitionSubmissionInput, ExhibitionSubmissionStatus, Purchase, PurchaseRequestReceipt } from '../types/artverse';
 
 type DbRow = Record<string, unknown>;
 
@@ -856,16 +856,19 @@ export async function getPurchaseRequestsForCollector(collectorId: string) {
   return requests.map((request) => fromDatabase(request));
 }
 
-export async function getPurchasesForCollector(db: SupabaseDataClient, collectorId: string) {
-  const purchases = await many<DbRow>(
+export async function getPurchasesForCollector(
+  db: SupabaseDataClient,
+  collectorId: string
+): Promise<{ purchases: Purchase[]; artworks: Artwork[] }> {
+  const purchases = await many<Purchase>(
     db.from('purchases').select('*').eq('collector_id', collectorId).order('purchased_at', { ascending: false })
   );
   if (!purchases.length) return { purchases: [], artworks: [] };
-  const artworks = await many(
-    getSupabaseServiceClient()
+  const artworks = await many<Artwork>(
+    db
       .from('artworks')
       .select('*')
-      .in('id', purchases.map((purchase) => String(purchase.artwork_id)))
+      .in('id', purchases.map((purchase) => purchase.artworkId))
   );
   return {
     purchases: purchases.map((purchase) => fromDatabase(purchase)),

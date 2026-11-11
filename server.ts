@@ -652,7 +652,7 @@ function createApp() {
     try {
       if (!req.supabase) throw new Error('Supabase database access is not configured.');
       res.setHeader('Cache-Control', 'no-store');
-      const data = await getPurchasesForCollector(req.supabase, req.user!.uid);
+      const data = await getPurchasesForCollector(getSupabaseServiceClient(), req.user!.uid);
       res.json(data);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load purchases.';

@@ -3,6 +3,7 @@ import test from 'node:test';
 import {
   createPurchaseRequestInDb,
   filterVisibleCatalogRows,
+  getPurchasesForCollector,
   removeAdminArtworkListing,
   upsertArtworkListing,
 } from './repository.ts';
@@ -266,6 +267,66 @@ test('purchase request submission propagates collector authorization failures', 
     (error: unknown) =>
       error instanceof PurchaseWorkflowError && error.statusCode === 403
   );
+});
+
+test('collector purchases are loaded with an explicit collector filter and linked artworks', async () => {
+  const operations: string[] = [];
+  const db = {
+    from: (table: string) => {
+      if (table === 'purchases') {
+        const query = {
+          eq: (column: string, value: string) => {
+            operations.push(`filter purchases ${column}=${value}`);
+            return query;
+          },
+          order: async (column: string, options: { ascending: boolean }) => {
+            operations.push(`order purchases ${column} ascending=${options.ascending}`);
+            return {
+              data: [{
+                id: 'purchase-1',
+                artwork_id: 'artwork-1',
+                collector_id: 'collector-1',
+                purchase_price: 450,
+                currency: 'USD',
+                payment_status: 'pending',
+                delivery_status: 'pending',
+              }],
+              error: null,
+            };
+          },
+        };
+        return { select: () => query };
+      }
+
+      assert.equal(table, 'artworks');
+      const query = {
+        in: async (column: string, values: string[]) => {
+          operations.push(`load artworks ${column}=${values.join(',')}`);
+          return {
+            data: [{
+              id: 'artwork-1',
+              artist_id: 'artist-1',
+              title: 'Clay Vessel',
+              image_key: 'artist-1/artwork.jpg',
+            }],
+            error: null,
+          };
+        },
+      };
+      return { select: () => query };
+    },
+  } as unknown as SupabaseDataClient;
+
+  const result = await getPurchasesForCollector(db, 'collector-1');
+
+  assert.equal(result.purchases[0]?.collectorId, 'collector-1');
+  assert.equal(result.purchases[0]?.artworkId, 'artwork-1');
+  assert.equal(result.artworks[0]?.id, 'artwork-1');
+  assert.deepEqual(operations, [
+    'filter purchases collector_id=collector-1',
+    'order purchases purchased_at ascending=false',
+    'load artworks id=artwork-1',
+  ]);
 });
 
 test('editing a sold artwork keeps it unavailable while fixing its sale mode', async () => {
