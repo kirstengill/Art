@@ -6,6 +6,7 @@ import artNocturneStudy from '../assets/images/art_nocturne_study_1792993239582.
 import artTerracottaStudy from '../assets/images/art_terracotta_study_1792993240609.jpg';
 import artLapisRefraction from '../assets/images/art_lapis_refraction_1792993241626.jpg';
 import atelierEditorialCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
+import { ARTWORK_IMAGE_BUCKET } from '../lib/supabase';
 
 export const STUDIO_IMAGE_MAP: Record<string, string> = {
   hero_gilded_horizon: heroGildedHorizon,
@@ -37,6 +38,11 @@ export function resolveArtworkImageUrl(imageKey?: string | null): string | null 
     imageKey.startsWith('/')
   ) {
     return imageKey;
+  }
+  // Storage path (e.g. "user-id/uuid.jpg"): resolve to public Supabase URL
+  const supabaseUrl = import.meta.env.VITE_SUPABASE_URL;
+  if (supabaseUrl) {
+    return `${supabaseUrl}/storage/v1/object/public/${ARTWORK_IMAGE_BUCKET}/${imageKey}`;
   }
   return null;
 }

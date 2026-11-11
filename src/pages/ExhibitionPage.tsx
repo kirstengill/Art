@@ -3,12 +3,15 @@ import { Link, useNavigate } from 'react-router-dom';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { formatShortDate } from '../utils/formatters';
 import { Plus, Calendar, Pin, Image } from 'lucide-react';
+import type { Artwork } from '../types/artverse';
 import type { Exhibition } from '../types/artverse';
+import { resolveArtworkImageUrl } from '../data/artworkImages';
 
 export function ExhibitionPage() {
   const {
     exhibitions,
     fetchExhibitions,
+    fetchExhibitionArtworks,
     createExhibition,
     updateExhibition,
     deleteExhibition,
@@ -30,12 +33,27 @@ export function ExhibitionPage() {
     featured: false,
   });
   const [submitting, setSubmitting] = useState(false);
+  const [exhibitionArtworks, setExhibitionArtworks] = useState<Record<string, Artwork[]>>({});
 
   const canCurate = Boolean(currentUser && (currentUser.role === 'admin' || currentUser.role === 'artist'));
 
   useEffect(() => {
     void fetchExhibitions(statusFilter === 'all' ? undefined : statusFilter);
   }, [fetchExhibitions, statusFilter]);
+
+  useEffect(() => {
+    const loadArtworks = async () => {
+      for (const exhibition of exhibitions) {
+        try {
+          const artworks = await fetchExhibitionArtworks(exhibition.id);
+          setExhibitionArtworks((prev) => ({ ...prev, [exhibition.id]: artworks }));
+        } catch {
+          // Silent - artwork loading failure shouldn't block exhibition listing
+        }
+      }
+    };
+    void loadArtworks();
+  }, [exhibitions, fetchExhibitionArtworks]);
 
   const filtered = exhibitions.filter((e) => {
     if (statusFilter === 'all') return true;
@@ -140,21 +158,35 @@ export function ExhibitionPage() {
             No exhibitions match these filters.
           </div>
         ) : (
-          filtered.map((exhibition: Exhibition) => (
-            <div key={exhibition.id} className="rounded-xl border border-[#E2D6BD] bg-white p-5 flex flex-col">
-              <div className="relative h-32 rounded-lg overflow-hidden border border-[#D4C5B0] bg-[#F5EFE2] mb-4">
-                {exhibition.coverImageKey ? (
-                  <img
-                    src={exhibition.coverImageKey}
-                    alt={exhibition.title}
-                    className="h-full w-full object-cover"
-                  />
-                ) : (
-                  <div className="h-full w-full flex items-center justify-center text-[#C8C1B6] text-xs">
-                    <Image className="h-6 w-6 mx-auto mb-1.5" /> No cover image
-                  </div>
-                )}
-                <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium border"
+          filtered.map((exhibition: Exhibition) => {
+            const artworks = exhibitionArtworks[exhibition.id] || [];
+            return (
+              <div key={exhibition.id} className="rounded-xl border border-[#E2D6BD] bg-white p-5 flex flex-col">
+                <div className="relative h-32 rounded-lg overflow-hidden border border-[#D4C5B0] bg-[#F5EFE2] mb-4">
+                  {exhibition.coverImageKey ? (
+                    <img
+                      src={resolveArtworkImageUrl(exhibition.coverImageKey) || undefined}
+                      alt={exhibition.title}
+                      className="h-full w-full object-cover"
+                    />
+                  ) : (
+                    <div className="h-full w-full flex items-center justify-center text-[#C8C1B6] text-xs">
+                      <Image className="h-6 w-6 mx-auto mb-1.5" /> No cover image
+                    </div>
+                  )}
+                  {artworks.length > 0 && (
+                    <div className="absolute top-2 right-2 flex flex-col gap-1">
+                      {artworks.slice(0, 3).map((art) => (
+                        <img
+                          key={art.id}
+                          src={resolveArtworkImageUrl(art.imageKey) || undefined}
+                          alt={art.title}
+                          className="h-8 w-8 rounded-md object-cover border border-white bg-white shadow-sm"
+                        />
+                      ))}
+                    </div>
+                  )}
+                  <span className="absolute top-2 left-2 px-2 py-0.5 rounded text-[10px] font-medium border"
                   style={{
                     borderColor: exhibition.status === 'active' ? '#2E7D32' : '#B38B40',
                     color: exhibition.status === 'active' ? '#2E7D32' : '#5A4010',
@@ -192,7 +224,8 @@ export function ExhibitionPage() {
                 )}
               </div>
             </div>
-          ))
+          )
+        })
         )}
       </div>
 

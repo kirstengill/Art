@@ -68,6 +68,8 @@ export const Navbar: React.FC = () => {
           className="hidden lg:flex items-center gap-1 text-sm font-medium"
         >
           {PUBLIC_LINKS.map((item) => {
+            const collectorOnly = item.to === '/gallery' || item.to === '/artists';
+            if (collectorOnly && (!currentUser || currentUser.role !== 'collector')) return null;
             const active = isActive(item.to);
             return (
               <Link
@@ -134,23 +136,25 @@ export const Navbar: React.FC = () => {
                       : 'Dashboard'}
                 </span>
               </Link>
-              <Link
-                to="/donations"
-                className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
-                  isActive('/donations')
-                    ? 'text-[#FAF8F3]'
-                    : 'text-[#C8C1B6] hover:text-[#FAF8F3] hover:bg-white/5'
-                }`}
-              >
-                {isActive('/donations') && (
-                  <motion.span
-                    layoutId={shouldReduceMotion ? undefined : 'nav-active'}
-                    className="absolute inset-0 rounded-lg bg-white/10"
-                    transition={{ type: 'spring', stiffness: 380, damping: 30 }}
-                  />
-                )}
-                <span className="relative z-10">Donate</span>
-              </Link>
+              {currentUser.role !== 'artist' && (
+                <Link
+                  to="/donations"
+                  className={`relative px-4 py-2 rounded-lg whitespace-nowrap shrink-0 transition-all duration-200 ${
+                    isActive('/donations')
+                      ? 'text-[#FAF8F3]'
+                      : 'text-[#C8C1B6] hover:text-[#FAF8F3] hover:bg-white/5'
+                  }`}
+                >
+                  {isActive('/donations') && (
+                    <motion.span
+                      layoutId={shouldReduceMotion ? undefined : 'nav-active'}
+                      className="absolute inset-0 rounded-lg bg-white/10"
+                      transition={{ type: 'spring', stiffness: 380, damping: 30 }}
+                    />
+                  )}
+                  <span className="relative z-10">Donate</span>
+                </Link>
+              )}
             </>
           )}
         </nav>
@@ -244,20 +248,24 @@ export const Navbar: React.FC = () => {
             }}
           >
             <nav className="px-4 py-4 space-y-2">
-              {PUBLIC_LINKS.map((item) => (
-                <Link
-                  key={item.to}
-                  to={item.to}
-                  onClick={() => setMobileOpen(false)}
-                  className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                    isActive(item.to)
-                      ? 'bg-white/10 text-[#FAF8F3]'
-                      : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
-                  }`}
-                >
-                  {item.label}
-                </Link>
-              ))}
+              {PUBLIC_LINKS.map((item) => {
+                const collectorOnly = item.to === '/gallery' || item.to === '/artists';
+                if (collectorOnly && (!currentUser || currentUser.role !== 'collector')) return null;
+                return (
+                  <Link
+                    key={item.to}
+                    to={item.to}
+                    onClick={() => setMobileOpen(false)}
+                    className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                      isActive(item.to)
+                        ? 'bg-white/10 text-[#FAF8F3]'
+                        : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
+                    }`}
+                  >
+                    {item.label}
+                  </Link>
+                );
+              })}
               {currentUser ? (
                 <>
                   {currentUser.role === 'collector' && (
@@ -282,23 +290,25 @@ export const Navbar: React.FC = () => {
                         : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
                     }`}
                   >
-                      {currentUser.role === 'artist'
-                        ? 'My Studio'
-                        : currentUser.role === 'admin'
-                          ? 'Admin Dashboard'
-                          : 'Dashboard'}
+                  {currentUser.role === 'artist'
+                    ? 'My Studio'
+                    : currentUser.role === 'admin'
+                      ? 'Admin Dashboard'
+                      : 'Dashboard'}
                   </Link>
-                  <Link
-                    to="/donations"
-                    onClick={() => setMobileOpen(false)}
-                    className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
-                      isActive('/donations')
-                        ? 'bg-white/10 text-[#FAF8F3]'
-                        : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
-                    }`}
-                  >
-                    Donate
-                  </Link>
+                  {currentUser.role !== 'artist' && (
+                    <Link
+                      to="/donations"
+                      onClick={() => setMobileOpen(false)}
+                      className={`block px-4 py-2.5 rounded-lg text-sm font-medium transition-colors ${
+                        isActive('/donations')
+                          ? 'bg-white/10 text-[#FAF8F3]'
+                          : 'text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3]'
+                      }`}
+                    >
+                      Donate
+                    </Link>
+                  )}
                   <button
                     onClick={handleLogout}
                     className="w-full text-left px-4 py-2.5 rounded-lg text-sm font-medium text-[#C8C1B6] hover:bg-white/5 hover:text-[#FAF8F3] transition-colors"

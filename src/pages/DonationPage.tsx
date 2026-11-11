@@ -56,6 +56,19 @@ export function DonationPage() {
     );
   }
 
+  if (String(currentUser.role) === 'artist') {
+    return (
+      <div className="max-w-[760px] mx-auto px-6 py-12 text-center">
+        <Gift className="h-8 w-8 text-[#B38B40] mb-3" />
+        <h2 className="font-serif text-xl font-bold mb-2">Donations are for collectors and art lovers</h2>
+        <p className="text-[#5C554C]">
+          Artist accounts cannot make donations. If you would like to support other artists, please
+          register or switch to a collector or art lover account.
+        </p>
+      </div>
+    );
+  }
+
   const isArtist = currentUser.role === 'artist';
   const ownDonations = donations.filter((d) => d.donorId === currentUser.id);
   const receivedDonations = donations.filter((d) => d.artistId === currentUser.id);

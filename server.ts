@@ -105,9 +105,18 @@ function createApp() {
     }
   });
 
-  app.get('/api/catalog', optionalAuth, async (req: AuthRequest, res) => {
+  app.get('/api/catalog', requireAuth, async (req: AuthRequest, res) => {
     try {
       if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const profile = await req.supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', req.user!.uid)
+        .maybeSingle();
+      if (!profile || String((profile as { role?: string }).role) !== 'collector') {
+        res.status(403).json({ error: 'Collector account required to view artworks.' });
+        return;
+      }
       const catalog = await getPublicCatalog(req.supabase, req.user?.uid);
       res.json(catalog);
     } catch (error: unknown) {
@@ -116,9 +125,18 @@ function createApp() {
     }
   });
 
-  app.get('/api/artists', optionalAuth, async (req: AuthRequest, res) => {
+  app.get('/api/artists', requireAuth, async (req: AuthRequest, res) => {
     try {
       if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const profile = await req.supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', req.user!.uid)
+        .maybeSingle();
+      if (!profile || String((profile as { role?: string }).role) !== 'collector') {
+        res.status(403).json({ error: 'Collector account required to view artists.' });
+        return;
+      }
       const artists = await getArtists(req.supabase);
       res.json({ artists });
     } catch (error: unknown) {
@@ -496,6 +514,15 @@ function createApp() {
   app.post('/api/donations', requireAuth, async (req: AuthRequest, res) => {
     try {
       if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const { data: profile } = await req.supabase
+        .from('profiles')
+        .select('role')
+        .eq('id', req.user!.uid)
+        .maybeSingle();
+      if (profile && String((profile as { role?: string }).role) === 'artist') {
+        res.status(403).json({ error: 'Artist accounts cannot make donations.' });
+        return;
+      }
       const donation = await createDonationInDb(req.supabase, req.user!.uid, req.body);
       res.status(201).json({ donation });
     } catch (error: unknown) {

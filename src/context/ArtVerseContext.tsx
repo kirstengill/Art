@@ -127,6 +127,7 @@ interface ArtVerseContextValue {
   createExhibitionSubmission: (payload: ExhibitionSubmissionInput) => Promise<ExhibitionSubmission>;
   fetchExhibitionSubmissions: (exhibitionId: string) => Promise<ExhibitionSubmission[]>;
   updateExhibitionSubmission: (submissionId: string, status: string, notes?: string) => Promise<ExhibitionSubmission>;
+  fetchExhibitionArtworks: (exhibitionId: string) => Promise<Artwork[]>;
   getProfileById: (id: string) => Profile | undefined;
   getArtworkById: (id: string) => Artwork | undefined;
   getIsPurchased: (artworkId: string) => boolean;
@@ -268,6 +269,18 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const loadCatalog = useCallback(async () => {
+    if (authMode !== 'authenticated' || !currentUser || currentUser.role !== 'collector') {
+      setProfiles([]);
+      setArtworks([]);
+      setPosts([]);
+      setComments([]);
+      setSavedArtworkIds([]);
+      setFollowedArtistIds([]);
+      setLikedPostIds([]);
+      setIsLoadingCatalog(false);
+      setCatalogError(null);
+      return;
+    }
     const startedAt = Date.now();
     setIsLoadingCatalog(true);
     setCatalogError(null);
@@ -921,6 +934,22 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     [authMode, currentUser]
   );
 
+  const fetchExhibitionArtworks = useCallback(
+    async (exhibitionId: string): Promise<Artwork[]> => {
+      requireAuthenticatedUser(authMode, currentUser);
+      setExhibitionError(null);
+      try {
+        const data = await artverseApi.fetchExhibitionArtworks(exhibitionId);
+        return (data.artworks || []) as Artwork[];
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Unable to load exhibition artworks.';
+        setExhibitionError(message);
+        throw err;
+      }
+    },
+    [authMode, currentUser]
+  );
+
   const updateExhibitionSubmission = useCallback(
     async (
       submissionId: string,
@@ -1014,6 +1043,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       createExhibitionSubmission,
       fetchExhibitionSubmissions,
       updateExhibitionSubmission,
+      fetchExhibitionArtworks,
       getProfileById,
       getArtworkById,
       getIsPurchased,
@@ -1071,6 +1101,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       createExhibitionSubmission,
       fetchExhibitionSubmissions,
       updateExhibitionSubmission,
+      fetchExhibitionArtworks,
       getProfileById,
       getArtworkById,
       getIsPurchased,
