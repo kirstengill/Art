@@ -36,33 +36,6 @@ export const GalleryPage: React.FC = () => {
     refreshCatalog,
   } = useArtVerse();
 
-  if (!currentUser || currentUser.role !== 'collector') {
-    return (
-      <div className="flex min-h-dvh flex-col items-center justify-center bg-[#FAF8F3] px-6 py-12 text-center">
-        <div className="rounded-2xl border border-[#E2D6BD] bg-[#F5EFE2] p-10 md:p-16 max-w-md">
-          <div className="flex items-center justify-center gap-2 mx-auto mb-4">
-            <span className="h-10 w-10 rounded-full bg-[#B38B40]/10 text-[#B38B40] flex items-center justify-center text-2xl">🖼️</span>
-          </div>
-          <h1 className="font-serif text-2xl font-bold mb-3">Collector access required</h1>
-          <p className="text-[#5C554C] leading-relaxed mb-6">
-            Artworks and artists are only visible to registered collectors. Please sign up as a
-            collector to browse the Louvre Singa gallery.
-          </p>
-          <a
-            href="/signup"
-            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all"
-            style={{
-              background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
-              color: '#141312',
-            }}
-          >
-            Register as Collector
-          </a>
-        </div>
-      </div>
-    );
-  }
-
   const initialCat =
     (searchParams.get('category') as ArtworkCategory | null) || 'all';
   const [selectedCategory, setSelectedCategory] = useState<
@@ -121,6 +94,33 @@ export const GalleryPage: React.FC = () => {
     selectedCategory,
     sortBy,
   ]);
+
+  if (!currentUser || currentUser.role !== 'collector') {
+    return (
+      <div className="flex min-h-dvh flex-col items-center justify-center bg-[#FAF8F3] px-6 py-12 text-center">
+        <div className="rounded-2xl border border-[#E2D6BD] bg-[#F5EFE2] p-10 md:p-16 max-w-md">
+          <div className="flex items-center justify-center gap-2 mx-auto mb-4">
+            <span className="h-10 w-10 rounded-full bg-[#B38B40]/10 text-[#B38B40] flex items-center justify-center text-2xl">🖼️</span>
+          </div>
+          <h1 className="font-serif text-2xl font-bold mb-3">Collector access required</h1>
+          <p className="text-[#5C554C] leading-relaxed mb-6">
+            Artworks and artists are only visible to registered collectors. Please sign up as a
+            collector to browse the Louvre Singa gallery.
+          </p>
+          <a
+            href="/signup"
+            className="inline-flex items-center justify-center gap-2 px-6 py-3 rounded-lg text-sm font-semibold transition-all"
+            style={{
+              background: 'linear-gradient(135deg, #B38B40 0%, #9E7B3B 100%)',
+              color: '#141312',
+            }}
+          >
+            Register as Collector
+          </a>
+        </div>
+      </div>
+    );
+  }
 
   const resetFilters = () => {
     handleCategoryChange('all');
