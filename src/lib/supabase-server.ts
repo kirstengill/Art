@@ -59,9 +59,14 @@ export function getSupabaseServiceClient(): SupabaseDataClient {
   const url = getProjectUrl();
   const secretKey =
     process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
-  if (!url || !secretKey) {
+  if (!url) {
     throw new Error(
-      'Trusted Supabase server operations require SUPABASE_URL and SUPABASE_SECRET_KEY.'
+      'Supabase server is not configured: SUPABASE_URL environment variable is missing. Set it in your Vercel project environment variables.'
+    );
+  }
+  if (!secretKey) {
+    throw new Error(
+      'Supabase server is not configured: SUPABASE_SECRET_KEY environment variable is missing. Set it in your Vercel project environment variables (never use a VITE_ prefix or expose it to browser code).'
     );
   }
   if (!serviceClient) {

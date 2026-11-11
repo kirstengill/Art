@@ -59,12 +59,12 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
     receivedResponse = true;
 
     if (!response.ok) {
-      let errText = 'Request failed.';
+      let errText = `Request failed (${response.status}) for ${path}.`;
       try {
         const data = await response.json();
-        if (data?.error) errText = data.error;
+        if (data?.error) errText = `${data.error} (${response.status}) for ${path}.`;
       } catch {
-        // ignore json parse failure
+        // ignore json parse failure, errText already includes status and path
       }
       throw new Error(errText);
     }

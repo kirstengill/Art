@@ -2,7 +2,6 @@ import 'dotenv/config';
 import express from 'express';
 import path from 'path';
 import { fileURLToPath } from 'url';
-import { createServer as createViteServer } from 'vite';
 import {
   optionalAuth,
   requireAdmin,
@@ -101,14 +100,14 @@ function createApp() {
       res.json({ profile });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to sync profile.';
+      console.error(`[POST /api/auth/sync] Profile sync failed for user ${req.user!.uid}: ${message}`);
       res.status(500).json({ error: message });
     }
   });
 
   app.get('/api/catalog', requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.supabase) throw new Error('Supabase database access is not configured.');
-      const profile = await req.supabase
+      const profile = await getSupabaseServiceClient()
         .from('profiles')
         .select('role')
         .eq('id', req.user!.uid)
@@ -117,7 +116,7 @@ function createApp() {
         res.status(403).json({ error: 'Collector account required to view artworks.' });
         return;
       }
-      const catalog = await getPublicCatalog(req.supabase, req.user?.uid);
+      const catalog = await getPublicCatalog(getSupabaseServiceClient(), req.user?.uid);
       res.json(catalog);
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load catalog.';
@@ -127,8 +126,7 @@ function createApp() {
 
   app.get('/api/artists', requireAuth, async (req: AuthRequest, res) => {
     try {
-      if (!req.supabase) throw new Error('Supabase database access is not configured.');
-      const profile = await req.supabase
+      const profile = await getSupabaseServiceClient()
         .from('profiles')
         .select('role')
         .eq('id', req.user!.uid)
@@ -137,7 +135,7 @@ function createApp() {
         res.status(403).json({ error: 'Collector account required to view artists.' });
         return;
       }
-      const artists = await getArtists(req.supabase);
+      const artists = await getArtists(getSupabaseServiceClient());
       res.json({ artists });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to load artists.';
@@ -756,6 +754,7 @@ async function startServer() {
   const PORT = Number(process.env.PORT || 3000);
 
   if (process.env.NODE_ENV !== 'production') {
+    const { createServer: createViteServer } = await import('vite');
     const vite = await createViteServer({
       server: { middlewareMode: true },
       appType: 'spa',
