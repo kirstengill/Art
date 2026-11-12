@@ -512,6 +512,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     const {
       data: { subscription },
     } = supabase.auth.onAuthStateChange((_event, session) => {
+      artverseApi.setSession(session);
       if (!active) return;
       if (!session?.user) {
         activeAuthUserId.current = null;
@@ -597,6 +598,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
         if (error || !data.user) {
           throw error || new Error('Supabase did not return an authenticated user.');
         }
+        artverseApi.setSession(data.session);
         activeAuthUserId.current = data.user.id;
         await syncSupabaseProfile(data.user);
       } catch (error) {
@@ -640,6 +642,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
         },
       });
       if (error) throw error;
+      artverseApi.setSession(data.session);
 
       if (!data.session || !data.user) {
         return { emailConfirmationRequired: true };
@@ -656,6 +659,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       const { error } = await supabase.auth.signOut();
       if (error) throw error;
     }
+    artverseApi.setSession(null);
     activeAuthUserId.current = null;
     setCurrentUser(null);
     setAuthMode('guest');

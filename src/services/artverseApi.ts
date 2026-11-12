@@ -1,4 +1,5 @@
-import { getSupabaseAccessToken } from '../lib/supabase';
+import type { Session } from '@supabase/supabase-js';
+import { supabase } from '../lib/supabase';
 import type {
   Artwork,
   ArtworkInput,
@@ -44,48 +45,19 @@ import {
   trackApiRequest,
 } from '../utils/networkStatus';
 
-async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
-  const token = await getSupabaseAccessToken();
-  const headers = new Headers(init?.headers || {});
-  headers.set('Content-Type', 'application/json');
-  if (token) {
-    headers.set('Authorization', `Bearer ${token}`);
-  }
+type ApiRequestInit = Omit<RequestInit, 'body'> & { body?: unknown };
 
-  const finishTracking = trackApiRequest();
-  let receivedResponse = false;
-  try {
-    const response = await fetch(path, {
-      ...init,
-      headers,
-    });
-    receivedResponse = true;
-
-    if (!response.ok) {
-      let errText = `Request failed (${response.status}) for ${path}.`;
-      try {
-        const data = await response.json();
-        if (data?.error) errText = `${data.error} (${response.status}) for ${path}.`;
-      } catch {
-        // ignore json parse failure, errText already includes status and path
-      }
-      throw new Error(errText);
-    }
-
-    return await response.json() as T;
-  } catch (error) {
-    if (!receivedResponse) {
-      reportNetworkIssue();
-      const reason = error instanceof Error ? error.message : 'Unknown network error.';
-      throw new Error(
-        `Network request to ${path} failed before receiving a response: ${reason}`,
-        { cause: error }
-      );
-    }
-    throw error;
-  } finally {
-    finishTracking();
-    if (receivedResponse) reportNetworkRecovery();
+export class ApiError extends Error {
+  constructor(
+    message: string,
+    readonly status: number | null,
+    readonly code: string,
+    readonly path: string,
+    readonly details?: unknown,
+    options?: ErrorOptions
+  ) {
+    super(message, options);
+    this.name = 'ApiError';
   }
 }
 
@@ -103,11 +75,146 @@ export interface ArtistsResponse {
   artists: ArtistProfile[];
 }
 
-export const artverseApi = {
-  fetchCatalog: () => apiFetch<CatalogResponse>('/api/catalog', { cache: 'no-store' }),
-  fetchArtists: () => apiFetch<ArtistsResponse>('/api/artists'),
+export class ApiClient {
+  private session: Session | null = null;
+  private readonly baseUrl = (import.meta.env.VITE_API_BASE_URL ?? '').replace(/\/+$/, '');
 
-  syncProfile: (payload: {
+  setSession(session: Session | null): void {
+    this.session = session;
+  }
+
+  async getToken(): Promise<string | null> {
+    const session = await this.refreshSession();
+    return session?.access_token ?? null;
+  }
+
+  async getUserId(): Promise<string | null> {
+    const session = await this.refreshSession();
+    return session?.user.id ?? null;
+  }
+
+  async getHeaders(headers?: HeadersInit): Promise<Headers> {
+    const result = new Headers(headers);
+    result.set('Content-Type', 'application/json');
+    const token = await this.getToken();
+    if (token) {
+      result.set('Authorization', `Bearer ${token}`);
+    } else {
+      result.delete('Authorization');
+    }
+    return result;
+  }
+
+  async request<T>(path: string, init: ApiRequestInit = {}): Promise<T> {
+    const { body, ...requestOptions } = init;
+    const headers = await this.getHeaders(requestOptions.headers);
+    const url = `${this.baseUrl}${path}`;
+    const finishTracking = trackApiRequest();
+    let receivedResponse = false;
+
+    try {
+      const response = await fetch(url, {
+        ...requestOptions,
+        headers,
+        ...(body === undefined
+          ? {}
+          : { body: typeof body === 'string' ? body : JSON.stringify(body) }),
+      });
+      receivedResponse = true;
+      const responseText = await response.text();
+
+      if (!response.ok) {
+        let responseBody: unknown;
+        if (responseText) {
+          try {
+            responseBody = JSON.parse(responseText);
+          } catch (error) {
+            responseBody = {
+              raw: responseText,
+              parseError: error instanceof Error ? error.message : String(error),
+            };
+          }
+        }
+        const errorBody =
+          responseBody && typeof responseBody === 'object'
+            ? responseBody as Record<string, unknown>
+            : undefined;
+        const message = typeof errorBody?.error === 'string'
+          ? `${errorBody.error} (${response.status}) for ${path}.`
+          : `Request failed (${response.status}) for ${path}.`;
+        const code = typeof errorBody?.code === 'string' ? errorBody.code : 'HTTP_ERROR';
+        throw new ApiError(
+          message,
+          response.status,
+          code,
+          path,
+          responseBody
+        );
+      }
+
+      try {
+        return JSON.parse(responseText) as T;
+      } catch (error) {
+        throw new ApiError(
+          `Invalid JSON response from ${path}.`,
+          response.status,
+          'INVALID_RESPONSE',
+          path,
+          { raw: responseText },
+          { cause: error }
+        );
+      }
+    } catch (error) {
+      if (error instanceof ApiError) throw error;
+      if (!receivedResponse) {
+        reportNetworkIssue();
+        const reason = error instanceof Error ? error.message : String(error);
+        throw new ApiError(
+          `Network request to ${path} failed before receiving a response: ${reason}`,
+          null,
+          'NETWORK_ERROR',
+          path,
+          undefined,
+          { cause: error }
+        );
+      }
+      const reason = error instanceof Error ? error.message : String(error);
+      throw new ApiError(
+        `Unable to read the response from ${path}: ${reason}`,
+        null,
+        'INVALID_RESPONSE',
+        path,
+        undefined,
+        { cause: error }
+      );
+    } finally {
+      finishTracking();
+      if (receivedResponse) reportNetworkRecovery();
+    }
+  }
+
+  private async refreshSession(): Promise<Session | null> {
+    if (!supabase) {
+      this.setSession(null);
+      return null;
+    }
+    const { data, error } = await supabase.auth.getSession();
+    if (error) {
+      throw new ApiError(
+        error.message,
+        null,
+        'AUTH_ERROR',
+        '/auth/session',
+        undefined,
+        { cause: error }
+      );
+    }
+    this.setSession(data.session);
+    return this.session;
+  }
+
+  // Authentication and user profiles
+  syncProfile(payload: {
     fullName?: string;
     firstName?: string;
     lastName?: string;
@@ -115,167 +222,167 @@ export const artverseApi = {
     role?: UserRole;
     bio?: string;
     location?: string;
-  }) =>
-    apiFetch<{ profile: Profile }>('/api/auth/sync', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  }): Promise<{ profile: Profile }> {
+    return this.request('/api/auth/sync', { method: 'POST', body: payload });
+  }
 
-  saveArtwork: (input: ArtworkInput) =>
-    apiFetch<{ artwork: Artwork }>(
+  // Artists and artwork
+  fetchCatalog(): Promise<CatalogResponse> {
+    return this.request('/api/catalog', { cache: 'no-store' });
+  }
+
+  fetchArtists(): Promise<ArtistsResponse> {
+    return this.request('/api/artists');
+  }
+
+  saveArtwork(input: ArtworkInput): Promise<{ artwork: Artwork }> {
+    return this.request(
       input.id ? `/api/artworks/${input.id}` : '/api/artworks',
-      {
-        method: input.id ? 'PUT' : 'POST',
-        body: JSON.stringify(input),
-      }
-    ),
+      { method: input.id ? 'PUT' : 'POST', body: input }
+    );
+  }
 
-  deleteArtwork: (artworkId: string) =>
-    apiFetch<{ deletedId: string }>(`/api/artworks/${artworkId}`, {
-      method: 'DELETE',
-    }),
+  deleteArtwork(artworkId: string): Promise<{ deletedId: string }> {
+    return this.request(`/api/artworks/${artworkId}`, { method: 'DELETE' });
+  }
 
-  deleteAdminArtwork: (artworkId: string) =>
-    apiFetch<{ deletedId: string }>(`/api/admin/artworks/${artworkId}`, {
-      method: 'DELETE',
-    }),
+  toggleBookmark(artworkId: string): Promise<{ saved: boolean }> {
+    return this.request(`/api/artworks/${artworkId}/save`, { method: 'POST' });
+  }
 
-  toggleBookmark: (artworkId: string) =>
-    apiFetch<{ saved: boolean }>(`/api/artworks/${artworkId}/save`, {
-      method: 'POST',
-    }),
+  toggleFollow(artistId: string): Promise<{ following: boolean }> {
+    return this.request(`/api/artists/${artistId}/follow`, { method: 'POST' });
+  }
 
-  toggleFollow: (artistId: string) =>
-    apiFetch<{ following: boolean }>(`/api/artists/${artistId}/follow`, {
-      method: 'POST',
-    }),
-
-  createPost: (payload: {
+  // Posts and comments
+  createPost(payload: {
     title: string;
     body: string;
     artworkId?: string;
     imageKey?: string;
-  }) =>
-    apiFetch<{ post: CommunityPost }>('/api/posts', {
+  }): Promise<{ post: CommunityPost }> {
+    return this.request('/api/posts', { method: 'POST', body: payload });
+  }
+
+  addComment(postId: string, body: string): Promise<{ comment: PostComment }> {
+    return this.request(`/api/posts/${postId}/comments`, {
       method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+      body: { body },
+    });
+  }
 
-  addComment: (postId: string, body: string) =>
-    apiFetch<{ comment: PostComment }>(`/api/posts/${postId}/comments`, {
+  togglePostLike(postId: string): Promise<{ liked: boolean; likesCount: number }> {
+    return this.request(`/api/posts/${postId}/like`, { method: 'POST' });
+  }
+
+  // Conversations and offers
+  fetchConversations(): Promise<{
+    conversations: Conversation[];
+    messages: ConversationMessage[];
+    offers: ArtworkOffer[];
+  }> {
+    return this.request('/api/conversations');
+  }
+
+  openConversation(artworkId: string): Promise<{ conversation: Conversation }> {
+    return this.request('/api/conversations/open', {
       method: 'POST',
-      body: JSON.stringify({ body }),
-    }),
+      body: { artworkId },
+    });
+  }
 
-  togglePostLike: (postId: string) =>
-    apiFetch<{ liked: boolean; likesCount: number }>(`/api/posts/${postId}/like`, {
+  sendMessage(
+    conversationId: string,
+    body: string,
+    attachmentName?: string
+  ): Promise<{ message: ConversationMessage }> {
+    return this.request(`/api/conversations/${conversationId}/messages`, {
       method: 'POST',
-    }),
+      body: { body, attachmentName },
+    });
+  }
 
-  fetchConversations: () =>
-    apiFetch<{
-      conversations: Conversation[];
-      messages: ConversationMessage[];
-      offers: ArtworkOffer[];
-    }>('/api/conversations'),
-
-  openConversation: (artworkId: string) =>
-    apiFetch<{ conversation: Conversation }>('/api/conversations/open', {
-      method: 'POST',
-      body: JSON.stringify({ artworkId }),
-    }),
-
-  sendMessage: (conversationId: string, body: string, attachmentName?: string) =>
-    apiFetch<{ message: ConversationMessage }>(
-      `/api/conversations/${conversationId}/messages`,
-      {
-        method: 'POST',
-        body: JSON.stringify({ body, attachmentName }),
-      }
-    ),
-
-  submitOffer: (
+  submitOffer(
     conversationId: string,
     payload: { amount: number; currency: string; note: string }
-  ) =>
-    apiFetch<{ offer: ArtworkOffer }>(`/api/conversations/${conversationId}/offers`, {
+  ): Promise<{ offer: ArtworkOffer }> {
+    return this.request(`/api/conversations/${conversationId}/offers`, {
       method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+      body: payload,
+    });
+  }
 
-  respondToOffer: (
+  respondToOffer(
     offerId: string,
     payload: {
       action: 'accept' | 'reject' | 'withdraw' | 'counter';
       counterAmount?: number;
       note?: string;
     }
-  ) =>
-    apiFetch<{ updatedOffer: ArtworkOffer; counterOffer: ArtworkOffer | null }>(
-      `/api/offers/${offerId}/respond`,
-      {
-        method: 'POST',
-        body: JSON.stringify(payload),
-      }
-    ),
+  ): Promise<{ updatedOffer: ArtworkOffer; counterOffer: ArtworkOffer | null }> {
+    return this.request(`/api/offers/${offerId}/respond`, {
+      method: 'POST',
+      body: payload,
+    });
+  }
 
-  createOrderIntent: (payload: {
+  // Orders and purchase requests
+  createOrderIntent(payload: {
     artworkId: string;
     offerId?: string;
     shippingCity: string;
     collectorNote: string;
-  }) =>
-    apiFetch<{ order: OrderIntent }>('/api/orders/intent', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  }): Promise<{ order: OrderIntent }> {
+    return this.request('/api/orders/intent', { method: 'POST', body: payload });
+  }
 
-  createPurchaseRequest: (payload: PurchaseRequestInput) =>
-    apiFetch<{ order: PurchaseRequestReceipt }>('/api/purchase-requests', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  createPurchaseRequest(payload: PurchaseRequestInput): Promise<{ order: PurchaseRequestReceipt }> {
+    return this.request('/api/purchase-requests', { method: 'POST', body: payload });
+  }
 
-  fetchPurchaseRequests: () =>
-    apiFetch<{ requests: PurchaseRequest[] }>('/api/purchase-requests', { cache: 'no-store' }),
+  fetchPurchaseRequests(): Promise<{ requests: PurchaseRequest[] }> {
+    return this.request('/api/purchase-requests', { cache: 'no-store' });
+  }
 
-  fetchNotifications: () =>
-    apiFetch<{ notifications: UserNotification[] }>('/api/notifications', { cache: 'no-store' }),
+  // Notifications
+  fetchNotifications(): Promise<{ notifications: UserNotification[] }> {
+    return this.request('/api/notifications', { cache: 'no-store' });
+  }
 
-  markNotificationRead: (notificationId: string) =>
-    apiFetch<{ notification: UserNotification }>(
-      `/api/notifications/${encodeURIComponent(notificationId)}/read`,
-      { method: 'PATCH' }
-    ),
+  markNotificationRead(notificationId: string): Promise<{ notification: UserNotification }> {
+    return this.request(`/api/notifications/${encodeURIComponent(notificationId)}/read`, {
+      method: 'PATCH',
+    });
+  }
 
-  fetchAdminOverview: (timeframe: AdminTimeframe) =>
-    apiFetch<AdminOverview>(
-      `/api/admin/overview?timeframe=${encodeURIComponent(timeframe)}`
-    ),
+  // Administration
+  fetchAdminOverview(timeframe: AdminTimeframe): Promise<AdminOverview> {
+    return this.request(`/api/admin/overview?timeframe=${encodeURIComponent(timeframe)}`);
+  }
 
-  fetchAdminUsers: (options: {
+  fetchAdminUsers(options: {
     page: number;
     pageSize: number;
     role: AdminRoleFilter;
     search: string;
-  }) => {
+  }): Promise<AdminPageResult<AdminUserRecord>> {
     const params = new URLSearchParams({
       page: String(options.page),
       pageSize: String(options.pageSize),
       role: options.role,
       search: options.search,
     });
-    return apiFetch<AdminPageResult<AdminUserRecord>>(`/api/admin/users?${params}`);
-  },
+    return this.request(`/api/admin/users?${params}`);
+  }
 
-  fetchAdminContent: (options: {
+  fetchAdminContent(options: {
     kind: AdminContentKind;
     page: number;
     pageSize: number;
     search: string;
     artistName: string;
     filter: AdminArtworkFilter;
-  }) => {
+  }): Promise<AdminPageResult<AdminContentRecord>> {
     const params = new URLSearchParams({
       kind: options.kind,
       page: String(options.page),
@@ -284,177 +391,187 @@ export const artverseApi = {
       artistName: options.artistName,
       filter: options.filter,
     });
-    return apiFetch<AdminPageResult<AdminContentRecord>>(`/api/admin/content?${params}`);
-  },
+    return this.request(`/api/admin/content?${params}`);
+  }
 
-  fetchAdminOrders: (page: number, pageSize: number) => {
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
-    });
-    return apiFetch<AdminPageResult<AdminOrderRecord>>(`/api/admin/orders?${params}`);
-  },
+  fetchAdminOrders(page: number, pageSize: number): Promise<AdminPageResult<AdminOrderRecord>> {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    return this.request(`/api/admin/orders?${params}`);
+  }
 
-  updateAdminOrderStatus: (orderId: string, status: string) =>
-    apiFetch<{ id: string; status: string }>(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
+  updateAdminOrderStatus(orderId: string, status: string): Promise<{ id: string; status: string }> {
+    return this.request(`/api/admin/orders/${encodeURIComponent(orderId)}`, {
       method: 'PATCH',
-      body: JSON.stringify({ status }),
-    }),
-
-  fetchAdminPurchaseRequests: (page: number, pageSize: number) => {
-    const params = new URLSearchParams({
-      page: String(page),
-      pageSize: String(pageSize),
+      body: { status },
     });
-    return apiFetch<AdminPageResult<AdminPurchaseRequestRecord>>(
-      `/api/admin/purchase-requests?${params}`,
-      { cache: 'no-store' }
-    );
-  },
+  }
 
-  decideAdminPurchaseRequest: (requestId: string, decision: 'approve' | 'reject') =>
-    apiFetch<{ result: { id: string; status: string } }>(
-      `/api/admin/purchase-requests/${encodeURIComponent(requestId)}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ decision }),
-      }
-    ),
+  fetchAdminPurchaseRequests(
+    page: number,
+    pageSize: number
+  ): Promise<AdminPageResult<AdminPurchaseRequestRecord>> {
+    const params = new URLSearchParams({ page: String(page), pageSize: String(pageSize) });
+    return this.request(`/api/admin/purchase-requests?${params}`, { cache: 'no-store' });
+  }
 
-  updateAdminPurchaseFulfillment: (
+  decideAdminPurchaseRequest(
+    requestId: string,
+    decision: 'approve' | 'reject'
+  ): Promise<{ result: { id: string; status: string } }> {
+    return this.request(`/api/admin/purchase-requests/${encodeURIComponent(requestId)}`, {
+      method: 'PATCH',
+      body: { decision },
+    });
+  }
+
+  updateAdminPurchaseFulfillment(
     requestId: string,
     action: 'confirm_payment' | 'confirm_delivery'
-  ) =>
-    apiFetch<{ result: {
-      id: string;
-      status: string;
-      paymentStatus: string;
-      deliveryStatus: string;
-    } }>(
+  ): Promise<{ result: {
+    id: string;
+    status: string;
+    paymentStatus: string;
+    deliveryStatus: string;
+  } }> {
+    return this.request(
       `/api/admin/purchase-requests/${encodeURIComponent(requestId)}/fulfillment`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ action }),
-      }
-    ),
+      { method: 'PATCH', body: { action } }
+    );
+  }
 
-  fetchAdminCollectorApprovals: (options: {
+  fetchAdminCollectorApprovals(options: {
     page: number;
     pageSize: number;
     filter: AdminCollectorApprovalFilter;
     search: string;
-  }) => {
+  }): Promise<AdminPageResult<AdminCollectorApprovalRecord>> {
     const params = new URLSearchParams({
       page: String(options.page),
       pageSize: String(options.pageSize),
       filter: options.filter,
       search: options.search,
     });
-    return apiFetch<AdminPageResult<AdminCollectorApprovalRecord>>(`/api/admin/collector-approvals?${params}`);
-  },
+    return this.request(`/api/admin/collector-approvals?${params}`);
+  }
 
-  updateCollectorApproval: (
+  updateCollectorApproval(
     profileId: string,
     action: 'approve' | 'reject',
     rejectionReason?: string
-  ) =>
-    apiFetch<{ id: string; accountStatus: string; collectorApprovedAt: string | null }>(
-      `/api/admin/collector-approvals/${encodeURIComponent(profileId)}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ action, rejectionReason }),
-      }
-    ),
+  ): Promise<{ id: string; accountStatus: string; collectorApprovedAt: string | null }> {
+    return this.request(`/api/admin/collector-approvals/${encodeURIComponent(profileId)}`, {
+      method: 'PATCH',
+      body: { action, rejectionReason },
+    });
+  }
 
-  // Purchase-related endpoints
-  fetchPurchases: () =>
-    apiFetch<{ purchases: Purchase[]; artworks: Artwork[] }>('/api/purchases'),
+  deleteAdminArtwork(artworkId: string): Promise<{ deletedId: string }> {
+    return this.request(`/api/admin/artworks/${artworkId}`, { method: 'DELETE' });
+  }
 
-  checkPurchase: (artworkId: string) =>
-    apiFetch<{ isPurchased: boolean }>(`/api/purchases/check/${artworkId}`),
+  // Purchases and donations
+  fetchPurchases(): Promise<{ purchases: Purchase[]; artworks: Artwork[] }> {
+    return this.request('/api/purchases');
+  }
 
-  fetchPurchasedArtworkIds: () =>
-    apiFetch<{ artworkIds: string[] }>('/api/purchases/artwork-ids'),
+  checkPurchase(artworkId: string): Promise<{ isPurchased: boolean }> {
+    return this.request(`/api/purchases/check/${artworkId}`);
+  }
 
-  // ============================================
-  // Donations
-  // ============================================
-  createDonation: (payload: DonationInput) =>
-    apiFetch<{ donation: Donation }>('/api/donations', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  fetchPurchasedArtworkIds(): Promise<{ artworkIds: string[] }> {
+    return this.request('/api/purchases/artwork-ids');
+  }
 
-  fetchDonations: () =>
-    apiFetch<{ donations: Donation[] }>('/api/donations'),
+  createDonation(payload: DonationInput): Promise<{ donation: Donation }> {
+    return this.request('/api/donations', { method: 'POST', body: payload });
+  }
 
-  fetchDonationsForArtist: (artistId: string) =>
-    apiFetch<{ donations: Donation[] }>(`/api/donations/artist/${encodeURIComponent(artistId)}`),
+  fetchDonations(): Promise<{ donations: Donation[] }> {
+    return this.request('/api/donations');
+  }
 
-  fetchAdminDonations: () =>
-    apiFetch<{ donations: Donation[] }>('/api/admin/donations'),
+  fetchDonationsForArtist(artistId: string): Promise<{ donations: Donation[] }> {
+    return this.request(`/api/donations/artist/${encodeURIComponent(artistId)}`);
+  }
 
-  // ============================================
+  fetchAdminDonations(): Promise<{ donations: Donation[] }> {
+    return this.request('/api/admin/donations');
+  }
+
   // Exhibitions
-  // ============================================
-  fetchExhibitions: (status?: ExhibitionStatus) => {
+  fetchExhibitions(status?: ExhibitionStatus): Promise<{ exhibitions: Exhibition[] }> {
     const params = new URLSearchParams();
     if (status) params.set('status', status);
-    return apiFetch<{ exhibitions: Exhibition[] }>(`/api/exhibitions?${params}`);
-  },
+    return this.request(`/api/exhibitions?${params}`);
+  }
 
-  fetchExhibition: (exhibitionId: string) =>
-    apiFetch<{ exhibition: Exhibition }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`),
+  fetchExhibition(exhibitionId: string): Promise<{ exhibition: Exhibition }> {
+    return this.request(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`);
+  }
 
-  createExhibition: (payload: ExhibitionInput) =>
-    apiFetch<{ exhibition: Exhibition }>('/api/exhibitions', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  createExhibition(payload: ExhibitionInput): Promise<{ exhibition: Exhibition }> {
+    return this.request('/api/exhibitions', { method: 'POST', body: payload });
+  }
 
-  updateExhibition: (exhibitionId: string, payload: Partial<ExhibitionInput>) =>
-    apiFetch<{ exhibition: Exhibition }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`, {
+  updateExhibition(
+    exhibitionId: string,
+    payload: Partial<ExhibitionInput>
+  ): Promise<{ exhibition: Exhibition }> {
+    return this.request(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`, {
       method: 'PATCH',
-      body: JSON.stringify(payload),
-    }),
+      body: payload,
+    });
+  }
 
-  deleteExhibition: (exhibitionId: string) =>
-    apiFetch<{ deletedId: string }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`, {
+  deleteExhibition(exhibitionId: string): Promise<{ deletedId: string }> {
+    return this.request(`/api/exhibitions/${encodeURIComponent(exhibitionId)}`, {
       method: 'DELETE',
-    }),
+    });
+  }
 
-  fetchExhibitionArtworks: (exhibitionId: string) =>
-    apiFetch<{ artworks: any[] }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}/artworks`),
+  fetchExhibitionArtworks(exhibitionId: string): Promise<{ artworks: any[] }> {
+    return this.request(`/api/exhibitions/${encodeURIComponent(exhibitionId)}/artworks`);
+  }
 
-  addArtworkToExhibition: (exhibitionId: string, artworkId: string) =>
-    apiFetch<{ result: any }>(`/api/exhibitions/${encodeURIComponent(exhibitionId)}/artworks`, {
+  addArtworkToExhibition(exhibitionId: string, artworkId: string): Promise<{ result: any }> {
+    return this.request(`/api/exhibitions/${encodeURIComponent(exhibitionId)}/artworks`, {
       method: 'POST',
-      body: JSON.stringify({ artworkId }),
-    }),
+      body: { artworkId },
+    });
+  }
 
-  removeArtworkFromExhibition: (exhibitionId: string, artworkId: string) =>
-    apiFetch<{ removed: boolean }>(
+  removeArtworkFromExhibition(
+    exhibitionId: string,
+    artworkId: string
+  ): Promise<{ removed: boolean }> {
+    return this.request(
       `/api/exhibitions/${encodeURIComponent(exhibitionId)}/artworks/${encodeURIComponent(artworkId)}`,
       { method: 'DELETE' }
-    ),
+    );
+  }
 
-  createExhibitionSubmission: (payload: ExhibitionSubmissionInput) =>
-    apiFetch<{ submission: ExhibitionSubmission }>('/api/exhibitions/submissions', {
-      method: 'POST',
-      body: JSON.stringify(payload),
-    }),
+  createExhibitionSubmission(
+    payload: ExhibitionSubmissionInput
+  ): Promise<{ submission: ExhibitionSubmission }> {
+    return this.request('/api/exhibitions/submissions', { method: 'POST', body: payload });
+  }
 
-  fetchExhibitionSubmissions: (exhibitionId: string) =>
-    apiFetch<{ submissions: ExhibitionSubmission[] }>(
-      `/api/exhibitions/${encodeURIComponent(exhibitionId)}/submissions`
-    ),
+  fetchExhibitionSubmissions(
+    exhibitionId: string
+  ): Promise<{ submissions: ExhibitionSubmission[] }> {
+    return this.request(`/api/exhibitions/${encodeURIComponent(exhibitionId)}/submissions`);
+  }
 
-  updateExhibitionSubmission: (submissionId: string, status: string, notes?: string) =>
-    apiFetch<{ submission: ExhibitionSubmission }>(
-      `/api/exhibitions/submissions/${encodeURIComponent(submissionId)}`,
-      {
-        method: 'PATCH',
-        body: JSON.stringify({ status, notes }),
-      }
-    ),
-};
+  updateExhibitionSubmission(
+    submissionId: string,
+    status: string,
+    notes?: string
+  ): Promise<{ submission: ExhibitionSubmission }> {
+    return this.request(`/api/exhibitions/submissions/${encodeURIComponent(submissionId)}`, {
+      method: 'PATCH',
+      body: { status, notes },
+    });
+  }
+}
+
+export const artverseApi = new ApiClient();
