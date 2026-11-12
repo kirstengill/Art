@@ -74,7 +74,14 @@ async function apiFetch<T>(path: string, init?: RequestInit): Promise<T> {
 
     return await response.json() as T;
   } catch (error) {
-    if (!receivedResponse) reportNetworkIssue();
+    if (!receivedResponse) {
+      reportNetworkIssue();
+      const reason = error instanceof Error ? error.message : 'Unknown network error.';
+      throw new Error(
+        `Network request to ${path} failed before receiving a response: ${reason}`,
+        { cause: error }
+      );
+    }
     throw error;
   } finally {
     finishTracking();
