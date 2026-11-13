@@ -9,7 +9,7 @@ import {
   formatCategoryLabel,
   formatMoney,
 } from '../utils/formatters';
-import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
+import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.webp';
 
 interface ValidationErrors {
   title?: string;

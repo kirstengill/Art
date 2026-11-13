@@ -7,7 +7,7 @@ import { ArtworkGrid } from '../components/artwork/ArtworkGrid';
 import { ArtworkCard } from '../components/artwork/ArtworkCard';
 import { ArtworkGridSkeleton } from '../components/ui/Skeletons';
 import type { ArtworkCategory } from '../types/artverse';
-import lapisArtwork from '../assets/images/art_lapis_refraction_1792993241626.jpg';
+import lapisArtwork from '../assets/images/art_lapis_refraction_1792993241626.webp';
 import { FaWhatsapp } from 'react-icons/fa6';
 
 const CATEGORIES: { value: 'all' | ArtworkCategory; label: string }[] = [

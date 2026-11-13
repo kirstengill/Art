@@ -18,7 +18,7 @@ import {
   formatSaleModeLabel,
   formatShortDate,
 } from '../utils/formatters';
-import heroArtwork from '../assets/images/hero_gilded_horizon_1792993235968.jpg';
+import heroArtwork from '../assets/images/hero_gilded_horizon_1792993235968.webp';
 
 export const DiscoverPage: React.FC = () => {
   const shouldReduceMotion = useReducedMotion();

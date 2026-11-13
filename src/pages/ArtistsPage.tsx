@@ -6,7 +6,7 @@ import { useArtVerse } from '../context/ArtVerseContext';
 import { artverseApi } from '../services/artverseApi';
 import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
 import { formatMoney, formatShortDate } from '../utils/formatters';
-import nocturneArtwork from '../assets/images/art_nocturne_study_1792993239582.jpg';
+import nocturneArtwork from '../assets/images/art_nocturne_study_1792993239582.webp';
 import type { ArtistProfile } from '../types/artverse';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];

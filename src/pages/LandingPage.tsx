@@ -2,7 +2,7 @@ import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { ArrowRight, ArrowUpRight, Menu, X } from 'lucide-react';
-import lapisArtwork from '../assets/images/art_lapis_refraction_1792993241626.jpg';
+import lapisArtwork from '../assets/images/art_lapis_refraction_1792993241626.webp';
 import louvreSingaLogo from '../images/Louvre Singa Art Gallery Logo.png';
 
 const NAV_LINKS = [

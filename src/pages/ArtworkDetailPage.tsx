@@ -23,7 +23,7 @@ import {
   formatMoney,
   formatSaleModeLabel,
 } from '../utils/formatters';
-import marbleArtwork from '../assets/images/art_marble_form_1792993238374.jpg';
+import marbleArtwork from '../assets/images/art_marble_form_1792993238374.webp';
 
 export const ArtworkDetailPage: React.FC = () => {
   const { id } = useParams<{ id: string }>();

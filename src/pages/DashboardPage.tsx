@@ -13,7 +13,7 @@ import {
   formatShortDate,
   formatSaleModeLabel,
 } from '../utils/formatters';
-import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
+import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.webp';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 

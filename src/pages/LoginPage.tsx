@@ -5,7 +5,7 @@ import { Eye, EyeOff } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { GlassPanel } from '../components/ui/GlassCard';
 import { dashboardPathForRole } from '../utils/roleRoutes';
-import gildedArtwork from '../assets/images/hero_gilded_horizon_1792993235968.jpg';
+import gildedArtwork from '../assets/images/hero_gilded_horizon_1792993235968.webp';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
 

@@ -6,7 +6,7 @@ import { useArtVerse } from '../context/ArtVerseContext';
 import type { UserRole } from '../types/artverse';
 import { formatRoleLabel } from '../utils/formatters';
 import { GlassPanel } from '../components/ui/GlassCard';
-import terracottaArtwork from '../assets/images/art_terracotta_study_1792993240609.jpg';
+import terracottaArtwork from '../assets/images/art_terracotta_study_1792993240609.webp';
 import { dashboardPathForRole } from '../utils/roleRoutes';
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {

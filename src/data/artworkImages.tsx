@@ -1,11 +1,11 @@
 import React, { useState } from 'react';
 import { Frame } from 'lucide-react';
-import heroGildedHorizon from '../assets/images/hero_gilded_horizon_1792993235968.jpg';
-import artMarbleForm from '../assets/images/art_marble_form_1792993238374.jpg';
-import artNocturneStudy from '../assets/images/art_nocturne_study_1792993239582.jpg';
-import artTerracottaStudy from '../assets/images/art_terracotta_study_1792993240609.jpg';
-import artLapisRefraction from '../assets/images/art_lapis_refraction_1792993241626.jpg';
-import atelierEditorialCover from '../assets/images/atelier_editorial_cover_1792993242654.jpg';
+import heroGildedHorizon from '../assets/images/hero_gilded_horizon_1792993235968.webp';
+import artMarbleForm from '../assets/images/art_marble_form_1792993238374.webp';
+import artNocturneStudy from '../assets/images/art_nocturne_study_1792993239582.webp';
+import artTerracottaStudy from '../assets/images/art_terracotta_study_1792993240609.webp';
+import artLapisRefraction from '../assets/images/art_lapis_refraction_1792993241626.webp';
+import atelierEditorialCover from '../assets/images/atelier_editorial_cover_1792993242654.webp';
 import { ARTWORK_IMAGE_BUCKET } from '../lib/supabase';
 
 export const STUDIO_IMAGE_MAP: Record<string, string> = {
