@@ -77,6 +77,34 @@ import {
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = path.dirname(__filename);
 
+// Validate Supabase configuration at startup
+function validateSupabaseConfig(): void {
+  const requiredVars = [
+    { name: 'SUPABASE_URL', envVar: 'SUPABASE_URL' },
+    { name: 'SUPABASE_ANON_KEY', envVar: 'SUPABASE_ANON_KEY' },
+    { name: 'SUPABASE_SECRET_KEY', envVar: 'SUPABASE_SECRET_KEY' },
+  ];
+
+  const missing: string[] = [];
+  for (const { name, envVar } of requiredVars) {
+    if (!process.env[envVar] && !process.env[`VITE_${envVar}`]) {
+      missing.push(name);
+    }
+  }
+
+  if (missing.length > 0) {
+    console.warn(
+      `⚠️  Supabase configuration warning: Missing environment variables: ${missing.join(', ')}. ` +
+      'Some API endpoints may fail. Set these in your deployment environment.'
+    );
+  } else {
+    console.log('✅ Supabase configuration validated successfully.');
+  }
+}
+
+// Run validation on startup
+validateSupabaseConfig();
+
 function createApp() {
   const app = express();
 
@@ -110,6 +138,7 @@ function createApp() {
         metadataRole === 'art_lover'
           ? metadataRole
           : undefined;
+      
       const profile = await syncUserProfile({
         uid,
         email,
@@ -124,8 +153,17 @@ function createApp() {
       res.json({ profile });
     } catch (error: unknown) {
       const message = error instanceof Error ? error.message : 'Failed to sync profile.';
-      console.error(`[POST /api/auth/sync] Profile sync failed for user ${req.user!.uid}: ${message}`);
-      res.status(500).json({ error: message });
+      const statusCode = message.includes('SUPABASE') ? 503 : 500;
+      
+      console.error(`[POST /api/auth/sync] Profile sync failed for user ${req.user?.uid || 'unknown'}: ${message}`);
+      
+      res.status(statusCode).json({
+        error: message,
+        code: statusCode === 503 ? 'SUPABASE_CONFIG_ERROR' : 'PROFILE_SYNC_ERROR',
+        hint: statusCode === 503 
+          ? 'Check that SUPABASE_URL, SUPABASE_ANON_KEY, and SUPABASE_SECRET_KEY are set in your server environment variables.'
+          : undefined,
+      });
     }
   });
 

@@ -61,12 +61,12 @@ export function getSupabaseServiceClient(): SupabaseDataClient {
     process.env.SUPABASE_SECRET_KEY || process.env.SUPABASE_SERVICE_ROLE_KEY;
   if (!url) {
     throw new Error(
-      'Supabase server is not configured: SUPABASE_URL environment variable is missing. Set it in your Vercel project environment variables.'
+      'SUPABASE_URL is missing. Both SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) must be set as server environment variables on Vercel. Do NOT use VITE_ prefix for the secret key.'
     );
   }
   if (!secretKey) {
     throw new Error(
-      'Supabase server is not configured: SUPABASE_SECRET_KEY environment variable is missing. Set it in your Vercel project environment variables (never use a VITE_ prefix or expose it to browser code).'
+      'SUPABASE_SECRET_KEY is missing. Both SUPABASE_URL and SUPABASE_SECRET_KEY (or SUPABASE_SERVICE_ROLE_KEY) must be set as server environment variables on Vercel. Do NOT use VITE_ prefix for the secret key.'
     );
   }
   if (!serviceClient) {
@@ -85,12 +85,18 @@ export async function verifySupabaseAccessToken(
   accessToken: string
 ): Promise<SupabaseAuthUser | null> {
   const client = getSupabaseAuthClient();
-  if (!client) throw new Error('Supabase Auth is not configured on the server.');
+  if (!client) {
+    throw new Error(
+      'Supabase Auth is not configured on the server. SUPABASE_URL and SUPABASE_ANON_KEY are required.'
+    );
+  }
 
   const { data, error } = await client.auth.getUser(accessToken);
   if (error) {
-    if (error.status === 400 || error.status === 401 || error.status === 403) return null;
-    throw error;
+    if (error.status === 400 || error.status === 401 || error.status === 403) {
+      return null;
+    }
+    throw new Error(`Supabase token verification failed: ${error.message}`);
   }
   if (!data.user) return null;
 

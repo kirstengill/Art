@@ -97,7 +97,13 @@ function storageObjectPath(imageKey: string): string | undefined {
 }
 
 export async function syncUserProfile(params: SyncUserProfileParams) {
-  const db = getSupabaseServiceClient();
+  let db: SupabaseDataClient;
+  try {
+    db = getSupabaseServiceClient();
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : 'Failed to initialize Supabase service client.';
+    throw new Error(`Supabase service client initialization failed: ${message}`);
+  }
   return syncProfileWithOperations(params, {
     getProfile: async (uid) =>
       one(db.from('profiles').select('*').eq('id', uid).maybeSingle()),
