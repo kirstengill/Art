@@ -1051,7 +1051,7 @@ export const AdminPage: React.FC = () => {
                   className="rounded-lg border border-white/15 bg-[#262420] px-3 text-sm text-white"
                 >
                   <option value="all">All statuses</option>
-                  <option value="pending_approval">Pending Approval</option>
+                  <option value="pending">Pending</option>
                   <option value="approved">Approved</option>
                   <option value="rejected">Rejected</option>
                 </select>
@@ -1083,7 +1083,7 @@ export const AdminPage: React.FC = () => {
                           </td>
                           <td className="px-4 py-3 text-xs text-white/65">{record.location || '—'}</td>
                           <td className="px-4 py-3">
-                            {record.accountStatus === 'pending_approval' && (
+                            {record.accountStatus === 'pending' && (
                               <span className="inline-flex items-center gap-1 rounded-full bg-amber-900/30 px-2.5 py-1 text-xs text-amber-300">
                                 <span className="h-1.5 w-1.5 rounded-full bg-amber-400 animate-pulse" />
                                 Pending
@@ -1105,7 +1105,7 @@ export const AdminPage: React.FC = () => {
                             {record.collectorApprovedAt ? formatShortDate(record.collectorApprovedAt) : '—'}
                           </td>
                           <td className="px-4 py-3">
-                            {record.accountStatus === 'pending_approval' && (
+                            {record.accountStatus === 'pending' && (
                               <div className="flex gap-2">
                                 <button
                                   type="button"

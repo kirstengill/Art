@@ -470,7 +470,7 @@ export async function getAdminCollectorApprovals(options: {
 
   let query = db.from('profiles').select('*').eq('role', 'collector');
   if (options.filter === 'pending_approval') {
-    query = query.eq('account_status', 'pending_approval');
+    query = query.eq('account_status', 'pending');
   } else if (options.filter === 'approved') {
     query = query.eq('account_status', 'active').not('collector_approved_at', 'is', null);
   } else if (options.filter === 'rejected') {

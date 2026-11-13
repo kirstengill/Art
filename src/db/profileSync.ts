@@ -140,7 +140,7 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
         handle,
         username,
         role,
-        accountStatus: role === 'collector' ? 'pending_approval' : 'active',
+        accountStatus: role === 'collector' ? 'pending' : 'active',
         registrationDate: new Date(),
         bio: params.bio?.trim() || '',
         location: role === 'artist' ? params.location?.trim() || '' : '',

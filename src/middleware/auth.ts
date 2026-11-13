@@ -84,11 +84,11 @@ export const requireAuth = async (
     // Server-side pending collector / suspended account restriction (auth hook).
     // Use the service client so RLS on profiles never blocks this authorization check.
     // A profile-lookup error must not block sign-in; enforcement happens per-route too.
-    let profile: { role?: string; account_status?: string; collector_approved_at?: string | null } | null = null;
+    let profile: { role?: string; account_status?: string } | null = null;
     try {
       const { data, error } = await getSupabaseServiceClient()
         .from('profiles')
-        .select('role, account_status, collector_approved_at')
+        .select('role, account_status')
         .eq('id', user.uid)
         .maybeSingle();
       if (error) {
@@ -105,7 +105,7 @@ export const requireAuth = async (
       return;
     }
     if (
-      profile.account_status === 'pending_approval' ||
+      profile.account_status === 'pending' ||
       profile.account_status === 'suspended'
     ) {
       res.status(403).json({

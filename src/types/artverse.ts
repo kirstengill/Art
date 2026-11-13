@@ -88,7 +88,7 @@ export type OfferStatus =
   | 'withdrawn'
   | 'expired';
 
-export type AccountStatus = 'active' | 'pending' | 'pending_approval' | 'suspended' | 'deleted';
+export type AccountStatus = 'active' | 'pending' | 'suspended' | 'deleted';
 
 export interface Profile {
   id: string;
