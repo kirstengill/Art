@@ -85,14 +85,14 @@ function createApp() {
   // Vercel serverless functions may strip the /api prefix when forwarding
   // requests to api/[...path].ts. Ensure Express routes always see the /api
   // prefix so route matching works in both local and production environments.
-  if (process.env.VERCEL === '1') {
-    app.use((req, res, next) => {
-      if (!req.url.startsWith('/api')) {
-        req.url = '/api' + req.url;
-      }
-      next();
-    });
-  }
+  // if (process.env.VERCEL === '1') {
+  //   app.use((req, res, next) => {
+  //     if (!req.url.startsWith('/api')) {
+  //       req.url = '/api' + req.url;
+  //     }
+  //     next();
+  //   });
+  // }
 
   app.get('/api/__health', async (_req, res) => {
     res.status(200).json({ status: 'ok', service: 'louvre-singa-api' });
