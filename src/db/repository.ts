@@ -15,8 +15,8 @@ import {
   PurchaseWorkflowError,
   type PurchaseRequestInput,
 } from '../utils/purchaseRequests.ts';
-import { ARTWORK_CATEGORIES } from '../types/artverse';
-import type { Artwork, Donation, DonationInput, Exhibition, ExhibitionInput, ExhibitionStatus, ExhibitionSubmission, ExhibitionSubmissionInput, ExhibitionSubmissionStatus, Purchase, PurchaseRequestReceipt } from '../types/artverse';
+import { ARTWORK_CATEGORIES } from '../types/artverse.js';
+import type { Artwork, Donation, DonationInput, Exhibition, ExhibitionInput, ExhibitionStatus, ExhibitionSubmission, ExhibitionSubmissionInput, ExhibitionSubmissionStatus, Purchase, PurchaseRequestReceipt } from '../types/artverse.js';
 
 type DbRow = Record<string, unknown>;
 

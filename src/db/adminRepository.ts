@@ -5,7 +5,7 @@ import type {
   AdminContentKind,
   AdminRoleFilter,
   AdminTimeframe,
-} from '../types/admin';
+} from '../types/admin.js';
 
 export type {
   AdminArtworkFilter,

@@ -68,7 +68,7 @@ import {
   deleteExhibitionInDb,
   fromDatabase,
 } from './src/db/repository.ts';
-import type { ExhibitionStatus } from './src/types/artverse';
+import type { ExhibitionStatus } from './src/types/artverse.js';
 import {
   PurchaseRequestValidationError,
   PurchaseWorkflowError,

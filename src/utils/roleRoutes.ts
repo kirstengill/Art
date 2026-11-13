@@ -1,4 +1,4 @@
-import type { AccountRole } from '../types/artverse';
+import type { AccountRole } from '../types/artverse.js';
 
 export function dashboardPathForRole(role: AccountRole): string {
   switch (role) {

@@ -1,4 +1,4 @@
-import type { AvailabilityStatus, SaleMode } from '../types/artverse';
+import type { AvailabilityStatus, SaleMode } from '../types/artverse.js';
 
 export interface PurchaseRequestInput {
   requestId: string;
