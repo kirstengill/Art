@@ -3,6 +3,7 @@ export type AdminRoleFilter = 'all' | 'admin' | 'artist' | 'collector' | 'art_lo
 export type AdminContentKind = 'artworks' | 'community';
 export type AdminArtworkFilter = 'all' | 'direct';
 export type AdminCollectorApprovalFilter = 'all' | 'pending_approval' | 'approved' | 'rejected';
+export type AdminUserAction = 'block' | 'unblock' | 'delete';
 
 export interface AdminSeriesPoint {
   date: string;
@@ -52,6 +53,8 @@ export interface AdminUserRecord {
   fullName: string | null;
   handle: string | null;
   username: string | null;
+  email: string;
+  phoneNumber: string;
   role: string | null;
   accountStatus: string;
   registrationDate: string;
@@ -59,6 +62,11 @@ export interface AdminUserRecord {
   artworkCount: number;
   availableArtworkCount: number;
   purchaseIntentCount: number;
+}
+
+export interface AdminUserStatusResult {
+  id: string;
+  accountStatus: string;
 }
 
 export interface AdminContentRecord {

@@ -8,6 +8,7 @@ import type {
 } from '../types/artverse';
 
 export const ARTWORK_IMAGE_BUCKET = 'artwork-images';
+export const PROFILE_IMAGE_BUCKET = 'profile-images';
 
 export interface SupabaseDatabase {
   public: {
@@ -114,6 +115,38 @@ export async function uploadArtworkImage(
   dataUrl: string,
   artistId: string
 ): Promise<string> {
+  return uploadUserImage(
+    dataUrl,
+    artistId,
+    ARTWORK_IMAGE_BUCKET,
+    ['image/jpeg', 'image/png', 'image/webp', 'image/gif'],
+    10 * 1024 * 1024,
+    'Artwork'
+  );
+}
+
+export async function uploadProfileImage(
+  dataUrl: string,
+  userId: string
+): Promise<string> {
+  return uploadUserImage(
+    dataUrl,
+    userId,
+    PROFILE_IMAGE_BUCKET,
+    ['image/jpeg', 'image/png', 'image/webp'],
+    5 * 1024 * 1024,
+    'Profile'
+  );
+}
+
+async function uploadUserImage(
+  dataUrl: string,
+  ownerId: string,
+  bucket: string,
+  allowedTypes: string[],
+  maxBytes: number,
+  imageLabel: 'Artwork' | 'Profile'
+): Promise<string> {
   if (!supabase || !isSupabaseConfigured) {
     throw new Error('Supabase Storage is not configured.');
   }
@@ -121,25 +154,30 @@ export async function uploadArtworkImage(
   const imageMatch = dataUrl.match(
     /^data:(image\/(?:jpeg|png|webp|gif));base64,([A-Za-z\d+/]+={0,2})$/
   );
-  if (!imageMatch) {
-    throw new Error('Artwork images must be JPEG, PNG, WebP, or GIF files.');
+  if (!imageMatch || !allowedTypes.includes(imageMatch[1])) {
+    const supportedTypes =
+      imageLabel === 'Artwork' ? 'JPEG, PNG, WebP, or GIF' : 'JPEG, PNG, or WebP';
+    throw new Error(`${imageLabel} images must be ${supportedTypes} files.`);
   }
 
   const [, contentType, encodedImage] = imageMatch;
   const imageBytes = Uint8Array.from(atob(encodedImage), (character) =>
     character.charCodeAt(0)
   );
-  if (imageBytes.byteLength > 10 * 1024 * 1024) {
-    throw new Error('Artwork images must be under 10 MB.');
+  if (imageBytes.byteLength > maxBytes) {
+    throw new Error(
+      `${imageLabel} images must be ${maxBytes / (1024 * 1024)} MB or smaller.`
+    );
   }
 
-  // Get the authenticated user's ID from Supabase to match RLS policy
   const { data: { user }, error: authError } = await supabase.auth.getUser();
   if (authError || !user) {
     throw new Error('Unable to get authenticated user for upload.');
   }
-  if (artistId !== user.id) {
-    throw new Error('Artwork images can only be uploaded to the authenticated artist folder.');
+  if (ownerId !== user.id) {
+    throw new Error(
+      `${imageLabel} images can only be uploaded to the authenticated user's folder.`
+    );
   }
 
   const extensionByType: Record<string, string> = {
@@ -148,20 +186,21 @@ export async function uploadArtworkImage(
     'image/webp': 'webp',
     'image/gif': 'gif',
   };
-  // Use auth.uid() to match the RLS policy requirement
   const imagePath = `${user.id}/${crypto.randomUUID()}.${extensionByType[contentType]}`;
   const { error } = await supabase.storage
-    .from(ARTWORK_IMAGE_BUCKET)
+    .from(bucket)
     .upload(imagePath, imageBytes, {
       cacheControl: '3600',
       contentType,
       upsert: false,
     });
   if (error) {
-    throw new Error(`Unable to upload artwork image to Supabase Storage: ${error.message}`);
+      throw new Error(
+        `Unable to upload ${imageLabel.toLowerCase()} image to Supabase Storage: ${error.message}`
+      );
   }
 
-  return supabase.storage.from(ARTWORK_IMAGE_BUCKET).getPublicUrl(imagePath).data.publicUrl;
+    return supabase.storage.from(bucket).getPublicUrl(imagePath).data.publicUrl;
 }
 
 export async function getSupabaseAccessToken(): Promise<string | null> {

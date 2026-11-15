@@ -5,6 +5,7 @@ import type {
   AdminContentKind,
   AdminRoleFilter,
   AdminTimeframe,
+  AdminUserAction,
 } from '../types/admin.js';
 
 export type {
@@ -12,6 +13,7 @@ export type {
   AdminContentKind,
   AdminRoleFilter,
   AdminTimeframe,
+  AdminUserAction,
 } from '../types/admin';
 
 type Row = Record<string, unknown>;
@@ -39,6 +41,18 @@ async function getAll(table: string, missingTableIsOptional = false): Promise<Ro
     result.push(...(data as Row[]));
     if (data.length < 1000) return result;
   }
+}
+
+async function getPhoneNumbers(profileIds: string[]): Promise<Map<string, string>> {
+  if (profileIds.length === 0) return new Map();
+  const { data, error } = await getSupabaseServiceClient()
+    .from('user_account_details')
+    .select('user_id, phone_number')
+    .in('user_id', profileIds);
+  if (error) throw new Error(`Unable to load user phone numbers: ${error.message}`);
+  return new Map(
+    (data || []).map((row) => [String(row.user_id), String(row.phone_number || '')])
+  );
 }
 
 function getPageParams(pageValue: unknown, pageSizeValue: unknown) {
@@ -195,7 +209,9 @@ export async function getAdminUsers(options: {
         new Date(String(b.registration_date || b.created_at)).getTime() -
         new Date(String(a.registration_date || a.created_at)).getTime()
     );
+
   const pageRecords = records.slice(offset, offset + pageSize);
+  const phoneNumbers = await getPhoneNumbers(pageRecords.map((profile) => String(profile.id)));
   return {
     records: pageRecords.map((profile) => {
       const userArtworks = artworks.filter(
@@ -206,6 +222,8 @@ export async function getAdminUsers(options: {
         fullName: String(profile.full_name || ''),
         handle: String(profile.handle || ''),
         username: String(profile.username || ''),
+        email: String(profile.email || ''),
+        phoneNumber: phoneNumbers.get(String(profile.id)) || '',
         role: String(profile.role || ''),
         accountStatus: String(profile.account_status || ''),
         registrationDate: String(profile.registration_date || profile.created_at || ''),
@@ -479,6 +497,9 @@ export async function getAdminCollectorApprovals(options: {
 
   const { data: allRows, error } = await query;
   if (error) throw new Error(`Unable to load collector approvals: ${error.message}`);
+  const phoneNumbers = await getPhoneNumbers(
+    (allRows as Row[]).map((row) => String(row.id))
+  );
 
   let records = (allRows as Row[]).filter((row) => {
     if (!search) return true;
@@ -508,7 +529,7 @@ export async function getAdminCollectorApprovals(options: {
       username: String(row.username || ''),
       email: String(row.email || ''),
       location: String(row.location || ''),
-      phoneNumber: String(row.phone_number || ''),
+      phoneNumber: phoneNumbers.get(String(row.id)) || '',
       accountStatus: String(row.account_status || ''),
       registrationDate: String(row.registration_date || row.created_at || ''),
       createdAt: String(row.created_at || ''),
@@ -522,6 +543,55 @@ export async function getAdminCollectorApprovals(options: {
     pageSize,
     total: records.length,
   };
+}
+
+export async function updateAdminUserStatus(
+  profileId: string,
+  action: AdminUserAction,
+  actorId: string
+) {
+  if (profileId === actorId) {
+    throw new Error('Administrators cannot change their own account status.');
+  }
+
+  const db = getSupabaseServiceClient();
+  const { data: profile, error: loadError } = await db
+    .from('profiles')
+    .select('id, role, account_status, collector_approved_at')
+    .eq('id', profileId)
+    .maybeSingle();
+  if (loadError) throw new Error(`Unable to load user profile: ${loadError.message}`);
+  if (!profile) throw new Error('User profile not found.');
+  if (profile.account_status === 'deleted') {
+    throw new Error('Deleted user accounts cannot be changed.');
+  }
+
+  let accountStatus: string;
+  if (action === 'delete') {
+    accountStatus = 'deleted';
+  } else if (action === 'block') {
+    if (profile.account_status === 'suspended') {
+      throw new Error('User is already blocked.');
+    }
+    accountStatus = 'suspended';
+  } else {
+    if (profile.account_status !== 'suspended') {
+      throw new Error('Only blocked users can be restored.');
+    }
+    accountStatus =
+      profile.role === 'collector' && !profile.collector_approved_at
+        ? 'pending'
+        : 'active';
+  }
+
+  const { data, error } = await db
+    .from('profiles')
+    .update({ account_status: accountStatus, updated_at: new Date().toISOString() })
+    .eq('id', profileId)
+    .select('id, account_status')
+    .single();
+  if (error) throw new Error(`Unable to update user account status: ${error.message}`);
+  return { id: String(data.id), accountStatus: String(data.account_status) };
 }
 
 export async function updateAdminCollectorApproval(

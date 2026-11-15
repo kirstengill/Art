@@ -36,7 +36,9 @@ import type {
   AdminPageResult,
   AdminRoleFilter,
   AdminTimeframe,
+  AdminUserAction,
   AdminUserRecord,
+  AdminUserStatusResult,
 } from '../types/admin';
 import type { PurchaseRequestInput } from '../utils/purchaseRequests';
 import {
@@ -222,6 +224,7 @@ export class ApiClient {
     role?: UserRole;
     bio?: string;
     location?: string;
+    avatarUrl?: string | null;
   }): Promise<{ profile: Profile }> {
     return this.request('/api/auth/sync', { method: 'POST', body: payload });
   }
@@ -229,6 +232,10 @@ export class ApiClient {
   // Artists and artwork
   fetchCatalog(): Promise<CatalogResponse> {
     return this.request('/api/catalog', { cache: 'no-store' });
+  }
+
+  fetchCommunityFeed(): Promise<CatalogResponse> {
+    return this.request('/api/community', { cache: 'no-store' });
   }
 
   fetchArtists(): Promise<ArtistsResponse> {
@@ -373,6 +380,16 @@ export class ApiClient {
       search: options.search,
     });
     return this.request(`/api/admin/users?${params}`);
+  }
+
+  updateAdminUser(
+    profileId: string,
+    action: AdminUserAction
+  ): Promise<AdminUserStatusResult> {
+    return this.request(`/api/admin/users/${encodeURIComponent(profileId)}`, {
+      method: 'PATCH',
+      body: { action },
+    });
   }
 
   fetchAdminContent(options: {

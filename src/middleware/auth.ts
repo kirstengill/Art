@@ -81,9 +81,7 @@ export const requireAuth = async (
     req.user = user;
     req.supabase = getSupabaseDataClient(token);
 
-    // Server-side pending collector / suspended account restriction (auth hook).
-    // Use the service client so RLS on profiles never blocks this authorization check.
-    // A profile-lookup error must not block sign-in; enforcement happens per-route too.
+    // Use the service client so RLS on profiles never blocks account-status checks.
     let profile: { role?: string; account_status?: string } | null = null;
     try {
       const { data, error } = await getSupabaseServiceClient()
@@ -93,11 +91,15 @@ export const requireAuth = async (
         .maybeSingle();
       if (error) {
         console.warn('Unable to verify account status from the Supabase profile:', error.message);
+        res.status(503).json({ error: 'Unable to verify account status.' });
+        return;
       } else {
         profile = data ?? null;
       }
     } catch (err) {
       console.warn('Supabase profile lookup failed during auth:', err);
+      res.status(503).json({ error: 'Unable to verify account status.' });
+      return;
     }
     // No profile yet (first sign-in before sync): allow through; sync creates it.
     if (!profile) {
@@ -106,12 +108,16 @@ export const requireAuth = async (
     }
     if (
       profile.account_status === 'pending' ||
-      profile.account_status === 'suspended'
+      profile.account_status === 'pending_approval' ||
+      profile.account_status === 'suspended' ||
+      profile.account_status === 'deleted'
     ) {
       res.status(403).json({
         error:
           profile.account_status === 'suspended'
             ? 'Your account has been suspended. Contact Louvre Singa support.'
+            : profile.account_status === 'deleted'
+              ? 'This account has been deleted.'
             : 'Your collector account is pending approval. You will be able to access the gallery once an administrator approves your account.',
       });
       return;

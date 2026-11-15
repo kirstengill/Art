@@ -1,14 +1,45 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  createExhibitionInDb,
   createPurchaseRequestInDb,
   filterVisibleCatalogRows,
+  getPublicCommunityFeed,
   getPurchasesForCollector,
   removeAdminArtworkListing,
   upsertArtworkListing,
 } from './repository.ts';
 import type { SupabaseDataClient } from '../lib/supabase-server.ts';
 import { PurchaseWorkflowError } from '../utils/purchaseRequests.ts';
+
+function communityFeedClient(tables: Record<string, Array<Record<string, unknown>>>): SupabaseDataClient {
+  return {
+    from: (table: string) => {
+      const filters: Array<(row: Record<string, unknown>) => boolean> = [];
+      const query = {
+        select: () => query,
+        eq: (column: string, value: unknown) => {
+          filters.push((row) => row[column] === value);
+          return query;
+        },
+        in: (column: string, values: unknown[]) => {
+          filters.push((row) => values.includes(row[column]));
+          return query;
+        },
+        order: () => query,
+        then: (
+          resolve: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown,
+          reject?: (reason: unknown) => unknown
+        ) =>
+          Promise.resolve({
+            data: (tables[table] || []).filter((row) => filters.every((filter) => filter(row))),
+            error: null,
+          }).then(resolve, reject),
+      };
+      return query;
+    },
+  } as unknown as SupabaseDataClient;
+}
 
 function artworkDeletionClient(
   operations: string[],
@@ -99,6 +130,83 @@ test('keeps public catalog rows linked to visible profiles after database key co
   assert.deepEqual(visibleArtworks.map(({ id }) => id), ['artwork-1']);
   assert.deepEqual(visiblePosts.map(({ id }) => id), ['post-1']);
   assert.deepEqual(visibleComments.map(({ id }) => id), ['comment-1']);
+});
+
+test('loads persisted community posts and images for the public feed', async () => {
+  const feed = await getPublicCommunityFeed(
+    communityFeedClient({
+      profiles: [
+        { id: 'artist-1', role: 'artist', account_status: 'active', is_demo: false },
+        { id: 'artist-blocked', role: 'artist', account_status: 'suspended', is_demo: false },
+        { id: 'collector-1', role: 'collector', account_status: 'active', is_demo: false },
+      ],
+      posts: [
+        {
+          id: 'post-1',
+          author_id: 'artist-1',
+          title: 'Studio notes',
+          body: 'A new work in progress.',
+          image_key: 'https://storage.example/studio.jpg',
+          artwork_id: 'artwork-1',
+          is_demo: false,
+        },
+        {
+          id: 'hidden-post',
+          author_id: 'artist-blocked',
+          image_key: 'https://storage.example/hidden.jpg',
+          is_demo: false,
+        },
+      ],
+      comments: [
+        { id: 'comment-1', post_id: 'post-1', author_id: 'collector-1' },
+      ],
+      artworks: [
+        { id: 'artwork-1', artist_id: 'artist-1', is_demo: false },
+      ],
+      follows: [],
+      likes: [],
+    }),
+    'artist-1'
+  );
+
+  assert.deepEqual(feed.posts.map((post) => post.id), ['post-1']);
+  assert.equal(feed.posts[0].imageKey, 'https://storage.example/studio.jpg');
+  assert.deepEqual(feed.artworks.map((artwork) => artwork.id), ['artwork-1']);
+  assert.deepEqual(feed.comments.map((comment) => comment.id), ['comment-1']);
+});
+
+test('creates exhibitions as publicly visible scheduled events by default', async () => {
+  const inserted: Array<Record<string, unknown>> = [];
+  const insertQuery = {
+    select: () => insertQuery,
+    single: async () => ({ data: inserted[inserted.length - 1], error: null }),
+  };
+  const db = {
+    from: (table: string) => {
+      assert.equal(table, 'exhibitions');
+      return {
+        insert: (values: Record<string, unknown>) => {
+          inserted.push(values);
+          return insertQuery;
+        },
+      };
+    },
+  } as unknown as SupabaseDataClient;
+
+  await createExhibitionInDb(db, 'artist-1', {
+    title: 'Open Studio',
+    startDate: '2026-12-01',
+    endDate: '2026-12-31',
+  });
+  assert.equal(inserted[0].status, 'scheduled');
+
+  await createExhibitionInDb(db, 'artist-1', {
+    title: 'Unpublished Draft',
+    startDate: '2026-12-01',
+    endDate: '2026-12-31',
+    status: 'draft',
+  });
+  assert.equal(inserted[1].status, 'draft');
 });
 
 test('admin artwork deletion removes its stored image before deleting the database row', async () => {

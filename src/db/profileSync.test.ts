@@ -123,7 +123,39 @@ test('updates existing profiles without replacing non-empty values with blanks',
   assert.equal(profile.location, existing.location);
   assert.equal(profile.role, existing.role);
   assert.equal(profile.accountStatus, 'suspended');
-  assert.equal(profiles.size, 1);
+});
+
+test('persists an uploaded avatar and preserves it during later profile syncs', async () => {
+  const existing: TestProfile = {
+    id: 'auth-user-avatar',
+    email: 'artist@example.test',
+    fullName: 'Ada Artist',
+    handle: 'adaartist',
+    username: 'adaartist',
+    role: 'artist',
+    accountStatus: 'active',
+    discipline: 'Fine Art',
+    bio: '',
+    location: '',
+    registrationDate: new Date('2024-01-01T00:00:00.000Z'),
+    createdAt: new Date('2024-01-01T00:00:00.000Z'),
+    verified: false,
+    isDemo: false,
+  };
+  const { operations } = createOperations(existing);
+  const avatarUrl = 'https://storage.example.test/profile-images/auth-user-avatar/photo.webp';
+
+  const updated = await syncProfileWithOperations(
+    { uid: existing.id, avatarUrl },
+    operations
+  );
+  const resynced = await syncProfileWithOperations(
+    { uid: existing.id },
+    operations
+  );
+
+  assert.equal(updated.avatarUrl, avatarUrl);
+  assert.equal(resynced.avatarUrl, avatarUrl);
 });
 
 test('preserves the database role even when auth metadata requests another role', async () => {

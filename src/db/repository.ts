@@ -160,6 +160,81 @@ export async function syncUserProfile(params: SyncUserProfileParams) {
   });
 }
 
+export async function getPublicCommunityFeed(db: SupabaseDataClient, viewerUid?: string) {
+  const [profileRows, postRows, commentRows, followRows, likeRows] = await Promise.all([
+    many<DbRow>(
+      db
+        .from('profiles')
+        .select('id,full_name,handle,username,role,account_status,registration_date,avatar_url,bio,location,is_demo,created_at')
+        .eq('account_status', 'active')
+        .eq('is_demo', false)
+    ),
+    many<DbRow>(db.from('posts').select('*').order('created_at', { ascending: false })),
+    many<DbRow>(db.from('comments').select('*').order('created_at')),
+    viewerUid
+      ? many<DbRow>(db.from('follows').select('*').eq('follower_id', viewerUid))
+      : Promise.resolve([]),
+    viewerUid
+      ? many<DbRow>(db.from('likes').select('*').eq('user_id', viewerUid))
+      : Promise.resolve([]),
+  ]);
+  const profileById = new Map(profileRows.map((profile) => [String(profile.id), profile]));
+  const visibleProfiles = profileRows.filter((profile) => !profile.isDemo);
+  const visibleProfileIds = new Set(visibleProfiles.map((profile) => String(profile.id)));
+  const visibleArtists = new Set(
+    visibleProfiles
+      .filter((profile) => profile.role === 'artist')
+      .map((profile) => String(profile.id))
+  );
+  const visiblePosts = postRows.filter(
+    (post) =>
+      !post.isDemo &&
+      visibleArtists.has(String(post.authorId))
+  );
+  const visiblePostIds = new Set(visiblePosts.map((post) => String(post.id)));
+  const visibleComments = commentRows.filter(
+    (comment) =>
+      visiblePostIds.has(String(comment.postId)) &&
+      visibleProfileIds.has(String(comment.authorId))
+  );
+  const linkedArtworkIds = Array.from(
+    new Set(
+      visiblePosts
+        .map((post) => post.artworkId)
+        .filter((id): id is string => typeof id === 'string' && id.length > 0)
+    )
+  );
+  const viewerIsArtist = profileById.get(viewerUid || '')?.role === 'artist';
+  const [linkedArtworks, viewerArtworks] = await Promise.all([
+    linkedArtworkIds.length
+      ? many<DbRow>(db.from('artworks').select('*').in('id', linkedArtworkIds))
+      : Promise.resolve([]),
+    viewerUid && viewerIsArtist
+      ? many<DbRow>(db.from('artworks').select('*').eq('artist_id', viewerUid))
+      : Promise.resolve([]),
+  ]);
+  const artworks = [...linkedArtworks, ...viewerArtworks].filter(
+    (artwork, index, rows) =>
+      !artwork.isDemo &&
+      visibleArtists.has(String(artwork.artistId)) &&
+      rows.findIndex((row) => row.id === artwork.id) === index
+  );
+
+  return {
+    profiles: visibleProfiles.map((profile) => ({ ...profile, email: '' })),
+    artworks,
+    posts: visiblePosts,
+    comments: visibleComments,
+    followedArtistIds: followRows
+      .filter((follow) => visibleArtists.has(String(follow.followingId)))
+      .map((follow) => String(follow.followingId)),
+    likedPostIds: likeRows
+      .filter((like) => visiblePostIds.has(String(like.postId)))
+      .map((like) => String(like.postId)),
+    savedArtworkIds: [],
+  };
+}
+
 export async function getArtists(db: SupabaseDataClient) {
   return many(
     db
@@ -1003,7 +1078,7 @@ export async function createExhibitionInDb(
         location: payload.location || null,
         is_virtual: Boolean(payload.isVirtual),
         virtual_url: payload.virtualUrl || null,
-        status: payload.status || 'draft',
+        status: payload.status || 'scheduled',
         featured: Boolean(payload.featured),
       })
       .select('*')
@@ -1031,7 +1106,12 @@ export async function updateExhibitionInDb(
   const existing = await one<DbRow>(db.from('exhibitions').select('*').eq('id', exhibitionId).maybeSingle());
   if (!existing) throw new Error('Exhibition not found.');
   if (String(existing.curator_id) !== curatorUid) {
-    throw new Error('Forbidden: Only the curator may update this exhibition.');
+    const curator = await one<DbRow>(
+      db.from('profiles').select('role').eq('id', curatorUid).maybeSingle()
+    );
+    if (curator?.role !== 'admin') {
+      throw new Error('Forbidden: Only the curator or an administrator may update this exhibition.');
+    }
   }
   const updated = await one<DbRow>(
     db

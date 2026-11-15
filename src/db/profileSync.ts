@@ -7,6 +7,7 @@ export interface SyncProfileRecord {
   role: string;
   bio: string;
   location: string;
+  avatarUrl?: string | null;
   registrationDate: Date;
   createdAt: Date | string;
 }
@@ -22,6 +23,7 @@ export interface SyncProfileValues {
   registrationDate: Date;
   bio: string;
   location: string;
+  avatarUrl: string | null;
   discipline: string;
   verified: boolean;
   isDemo: boolean;
@@ -35,7 +37,7 @@ export interface ProfileSyncOperations<TProfile extends SyncProfileRecord> {
     uid: string,
     values: Pick<
       SyncProfileValues,
-      'email' | 'fullName' | 'handle' | 'username' | 'bio' | 'location'
+      'email' | 'fullName' | 'handle' | 'username' | 'bio' | 'location' | 'avatarUrl'
     >
   ): Promise<TProfile>;
   saveAccountDetails(params: {
@@ -57,6 +59,7 @@ export interface SyncUserProfileParams {
   role?: string;
   bio?: string;
   location?: string;
+  avatarUrl?: string | null;
 }
 
 const USER_ROLES = ['artist', 'collector', 'art_lover'];
@@ -132,6 +135,10 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
           role === 'artist'
             ? params.location?.trim() || current.location
             : current.location,
+        avatarUrl:
+          params.avatarUrl !== undefined
+            ? params.avatarUrl
+            : current.avatarUrl ?? null,
       })
     : await operations.insertProfile({
         id: uid,
@@ -144,6 +151,7 @@ export async function syncProfileWithOperations<TProfile extends SyncProfileReco
         registrationDate: new Date(),
         bio: params.bio?.trim() || '',
         location: role === 'artist' ? params.location?.trim() || '' : '',
+        avatarUrl: params.avatarUrl ?? null,
         discipline: role === 'artist' ? 'Fine Art' : 'Private Collection',
         verified: false,
         isDemo: false,

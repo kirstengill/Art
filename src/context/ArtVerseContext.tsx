@@ -15,6 +15,7 @@ import {
   subscribeToCollectorPurchases,
   subscribeToUserNotifications,
   uploadArtworkImage,
+  uploadProfileImage,
 } from '../lib/supabase';
 import { artverseApi } from '../services/artverseApi';
 import {
@@ -95,6 +96,7 @@ interface ArtVerseContextValue {
     location?: string;
   }) => Promise<{ emailConfirmationRequired: boolean; profile?: Profile }>;
   logout: () => Promise<void>;
+  updateProfileAvatar: (imageDataUrl: string) => Promise<void>;
   toggleSaveArtwork: (artworkId: string) => Promise<void>;
   toggleFollowArtist: (artistId: string) => Promise<void>;
   publishOrUpdateArtwork: (input: ArtworkInput) => Promise<Artwork>;
@@ -287,36 +289,21 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const loadCatalog = useCallback(async () => {
-    if (authMode !== 'authenticated' || !currentUser || currentUser.role !== 'collector') {
-      setProfiles([]);
-      setArtworks([]);
-      setPosts([]);
-      setComments([]);
-      setSavedArtworkIds([]);
-      setFollowedArtistIds([]);
-      setLikedPostIds([]);
-      setIsLoadingCatalog(false);
-      setCatalogError(null);
-      return;
-    }
     const startedAt = Date.now();
     setIsLoadingCatalog(true);
     setCatalogError(null);
     try {
-      const data = await artverseApi.fetchCatalog();
+      const data =
+        authMode === 'authenticated' && currentUser?.role === 'collector'
+          ? await artverseApi.fetchCatalog()
+          : await artverseApi.fetchCommunityFeed();
       setProfiles(data.profiles);
       setArtworks(data.artworks);
       setPosts(data.posts);
       setComments(mergeChronologicalById(data.comments));
-      if (currentUser) {
-        setSavedArtworkIds(Array.from(new Set(data.savedArtworkIds)));
-        setFollowedArtistIds(Array.from(new Set(data.followedArtistIds)));
-        setLikedPostIds(Array.from(new Set(data.likedPostIds)));
-      } else {
-        setSavedArtworkIds([]);
-        setFollowedArtistIds([]);
-        setLikedPostIds([]);
-      }
+      setSavedArtworkIds(Array.from(new Set(data.savedArtworkIds)));
+      setFollowedArtistIds(Array.from(new Set(data.followedArtistIds)));
+      setLikedPostIds(Array.from(new Set(data.likedPostIds)));
     } catch (err) {
       setCatalogError(
         err instanceof Error ? err.message : 'Unable to load the artwork catalog.'
@@ -335,7 +322,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
       setIsLoadingCatalog(false);
     }
-  }, [currentUser]);
+  }, [authMode, currentUser]);
 
   const refreshPurchases = useCallback(async () => {
     if (authMode !== 'authenticated' || !currentUser || currentUser.role !== 'collector') {
@@ -547,18 +534,8 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
         void syncSupabaseProfile(user)
           .then(async () => {
             if (!active) return;
-            const [cat, convData] = await Promise.all([
-              artverseApi.fetchCatalog(),
-              artverseApi.fetchConversations(),
-            ]);
+            const convData = await artverseApi.fetchConversations();
             if (!active) return;
-            setProfiles(cat.profiles);
-            setArtworks(cat.artworks);
-            setPosts(cat.posts);
-            setComments(mergeChronologicalById(cat.comments));
-            setSavedArtworkIds(Array.from(new Set(cat.savedArtworkIds)));
-            setFollowedArtistIds(Array.from(new Set(cat.followedArtistIds)));
-            setLikedPostIds(Array.from(new Set(cat.likedPostIds)));
             setConversations(convData.conversations);
             setMessages(mergeChronologicalById(convData.messages));
             setOffers(mergeChronologicalById(convData.offers));
@@ -678,6 +655,17 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     setMessages([]);
     setOffers([]);
   }, []);
+
+  const updateProfileAvatar = useCallback(
+    async (imageDataUrl: string) => {
+      requireAuthenticatedUser(authMode, currentUser);
+      const avatarUrl = await uploadProfileImage(imageDataUrl, currentUser.id);
+      const { profile } = await artverseApi.syncProfile({ avatarUrl });
+      setCurrentUser(profile);
+      setProfiles((previous) => mergeById([profile], previous));
+    },
+    [authMode, currentUser]
+  );
 
   const toggleSaveArtwork = useCallback(
     async (artworkId: string) => {
@@ -1163,6 +1151,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       signInWithEmail,
       signUpWithEmail,
       logout,
+      updateProfileAvatar,
       toggleSaveArtwork,
       toggleFollowArtist,
       publishOrUpdateArtwork,
@@ -1229,6 +1218,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       signInWithEmail,
       signUpWithEmail,
       logout,
+      updateProfileAvatar,
       toggleSaveArtwork,
       toggleFollowArtist,
       publishOrUpdateArtwork,

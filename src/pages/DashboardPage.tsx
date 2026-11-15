@@ -36,6 +36,7 @@ export const DashboardPage: React.FC = () => {
     currentUser,
     authMode,
     logout,
+    updateProfileAvatar,
     deleteArtwork,
     getArtworkById,
     getProfileById,
@@ -44,6 +45,8 @@ export const DashboardPage: React.FC = () => {
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
   const [notificationActionError, setNotificationActionError] = useState<string | null>(null);
+  const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
+  const [profilePhotoError, setProfilePhotoError] = useState<string | null>(null);
 
   const managedOwnerId = currentUser?.id;
 
@@ -84,6 +87,47 @@ export const DashboardPage: React.FC = () => {
         err instanceof Error ? err.message : 'Unable to update notification.'
       );
     }
+  };
+
+  const handleProfilePhotoChange = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.currentTarget.files?.[0];
+    event.currentTarget.value = '';
+    setProfilePhotoError(null);
+    if (!file) return;
+
+    if (!['image/jpeg', 'image/png', 'image/webp'].includes(file.type)) {
+      setProfilePhotoError('Choose a JPEG, PNG, or WebP image.');
+      return;
+    }
+    if (file.size > 5 * 1024 * 1024) {
+      setProfilePhotoError('Profile photos must be 5 MB or smaller.');
+      return;
+    }
+
+    const reader = new FileReader();
+    setProfilePhotoUploading(true);
+    reader.onload = async () => {
+      if (typeof reader.result !== 'string') {
+        setProfilePhotoError('Unable to read the selected image.');
+        setProfilePhotoUploading(false);
+        return;
+      }
+
+      try {
+        await updateProfileAvatar(reader.result);
+      } catch (error) {
+        setProfilePhotoError(
+          error instanceof Error ? error.message : 'Unable to upload profile photo.'
+        );
+      } finally {
+        setProfilePhotoUploading(false);
+      }
+    };
+    reader.onerror = () => {
+      setProfilePhotoError('Unable to read the selected image.');
+      setProfilePhotoUploading(false);
+    };
+    reader.readAsDataURL(file);
   };
 
   const kpiCards =
@@ -205,6 +249,23 @@ export const DashboardPage: React.FC = () => {
           </div>
 
           <div className="flex flex-wrap items-center gap-2.5 sm:gap-3 min-w-0">
+            {currentUser && (
+              <label className="inline-flex items-center px-4 py-2.5 text-xs font-medium bg-white border border-[#D8D0C1] text-[#3B352F] rounded-xl hover:border-[#B38B40] transition-colors whitespace-nowrap shrink-0 cursor-pointer">
+                <input
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  onChange={handleProfilePhotoChange}
+                  disabled={profilePhotoUploading}
+                  className="sr-only"
+                  aria-label="Upload profile photo"
+                />
+                {profilePhotoUploading
+                  ? 'Uploading photo...'
+                  : currentUser.avatarUrl
+                    ? 'Change profile photo'
+                    : 'Upload profile photo'}
+              </label>
+            )}
             {currentUser?.role === 'artist' && (
               <Link
                 to={`/artists/${currentUser.id}`}
@@ -240,6 +301,11 @@ export const DashboardPage: React.FC = () => {
               >
                 Sign In to Save Portfolio
               </Link>
+            )}
+            {profilePhotoError && (
+              <p className="w-full text-xs text-red-700" role="alert">
+                {profilePhotoError}
+              </p>
             )}
           </div>
         </motion.div>

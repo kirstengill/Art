@@ -18,6 +18,7 @@ import {
   getAdminOverview,
   getAdminPurchaseRequests,
   getAdminUsers,
+  updateAdminUserStatus,
   updateAdminCollectorApproval,
   updateAdminOrderStatus,
   type AdminArtworkFilter,
@@ -25,7 +26,7 @@ import {
   type AdminRoleFilter,
   type AdminTimeframe,
 } from './src/db/adminRepository.ts';
-import type { AdminCollectorApprovalFilter } from './src/types/admin.ts';
+import type { AdminCollectorApprovalFilter, AdminUserAction } from './src/types/admin.ts';
 import {
   addArtworkToExhibition,
   addCommentInDb,
@@ -49,6 +50,7 @@ import {
   getConversationsForParticipant,
   getOrCreateArtworkConversation,
   getNotificationsForUser,
+  getPublicCommunityFeed,
   getPublicCatalog,
   getPurchasesForCollector,
   getPurchaseRequestsForCollector,
@@ -126,11 +128,30 @@ function createApp() {
     res.status(200).json({ status: 'ok', service: 'louvre-singa-api' });
   });
 
+  app.get('/api/community', optionalAuth, async (req: AuthRequest, res) => {
+    res.setHeader('Cache-Control', 'no-store');
+    try {
+      const feed = await getPublicCommunityFeed(
+        getSupabaseServiceClient(),
+        req.user?.uid
+      );
+      res.json(feed);
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load community feed.';
+      console.error(`[GET /api/community] ${message}`);
+      res.status(500).json({ error: 'Unable to load community feed.' });
+    }
+  });
+
   app.post('/api/auth/sync', requireAuth, async (req: AuthRequest, res) => {
     try {
       const uid = req.user!.uid;
       const email = req.user!.email;
-      const { fullName, firstName, lastName, phoneNumber, bio, location } = req.body || {};
+      const { fullName, firstName, lastName, phoneNumber, bio, location, avatarUrl } = req.body || {};
+      if (avatarUrl !== undefined && avatarUrl !== null && typeof avatarUrl !== 'string') {
+        res.status(400).json({ error: 'Profile image URL must be a string.' });
+        return;
+      }
       const metadataRole = req.user!.user_metadata.role;
       const role =
         metadataRole === 'artist' ||
@@ -149,6 +170,7 @@ function createApp() {
         role,
         bio,
         location,
+        avatarUrl,
       });
       res.json({ profile });
     } catch (error: unknown) {
@@ -243,6 +265,21 @@ function createApp() {
     } catch {
       console.error('Admin users query failed.');
       res.status(500).json({ error: 'Unable to load administrator user records.' });
+    }
+  });
+
+  app.patch('/api/admin/users/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    const action = req.body?.action;
+    if (!['block', 'unblock', 'delete'].includes(action)) {
+      res.status(400).json({ error: 'A valid user action is required.' });
+      return;
+    }
+    try {
+      res.json(await updateAdminUserStatus(req.params.id, action as AdminUserAction, req.user!.uid));
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to update user account.';
+      const status = /not found/i.test(message) ? 404 : /cannot|already|only .* users|only blocked/i.test(message) ? 400 : 500;
+      res.status(status).json({ error: message });
     }
   });
 

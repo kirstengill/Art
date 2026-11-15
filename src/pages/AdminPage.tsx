@@ -197,6 +197,8 @@ export const AdminPage: React.FC = () => {
   const [savingOrderId, setSavingOrderId] = useState<string | null>(null);
   const [savingPurchaseRequestId, setSavingPurchaseRequestId] = useState<string | null>(null);
   const [savingApprovalId, setSavingApprovalId] = useState<string | null>(null);
+  const [savingUserId, setSavingUserId] = useState<string | null>(null);
+  const [savingExhibitionId, setSavingExhibitionId] = useState<string | null>(null);
   const [deletingArtworkId, setDeletingArtworkId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -489,6 +491,58 @@ export const AdminPage: React.FC = () => {
     }
   };
 
+  const handleAdminUserAction = async (user: AdminUserRecord, action: 'block' | 'unblock' | 'delete') => {
+    if (!user.profileId) return;
+    const name = user.fullName || user.email || 'this user';
+    const confirmation = action === 'delete'
+      ? `Mark ${name} as deleted and prevent further access? Their records will be retained.`
+      : action === 'block'
+        ? `Block ${name} from accessing the site?`
+        : `Restore access for ${name}?`;
+    if (!window.confirm(confirmation)) return;
+
+    setSavingUserId(user.profileId);
+    setError(null);
+    try {
+      const updated = await artverseApi.updateAdminUser(user.profileId, action);
+      setUsers((current) =>
+        current
+          ? {
+              ...current,
+              records: current.records.map((item) =>
+                item.profileId === updated.id
+                  ? { ...item, accountStatus: updated.accountStatus }
+                  : item
+              ),
+            }
+          : current
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update user account.');
+    } finally {
+      setSavingUserId(null);
+    }
+  };
+
+  const handlePublishExhibition = async (exhibitionId: string) => {
+    setSavingExhibitionId(exhibitionId);
+    setError(null);
+    try {
+      const { exhibition } = await artverseApi.updateExhibition(exhibitionId, {
+        status: 'scheduled',
+      });
+      setExhibitions((current) =>
+        current.map((item) =>
+          item.id === exhibitionId ? { ...item, status: exhibition.status } : item
+        )
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to publish exhibition.');
+    } finally {
+      setSavingExhibitionId(null);
+    }
+  };
+
   const handleDeleteArtwork = async (record: AdminContentRecord) => {
     if (
       record.kind !== 'artwork' ||
@@ -730,23 +784,25 @@ export const AdminPage: React.FC = () => {
               </div>
               {users && (
                 <div className="overflow-x-auto rounded-2xl border border-white/15 bg-white/[0.04]">
-                  <table className="w-full min-w-[650px] text-left text-sm">
+                  <table className={`w-full ${section === 'users' ? 'min-w-[950px]' : 'min-w-[650px]'} text-left text-sm`}>
                     <thead className="bg-white/[0.06] text-[10px] uppercase tracking-[0.14em] text-white/55">
-                      <tr><th className="px-4 py-3">Name</th><th className="px-4 py-3">Account type</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Registered</th><th className="px-4 py-3 text-right">Artworks</th>{section === 'artists' && <><th className="px-4 py-3 text-right">Available</th><th className="px-4 py-3 text-right">Purchase intents</th></>}<th className="px-4 py-3">Profile</th></tr>
+                      <tr><th className="px-4 py-3">Name</th>{section === 'users' && <th className="px-4 py-3">Contact</th>}<th className="px-4 py-3">Account type</th><th className="px-4 py-3">Status</th><th className="px-4 py-3">Registered</th><th className="px-4 py-3 text-right">Artworks</th>{section === 'artists' && <><th className="px-4 py-3 text-right">Available</th><th className="px-4 py-3 text-right">Purchase intents</th></>}<th className="px-4 py-3">Profile</th>{section === 'users' && <th className="px-4 py-3">Actions</th>}</tr>
                     </thead>
                     <tbody className="divide-y divide-white/10">
                       {users.records.map((user, index) => (
                         <tr key={`${user.profileId || 'unlinked'}-${index}`} className="text-white/80">
                           <td className="px-4 py-3"><span className="block">{user.fullName || 'Profile not synced'}</span><span className="text-xs text-white/45">{user.handle ? `@${user.handle}` : ''}</span></td>
+                          {section === 'users' && <td className="px-4 py-3"><p className="text-xs">{user.email || 'No email'}</p><p className="text-xs text-white/55">{user.phoneNumber || 'No phone'}</p></td>}
                           <td className="px-4 py-3">{user.role ? formatRoleLabel(user.role as 'admin' | 'artist' | 'collector' | 'art_lover') : '—'}</td>
                           <td className="px-4 py-3 capitalize">{user.accountStatus || '—'}</td>
                           <td className="px-4 py-3">{formatShortDate(user.createdAt)}</td>
                           <td className="px-4 py-3 text-right tabular-nums">{user.artworkCount}</td>
                           {section === 'artists' && <><td className="px-4 py-3 text-right tabular-nums">{user.availableArtworkCount}</td><td className="px-4 py-3 text-right tabular-nums">{user.purchaseIntentCount}</td></>}
                           <td className="px-4 py-3">{user.profileId && user.role === 'artist' ? <Link className="text-[#ead39e] hover:text-white" to={`/artists/${user.profileId}`}>Open <ArrowRight className="ml-1 inline h-3 w-3" /></Link> : '—'}</td>
+                          {section === 'users' && <td className="px-4 py-3"><div className="flex items-center gap-2">{user.accountStatus !== 'deleted' && user.profileId && <><button type="button" disabled={savingUserId === user.profileId} onClick={() => void handleAdminUserAction(user, user.accountStatus === 'suspended' ? 'unblock' : 'block')} className="rounded-lg border border-white/15 px-2.5 py-1.5 text-xs text-white/80 hover:bg-white/10 disabled:opacity-50">{savingUserId === user.profileId ? 'Saving…' : user.accountStatus === 'suspended' ? 'Unblock' : 'Block'}</button><button type="button" disabled={savingUserId === user.profileId} onClick={() => void handleAdminUserAction(user, 'delete')} className="rounded-lg border border-red-300/25 px-2.5 py-1.5 text-xs text-red-200 hover:bg-red-500/10 disabled:opacity-50">Delete</button></>}{user.accountStatus === 'deleted' && <span className="text-xs text-white/45">Deleted</span>}</div></td>}
                         </tr>
                       ))}
-                      {users.records.length === 0 && <tr><td colSpan={section === 'artists' ? 8 : 6} className="px-4 py-8 text-center text-white/55">No matching users.</td></tr>}
+                      {users.records.length === 0 && <tr><td colSpan={8} className="px-4 py-8 text-center text-white/55">No matching users.</td></tr>}
                     </tbody>
                   </table>
                 </div>
@@ -1230,6 +1286,16 @@ export const AdminPage: React.FC = () => {
                         <span className="text-white/55">{e.featured ? 'Featured' : 'Standard'}</span>
                         <span className="text-white/50">by {e.curatorId ? e.curatorId.slice(0, 6) : '—'}</span>
                       </div>
+                      {e.status === 'draft' && (
+                        <button
+                          type="button"
+                          disabled={savingExhibitionId === e.id}
+                          onClick={() => void handlePublishExhibition(e.id)}
+                          className="mt-3 rounded-lg bg-[#d3b578]/15 px-3 py-2 text-xs font-medium text-[#ead39e] hover:bg-[#d3b578]/25 disabled:opacity-50"
+                        >
+                          {savingExhibitionId === e.id ? 'Publishing…' : 'Publish to exhibitions'}
+                        </button>
+                      )}
                     </div>
                   ))}
                 </div>
