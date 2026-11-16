@@ -15,6 +15,7 @@ import {
   Trash2,
   UserCheck,
   Users,
+  X,
   XCircle,
 } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
@@ -205,6 +206,7 @@ export const AdminPage: React.FC = () => {
   const [savingUserId, setSavingUserId] = useState<string | null>(null);
   const [savingExhibitionId, setSavingExhibitionId] = useState<string | null>(null);
   const [deletingArtworkId, setDeletingArtworkId] = useState<string | null>(null);
+  const [viewingArtistCv, setViewingArtistCv] = useState<ArtistCVApprovalRecord | null>(null);
 
   useEffect(() => {
     let cancelled = false;
@@ -1354,15 +1356,13 @@ export const AdminPage: React.FC = () => {
                               </button>
                             </>
                           )}
-                          {cv.status !== 'pending' && (
-                            <button
-                              type="button"
-                              onClick={() => window.alert(`${cv.artistName}'s CV\n\n${cv.biography}\n\n${cv.artisticStatement}\n\nEducation & training:\n${cv.education}\n\nArtistic experience:\n${cv.experience}\n\nExhibitions:\n${cv.exhibitions}\n\nAwards:\n${cv.awards}\n\nSpecialisation:\n${cv.specialisation}`)}
-                              className="rounded-lg border border-white/15 bg-white/[0.05] px-3 py-2 text-xs font-medium text-white hover:bg-white/[0.08]"
-                            >
-                              View complete CV
-                            </button>
-                          )}
+                          <button
+                            type="button"
+                            onClick={() => setViewingArtistCv(cv)}
+                            className="rounded-lg border border-white/15 bg-white/[0.05] px-3 py-2 text-xs font-medium text-white hover:bg-white/[0.08]"
+                          >
+                            View complete CV
+                          </button>
                         </div>
                       </div>
                       {cv.adminFeedback && (
@@ -1478,6 +1478,74 @@ export const AdminPage: React.FC = () => {
           )}
         </main>
       </div>
+      {viewingArtistCv && (
+        <div
+          role="presentation"
+          onMouseDown={(event) => {
+            if (event.target === event.currentTarget) setViewingArtistCv(null);
+          }}
+          className="fixed inset-0 z-[70] flex items-center justify-center overflow-y-auto bg-[#141312]/75 p-3 backdrop-blur-sm sm:p-6"
+        >
+          <section
+            role="dialog"
+            aria-modal="true"
+            aria-labelledby="artist-cv-dialog-title"
+            className="my-auto flex max-h-[90dvh] w-full max-w-3xl flex-col overflow-hidden rounded-2xl border border-white/15 bg-[#201f1c] shadow-2xl"
+          >
+            <header className="flex shrink-0 items-start justify-between gap-4 border-b border-white/10 px-5 py-4 sm:px-7">
+              <div>
+                <p className="text-[10px] uppercase tracking-[0.18em] text-[#d6bb7e]">
+                  {ARTIST_CV_STATUS_LABELS[viewingArtistCv.status]}
+                </p>
+                <h2 id="artist-cv-dialog-title" className="mt-1 font-serif text-2xl font-semibold text-white">
+                  {viewingArtistCv.artistName}&apos;s Artist CV
+                </h2>
+                <p className="mt-1 text-xs text-white/55">
+                  @{viewingArtistCv.artistHandle || 'artist'} · Submitted {formatShortDate(viewingArtistCv.submittedAt || viewingArtistCv.createdAt)}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingArtistCv(null)}
+                aria-label="Close artist CV"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg text-white/65 hover:bg-white/10 hover:text-white"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </header>
+            <div className="space-y-5 overflow-y-auto p-5 sm:p-7">
+              {([
+                ['Biography', viewingArtistCv.biography],
+                ['Artistic statement', viewingArtistCv.artisticStatement],
+                ['Education and training', viewingArtistCv.education],
+                ['Artistic experience', viewingArtistCv.experience],
+                ['Exhibitions', viewingArtistCv.exhibitions],
+                ['Awards and recognition', viewingArtistCv.awards],
+                ['Artistic specialisation', viewingArtistCv.specialisation],
+              ] as const).map(([label, value]) => (
+                <section key={label}>
+                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#d6bb7e]">
+                    {label}
+                  </h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/85">
+                    {value || 'Not provided'}
+                  </p>
+                </section>
+              ))}
+              {viewingArtistCv.adminFeedback && (
+                <section className="rounded-xl border border-[#d6bb7e]/20 bg-[#d6bb7e]/[0.08] p-4">
+                  <h3 className="text-[10px] font-semibold uppercase tracking-[0.16em] text-[#ead39e]">
+                    Admin feedback
+                  </h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-white/85">
+                    {viewingArtistCv.adminFeedback}
+                  </p>
+                </section>
+              )}
+            </div>
+          </section>
+        </div>
+      )}
     </div>
   );
 };

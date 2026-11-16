@@ -26,6 +26,7 @@ function communityFeedClient(tables: Record<string, Array<Record<string, unknown
           filters.push((row) => values.includes(row[column]));
           return query;
         },
+        range: () => query,
         order: () => query,
         then: (
           resolve: (value: { data: Array<Record<string, unknown>>; error: null }) => unknown,
@@ -148,6 +149,7 @@ test('loads persisted community posts and images for the public feed', async () 
           body: 'A new work in progress.',
           image_key: 'https://storage.example/studio.jpg',
           artwork_id: 'artwork-1',
+          likes_count: 99,
           is_demo: false,
         },
         {
@@ -164,13 +166,19 @@ test('loads persisted community posts and images for the public feed', async () 
         { id: 'artwork-1', artist_id: 'artist-1', is_demo: false },
       ],
       follows: [],
-      likes: [],
+      likes: [
+        { id: 1, post_id: 'post-1', user_id: 'artist-1' },
+        { id: 2, post_id: 'post-1', user_id: 'collector-1' },
+        { id: 3, post_id: 'hidden-post', user_id: 'collector-1' },
+      ],
     }),
     'artist-1'
   );
 
-  assert.deepEqual(feed.posts.map((post) => post.id), ['post-1']);
-  assert.equal(feed.posts[0].imageKey, 'https://storage.example/studio.jpg');
+  assert.deepEqual(feed.posts.map((post) => post['id']), ['post-1']);
+  assert.equal(feed.posts[0]['imageKey'], 'https://storage.example/studio.jpg');
+  assert.equal(feed.posts[0].likesCount, 2);
+  assert.deepEqual(feed.likedPostIds, ['post-1']);
   assert.deepEqual(feed.artworks.map((artwork) => artwork.id), ['artwork-1']);
   assert.deepEqual(feed.comments.map((comment) => comment.id), ['comment-1']);
 });

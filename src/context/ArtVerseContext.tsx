@@ -226,6 +226,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [exhibitionError, setExhibitionError] = useState<string | null>(null);
   const profileSyncTasks = useRef(new Map<string, Promise<Profile>>());
   const activeAuthUserId = useRef<string | null>(null);
+  const catalogRequestId = useRef(0);
 
   const syncSupabaseProfile = useCallback(
     (user: SupabaseUser) => {
@@ -289,6 +290,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   );
 
   const loadCatalog = useCallback(async () => {
+    const requestId = ++catalogRequestId.current;
     const startedAt = Date.now();
     setIsLoadingCatalog(true);
     setCatalogError(null);
@@ -297,6 +299,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
         authMode === 'authenticated' && currentUser?.role === 'collector'
           ? await artverseApi.fetchCatalog()
           : await artverseApi.fetchCommunityFeed();
+      if (requestId !== catalogRequestId.current) return;
       setProfiles(data.profiles);
       setArtworks(data.artworks);
       setPosts(data.posts);
@@ -305,22 +308,26 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       setFollowedArtistIds(Array.from(new Set(data.followedArtistIds)));
       setLikedPostIds(Array.from(new Set(data.likedPostIds)));
     } catch (err) {
-      setCatalogError(
-        err instanceof Error ? err.message : 'Unable to load the artwork catalog.'
-      );
-      setProfiles([]);
-      setArtworks([]);
-      setPosts([]);
-      setComments([]);
-      setSavedArtworkIds([]);
-      setFollowedArtistIds([]);
-      setLikedPostIds([]);
-    } finally {
-      const elapsed = Date.now() - startedAt;
-      if (elapsed < 280) {
-        await new Promise((resolve) => setTimeout(resolve, 280 - elapsed));
+      if (requestId === catalogRequestId.current) {
+        setCatalogError(
+          err instanceof Error ? err.message : 'Unable to load the artwork catalog.'
+        );
+        setProfiles([]);
+        setArtworks([]);
+        setPosts([]);
+        setComments([]);
+        setSavedArtworkIds([]);
+        setFollowedArtistIds([]);
+        setLikedPostIds([]);
       }
-      setIsLoadingCatalog(false);
+    } finally {
+      if (requestId === catalogRequestId.current) {
+        const elapsed = Date.now() - startedAt;
+        if (elapsed < 280) {
+          await new Promise((resolve) => setTimeout(resolve, 280 - elapsed));
+        }
+        if (requestId === catalogRequestId.current) setIsLoadingCatalog(false);
+      }
     }
   }, [authMode, currentUser]);
 
@@ -691,11 +698,11 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const toggleFollowArtist = useCallback(
     async (artistId: string) => {
       requireAuthenticatedUser(authMode, currentUser);
-      await artverseApi.toggleFollow(artistId);
+      const { following } = await artverseApi.toggleFollow(artistId);
       setFollowedArtistIds((prev) =>
-        prev.includes(artistId)
-            ? prev.filter((id) => id !== artistId)
-            : Array.from(new Set([...prev, artistId]))
+        following
+          ? Array.from(new Set([...prev, artistId]))
+          : prev.filter((id) => id !== artistId)
       );
     },
     [authMode, currentUser]
@@ -788,22 +795,21 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const toggleLikePost = useCallback(
     async (postId: string) => {
       requireAuthenticatedUser(authMode, currentUser);
-      const already = likedPostIds.includes(postId);
-      await artverseApi.togglePostLike(postId);
+      const { liked, likesCount } = await artverseApi.togglePostLike(postId);
       setLikedPostIds((prev) =>
-        prev.includes(postId)
-          ? prev.filter((id) => id !== postId)
-          : Array.from(new Set([...prev, postId]))
+        liked
+          ? Array.from(new Set([...prev, postId]))
+          : prev.filter((id) => id !== postId)
       );
       setPosts((prev) =>
         prev.map((p) =>
           p.id === postId
-            ? { ...p, likesCount: Math.max(0, p.likesCount + (already ? -1 : 1)) }
+            ? { ...p, likesCount }
             : p
         )
       );
     },
-    [authMode, currentUser, likedPostIds]
+    [authMode, currentUser]
   );
 
   const openOrCreateConversation = useCallback(
