@@ -1,8 +1,10 @@
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { AnimatePresence, motion, useReducedMotion } from 'motion/react';
 import { Bell, CheckCheck, Edit3, Eye, LogOut, PackageCheck, Plus, Trash2 } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
+import { artverseApi } from '../services/artverseApi';
+import type { ArtistCV } from '../types/artverse';
 import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
 import {
   formatAvailabilityLabel,
@@ -13,6 +15,7 @@ import {
   formatShortDate,
   formatSaleModeLabel,
 } from '../utils/formatters';
+import { ARTIST_CV_STATUS_LABELS, validateArtistCV } from '../utils/artistCV';
 import atelierCover from '../assets/images/atelier_editorial_cover_1792993242654.webp';
 
 const EASE_OUT: [number, number, number, number] = [0.16, 1, 0.3, 1];
@@ -47,6 +50,59 @@ export const DashboardPage: React.FC = () => {
   const [notificationActionError, setNotificationActionError] = useState<string | null>(null);
   const [profilePhotoUploading, setProfilePhotoUploading] = useState(false);
   const [profilePhotoError, setProfilePhotoError] = useState<string | null>(null);
+  const [artistCv, setArtistCv] = useState<ArtistCV | null>(null);
+  const [cvDraft, setCvDraft] = useState<Partial<ArtistCV>>({
+    biography: '',
+    artisticStatement: '',
+    education: '',
+    experience: '',
+    exhibitions: '',
+    awards: '',
+    specialisation: '',
+    status: 'draft',
+  });
+  const [cvErrors, setCvErrors] = useState<string[]>([]);
+  const [cvNotice, setCvNotice] = useState<string | null>(null);
+  const [cvSaving, setCvSaving] = useState(false);
+  const [cvSubmitting, setCvSubmitting] = useState(false);
+  const [cvFormOpen, setCvFormOpen] = useState(false);
+  const role = currentUser?.role;
+
+  useEffect(() => {
+    if (role !== 'artist') return;
+    let cancelled = false;
+    artverseApi.fetchArtistCV()
+      .then((data) => {
+        if (!cancelled) {
+          const nextCv = data.cv;
+          setArtistCv(nextCv);
+          if (nextCv) {
+            setCvDraft({
+              id: nextCv.id,
+              artistId: nextCv.artistId,
+              biography: nextCv.biography,
+              artisticStatement: nextCv.artisticStatement,
+              education: nextCv.education,
+              experience: nextCv.experience,
+              exhibitions: nextCv.exhibitions,
+              awards: nextCv.awards,
+              specialisation: nextCv.specialisation,
+              status: nextCv.status,
+              adminFeedback: nextCv.adminFeedback,
+              reviewedBy: nextCv.reviewedBy,
+              reviewedAt: nextCv.reviewedAt,
+              submittedAt: nextCv.submittedAt,
+            });
+          }
+        }
+      })
+      .catch(() => {
+        if (!cancelled) setCvNotice('Unable to load your artist CV right now.');
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [role]);
 
   const managedOwnerId = currentUser?.id;
 
@@ -61,7 +117,84 @@ export const DashboardPage: React.FC = () => {
   );
 
   const savedWorks = artworks.filter((a) => savedArtworkIds.includes(a.id));
-  const role = currentUser?.role;
+
+  const handleCvFieldChange = (field: keyof typeof cvDraft, value: string) => {
+    setCvDraft((current) => ({ ...current, [field]: value }));
+    setCvErrors([]);
+    setCvNotice(null);
+  };
+
+  const handleCvFormToggle = (open: boolean) => {
+    setCvFormOpen(open);
+    if (open && !artistCv) {
+      setCvDraft({
+        biography: '',
+        artisticStatement: '',
+        education: '',
+        experience: '',
+        exhibitions: '',
+        awards: '',
+        specialisation: '',
+        status: 'draft',
+      });
+    }
+    setCvErrors([]);
+    setCvNotice(null);
+  };
+
+  const handleSaveCv = async (submit = false) => {
+    if (!currentUser || role !== 'artist') return;
+    setCvNotice(null);
+
+    const draft = {
+      ...cvDraft,
+      artistId: currentUser.id,
+      status: submit ? 'pending' : 'draft',
+    } as Partial<ArtistCV>;
+
+    if (submit) {
+      const errors = validateArtistCV(draft);
+      if (errors.length > 0) {
+        setCvErrors(errors);
+        setCvNotice('Please complete all required fields before submitting your CV.');
+        return;
+      }
+    }
+
+    try {
+      if (submit) setCvSubmitting(true); else setCvSaving(true);
+      const result = submit
+        ? await artverseApi.submitArtistCV(draft)
+        : await artverseApi.saveArtistCV(draft);
+      setArtistCv(result.cv);
+      setCvDraft({
+        id: result.cv.id,
+        artistId: result.cv.artistId,
+        biography: result.cv.biography,
+        artisticStatement: result.cv.artisticStatement,
+        education: result.cv.education,
+        experience: result.cv.experience,
+        exhibitions: result.cv.exhibitions,
+        awards: result.cv.awards,
+        specialisation: result.cv.specialisation,
+        status: result.cv.status,
+        adminFeedback: result.cv.adminFeedback,
+        reviewedBy: result.cv.reviewedBy,
+        reviewedAt: result.cv.reviewedAt,
+        submittedAt: result.cv.submittedAt,
+      });
+      setCvErrors([]);
+      setCvNotice(
+        submit
+          ? 'Your Artist CV has been submitted successfully and is awaiting administrative review.'
+          : 'Your Artist CV draft has been saved.'
+      );
+    } catch (error) {
+      setCvNotice(error instanceof Error ? error.message : 'Unable to save your CV.');
+    } finally {
+      if (submit) setCvSubmitting(false); else setCvSaving(false);
+    }
+  };
 
   const totalPortfolioValue = managedListings.reduce(
     (acc, item) => acc + item.price,
@@ -562,6 +695,159 @@ export const DashboardPage: React.FC = () => {
             </>
           )}
         </section>
+        )}
+
+        {role === 'artist' && (
+          <section className="space-y-5 rounded-2xl border border-[#E6DFD3] bg-white p-6 sm:p-8">
+            <div className="flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium tracking-wide text-[#8C6828]">My Artist CV</p>
+                <h2 className="font-serif text-2xl sm:text-3xl font-semibold text-[#141312]">
+                  Professional profile & submission
+                </h2>
+              </div>
+              {artistCv && (
+                <span className="rounded-full bg-[#FAF8F3] px-3 py-1.5 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#8C6828]">
+                  {ARTIST_CV_STATUS_LABELS[artistCv.status]}
+                </span>
+              )}
+            </div>
+
+            {!cvFormOpen && (
+              <div className="rounded-xl border border-dashed border-[#D8D0C1] bg-[#FAF8F3] p-5">
+                <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
+                  <div>
+                    <p className="text-sm text-[#3B352F]">
+                      {artistCv
+                        ? 'Your CV is ready to be updated or refined before the next submission.'
+                        : 'Create your artist CV to showcase your biography, statement, experience, and portfolio highlights.'}
+                    </p>
+                    {artistCv && (
+                      <p className="mt-2 text-xs uppercase tracking-[0.14em] text-[#8C6828]">
+                        {ARTIST_CV_STATUS_LABELS[artistCv.status]}
+                      </p>
+                    )}
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => handleCvFormToggle(true)}
+                    className="rounded-xl bg-[#B38B40] px-4 py-2.5 text-xs font-medium text-[#141312] transition hover:bg-[#C69D4E]"
+                  >
+                    {artistCv ? 'Update CV' : 'Create CV'}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {artistCv?.status === 'pending' && (
+              <div className="rounded-xl border border-amber-200 bg-amber-50 p-3 text-sm text-amber-900">
+                Your CV is currently under review and cannot be edited until the administrator resolves it.
+              </div>
+            )}
+
+            {artistCv?.status === 'rejected' && artistCv.adminFeedback && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-900">
+                <p className="font-semibold">Administrator feedback</p>
+                <p className="mt-1 whitespace-pre-wrap">{artistCv.adminFeedback}</p>
+              </div>
+            )}
+
+            {cvNotice && (
+              <div className="rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] p-3 text-sm text-[#3B352F]">
+                {cvNotice}
+              </div>
+            )}
+
+            {cvErrors.length > 0 && (
+              <div className="rounded-xl border border-red-200 bg-red-50 p-3 text-sm text-red-800">
+                <ul className="list-disc space-y-1 pl-6">
+                  {cvErrors.map((error) => <li key={error}>{error}</li>)}
+                </ul>
+              </div>
+            )}
+
+            {cvFormOpen && (
+              <>
+                <div className="grid gap-5 lg:grid-cols-2">
+                  <textarea
+                    value={cvDraft.biography ?? ''}
+                    onChange={(event) => handleCvFieldChange('biography', event.target.value)}
+                    disabled={artistCv?.status === 'pending'}
+                    placeholder="Artist biography: a professional introduction to your practice, background, and artistic journey"
+                    className="min-h-32 rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] p-3 text-sm text-[#141312] outline-none transition focus:border-[#B38B40] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <textarea
+                    value={cvDraft.artisticStatement ?? ''}
+                    onChange={(event) => handleCvFieldChange('artisticStatement', event.target.value)}
+                    disabled={artistCv?.status === 'pending'}
+                    placeholder="Artistic statement: describe your philosophy, inspiration, and artistic vision"
+                    className="min-h-32 rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] p-3 text-sm text-[#141312] outline-none transition focus:border-[#B38B40] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <textarea
+                    value={cvDraft.education ?? ''}
+                    onChange={(event) => handleCvFieldChange('education', event.target.value)}
+                    disabled={artistCv?.status === 'pending'}
+                    placeholder="Education and training"
+                    className="min-h-32 rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] p-3 text-sm text-[#141312] outline-none transition focus:border-[#B38B40] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <textarea
+                    value={cvDraft.experience ?? ''}
+                    onChange={(event) => handleCvFieldChange('experience', event.target.value)}
+                    disabled={artistCv?.status === 'pending'}
+                    placeholder="Artistic experience"
+                    className="min-h-32 rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] p-3 text-sm text-[#141312] outline-none transition focus:border-[#B38B40] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <textarea
+                    value={cvDraft.exhibitions ?? ''}
+                    onChange={(event) => handleCvFieldChange('exhibitions', event.target.value)}
+                    disabled={artistCv?.status === 'pending'}
+                    placeholder="Exhibitions: names, venues, and dates"
+                    className="min-h-32 rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] p-3 text-sm text-[#141312] outline-none transition focus:border-[#B38B40] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <textarea
+                    value={cvDraft.awards ?? ''}
+                    onChange={(event) => handleCvFieldChange('awards', event.target.value)}
+                    disabled={artistCv?.status === 'pending'}
+                    placeholder="Awards and recognition"
+                    className="min-h-32 rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] p-3 text-sm text-[#141312] outline-none transition focus:border-[#B38B40] disabled:cursor-not-allowed disabled:opacity-60"
+                  />
+                  <textarea
+                    value={cvDraft.specialisation ?? ''}
+                    onChange={(event) => handleCvFieldChange('specialisation', event.target.value)}
+                    disabled={artistCv?.status === 'pending'}
+                    placeholder="Artistic specialisation"
+                    className="min-h-32 rounded-xl border border-[#D8D0C1] bg-[#FAF8F3] p-3 text-sm text-[#141312] outline-none transition focus:border-[#B38B40] disabled:cursor-not-allowed disabled:opacity-60 lg:col-span-2"
+                  />
+                </div>
+
+                <div className="flex flex-wrap justify-end gap-3 pt-2">
+                  <button
+                    type="button"
+                    onClick={() => handleCvFormToggle(false)}
+                    className="rounded-xl border border-[#D8D0C1] bg-white px-4 py-2.5 text-xs font-medium text-[#141312] transition hover:border-[#B38B40]"
+                  >
+                    Close
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveCv(false)}
+                    disabled={cvSaving || artistCv?.status === 'pending'}
+                    className="rounded-xl border border-[#D8D0C1] bg-white px-4 py-2.5 text-xs font-medium text-[#141312] transition hover:border-[#B38B40] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {cvSaving ? 'Saving...' : 'Save as Draft'}
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => void handleSaveCv(true)}
+                    disabled={cvSubmitting || artistCv?.status === 'pending'}
+                    className="rounded-xl bg-[#B38B40] px-4 py-2.5 text-xs font-medium text-[#141312] transition hover:bg-[#C69D4E] disabled:cursor-not-allowed disabled:opacity-60"
+                  >
+                    {cvSubmitting ? 'Submitting...' : 'Submit for Approval'}
+                  </button>
+                </div>
+              </>
+            )}
+          </section>
         )}
 
         {/* Role-specific activity and saved artworks */}

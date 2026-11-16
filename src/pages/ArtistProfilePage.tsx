@@ -1,8 +1,10 @@
-import React from 'react';
+import React, { useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { motion, useReducedMotion } from 'motion/react';
 import { ArrowLeft, MessageSquare } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
+import { artverseApi } from '../services/artverseApi';
+import type { ArtistCV } from '../types/artverse';
 import { ArtworkImage, ProfileAvatar } from '../data/artworkImages';
 import { ArtworkCard } from '../components/artwork/ArtworkCard';
 import { ArtworkGridSkeleton } from '../components/ui/Skeletons';
@@ -24,8 +26,24 @@ export const ArtistProfilePage: React.FC = () => {
     openOrCreateConversation,
     currentUser,
   } = useArtVerse();
+  const [artistCv, setArtistCv] = useState<ArtistCV | null>(null);
 
   const artist = id ? getProfileById(id) : undefined;
+
+  useEffect(() => {
+    if (!id) return;
+    let cancelled = false;
+    artverseApi.fetchPublicArtistCV(id)
+      .then((data) => {
+        if (!cancelled) setArtistCv(data.cv);
+      })
+      .catch(() => {
+        if (!cancelled) setArtistCv(null);
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [id]);
 
   if (!artist) {
     return (
@@ -157,6 +175,60 @@ export const ArtistProfilePage: React.FC = () => {
             {artist.bio}
           </p>
         </motion.div>
+
+        {artistCv && (
+          <motion.section
+            initial={shouldReduceMotion ? false : { opacity: 0, y: 16 }}
+            animate={{ opacity: 1, y: 0 }}
+            transition={{ duration: 0.28, ease: EASE_OUT }}
+            className="mb-14 rounded-2xl border border-[#E6DFD3] bg-white p-6 sm:p-8"
+          >
+            <div className="mb-6 flex items-end justify-between gap-3">
+              <div>
+                <p className="text-xs font-medium tracking-wide text-[#8C6828]">Artist CV</p>
+                <h2 className="mt-1 font-serif text-3xl font-semibold text-[#141312]">Artist Biography & Practice</h2>
+              </div>
+            </div>
+            <div className="grid gap-6 md:grid-cols-2">
+              <div className="space-y-5 rounded-2xl border border-[#E6DFD3] bg-[#FAF8F3] p-5">
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-[#8C6828]">Artist Biography</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#4F4840]">{artistCv.biography}</p>
+                </div>
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-[#8C6828]">Artistic Statement</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#4F4840]">{artistCv.artisticStatement}</p>
+                </div>
+              </div>
+              <div className="space-y-5 rounded-2xl border border-[#E6DFD3] bg-[#FAF8F3] p-5">
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-[#8C6828]">Education & Training</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#4F4840]">{artistCv.education}</p>
+                </div>
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-[#8C6828]">Artistic Experience</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#4F4840]">{artistCv.experience}</p>
+                </div>
+              </div>
+              <div className="space-y-5 rounded-2xl border border-[#E6DFD3] bg-[#FAF8F3] p-5">
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-[#8C6828]">Exhibitions</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#4F4840]">{artistCv.exhibitions}</p>
+                </div>
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-[#8C6828]">Awards & Recognition</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#4F4840]">{artistCv.awards}</p>
+                </div>
+              </div>
+              <div className="space-y-5 rounded-2xl border border-[#E6DFD3] bg-[#FAF8F3] p-5">
+                <div>
+                  <h3 className="text-xs font-medium uppercase tracking-[0.12em] text-[#8C6828]">Artistic Specialisation</h3>
+                  <p className="mt-2 whitespace-pre-wrap text-sm leading-relaxed text-[#4F4840]">{artistCv.specialisation}</p>
+                </div>
+              </div>
+            </div>
+          </motion.section>
+        )}
 
         {/* Portfolio Grid */}
         <section className="space-y-8">

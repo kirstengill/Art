@@ -31,11 +31,13 @@ import type {
   AdminRoleFilter,
   AdminTimeframe,
   AdminUserRecord,
+  ArtistCVApprovalRecord,
 } from '../types/admin';
 import { formatMoney, formatRoleLabel, formatShortDate } from '../utils/formatters';
+import { ARTIST_CV_STATUS_LABELS } from '../utils/artistCV';
 import { ArtworkImage } from '../data/artworkImages';
 
-type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders' | 'purchase_requests' | 'collector_approval' | 'donations' | 'exhibitions';
+type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders' | 'purchase_requests' | 'collector_approval' | 'artist_cvs' | 'donations' | 'exhibitions';
 
 const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   intent_created: ['awaiting_payment', 'cancelled'],
@@ -56,6 +58,7 @@ const NAV_ITEMS: Array<{ id: AdminSection; label: string; icon: React.FC<{ class
   { id: 'orders', label: 'Order intents', icon: CreditCard },
   { id: 'purchase_requests', label: 'Purchase Requests', icon: CreditCard },
   { id: 'collector_approval', label: 'Collector Approval', icon: UserCheck },
+  { id: 'artist_cvs', label: 'Artist CV Approvals', icon: Brush },
   { id: 'donations', label: 'Donations', icon: CreditCard },
   { id: 'exhibitions', label: 'Exhibitions', icon: Image },
 ];
@@ -183,12 +186,14 @@ export const AdminPage: React.FC = () => {
   const [orders, setOrders] = useState<AdminPageResult<AdminOrderRecord> | null>(null);
   const [purchaseRequests, setPurchaseRequests] = useState<AdminPageResult<AdminPurchaseRequestRecord> | null>(null);
   const [collectorApprovals, setCollectorApprovals] = useState<AdminPageResult<AdminCollectorApprovalRecord> | null>(null);
+  const [artistCvs, setArtistCvs] = useState<AdminPageResult<ArtistCVApprovalRecord> | null>(null);
   const [donations, setDonations] = useState<Array<{ id: string; donorId: string; artistId: string | null; amount: number; currency: string; status: string; createdAt: string }>>([]);
   const [exhibitions, setExhibitions] = useState<Array<{ id: string; title: string; status: string; featured: boolean; startDate: string; endDate: string; curatorId: string | null }>>([]);
   const [roleFilter, setRoleFilter] = useState<AdminRoleFilter>('all');
   const [contentKind, setContentKind] = useState<AdminContentKind>('artworks');
   const [contentFilter, setContentFilter] = useState<'all' | 'direct'>('all');
   const [collectorApprovalFilter, setCollectorApprovalFilter] = useState<AdminCollectorApprovalFilter>('all');
+  const [artistCvFilter, setArtistCvFilter] = useState<'all' | 'pending' | 'approved' | 'rejected'>('pending');
   const [search, setSearch] = useState('');
   const [artistSearch, setArtistSearch] = useState('');
   const [page, setPage] = useState(1);
@@ -343,6 +348,34 @@ export const AdminPage: React.FC = () => {
   }, [page, collectorApprovalFilter, search, section]);
 
   useEffect(() => {
+    if (section !== 'artist_cvs') return;
+    let cancelled = false;
+    setLoading(true);
+    setError(null);
+    const timeout = window.setTimeout(() => {
+      artverseApi.fetchArtistCVApprovals({
+        page,
+        pageSize: 20,
+        filter: artistCvFilter,
+        search,
+      })
+        .then((data) => {
+          if (!cancelled) setArtistCvs(data);
+        })
+        .catch((err: unknown) => {
+          if (!cancelled) setError(err instanceof Error ? err.message : 'Unable to load artist CV approvals.');
+        })
+        .finally(() => {
+          if (!cancelled) setLoading(false);
+        });
+    }, 180);
+    return () => {
+      cancelled = true;
+      window.clearTimeout(timeout);
+    };
+  }, [page, artistCvFilter, search, section]);
+
+  useEffect(() => {
     if (section !== 'donations') return;
     let cancelled = false;
     setLoading(true);
@@ -393,6 +426,7 @@ export const AdminPage: React.FC = () => {
     setSearch('');
     setArtistSearch('');
     setCollectorApprovalFilter('all');
+    setArtistCvFilter('pending');
   };
 
   const handleOrderStatusChange = async (order: AdminOrderRecord, status: string) => {
@@ -486,6 +520,41 @@ export const AdminPage: React.FC = () => {
       );
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to update collector approval.');
+    } finally {
+      setSavingApprovalId(null);
+    }
+  };
+
+  const handleArtistCvDecision = async (record: ArtistCVApprovalRecord, action: 'approve' | 'reject') => {
+    setSavingApprovalId(record.id);
+    setError(null);
+    try {
+      const feedback = action === 'reject'
+        ? window.prompt(`Provide feedback for ${record.artistName}:`, '')
+        : '';
+      if (action === 'reject' && feedback === null) return;
+      const updated = await artverseApi.reviewArtistCV(record.id, action, feedback || undefined);
+      setArtistCvs((current) =>
+        current
+          ? {
+              ...current,
+              records: current.records.map((item) =>
+                item.id === record.id
+                  ? {
+                      ...item,
+                      status: updated.cv.status,
+                      adminFeedback: updated.cv.adminFeedback,
+                      reviewedBy: updated.cv.reviewedBy,
+                      reviewedAt: updated.cv.reviewedAt,
+                      updatedAt: updated.cv.updatedAt,
+                    }
+                  : item
+              ),
+            }
+          : current
+      );
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Unable to update artist CV.');
     } finally {
       setSavingApprovalId(null);
     }
@@ -1207,6 +1276,111 @@ export const AdminPage: React.FC = () => {
                 </div>
               )}
               {collectorApprovals && <Pager data={collectorApprovals} onPage={setPage} />}
+            </section>
+          )}
+
+          {section === 'artist_cvs' && (
+            <section className="space-y-5">
+              <p className="max-w-3xl text-sm leading-relaxed text-white/60">
+                Review artist CV submissions and approve or reject them before they become publicly visible on each artist profile.
+              </p>
+              <div className="flex flex-wrap gap-3">
+                <label className="relative min-w-56 flex-1">
+                  <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-white/45" />
+                  <input
+                    value={search}
+                    onChange={(event) => { setSearch(event.target.value); setPage(1); }}
+                    placeholder="Search submissions"
+                    aria-label="Search artist CV submissions"
+                    className="w-full rounded-xl border border-white/15 bg-white/[0.07] py-2.5 pl-10 pr-3 text-sm text-white placeholder:text-white/40"
+                  />
+                </label>
+                <select
+                  value={artistCvFilter}
+                  onChange={(event) => { setArtistCvFilter(event.target.value as 'all' | 'pending' | 'approved' | 'rejected'); setPage(1); }}
+                  aria-label="Filter artist CV status"
+                  className="rounded-lg border border-white/15 bg-[#262420] px-3 text-sm text-white"
+                >
+                  <option value="pending">Pending</option>
+                  <option value="approved">Approved</option>
+                  <option value="rejected">Rejected</option>
+                  <option value="all">All</option>
+                </select>
+              </div>
+              {artistCvs && (
+                <div className="space-y-4">
+                  {artistCvs.records.map((cv) => (
+                    <article key={cv.id} className="rounded-2xl border border-white/15 bg-white/[0.04] p-4 sm:p-5">
+                      <div className="flex flex-col gap-4 lg:flex-row lg:items-start lg:justify-between">
+                        <div className="flex min-w-0 items-start gap-3">
+                          <div className="h-14 w-14 overflow-hidden rounded-full border border-white/10 bg-[#FAF8F3]">
+                            {cv.artistAvatar ? (
+                              <ArtworkImage imageKey={cv.artistAvatar} alt={cv.artistName} className="h-full w-full object-cover" />
+                            ) : (
+                              <div className="flex h-full items-center justify-center text-xs font-medium text-[#141312]">
+                                {cv.artistName.slice(0, 1).toUpperCase()}
+                              </div>
+                            )}
+                          </div>
+                          <div className="min-w-0">
+                            <div className="flex flex-wrap items-center gap-2">
+                              <h3 className="font-serif text-xl font-semibold text-white">{cv.artistName}</h3>
+                              <span className="rounded-full bg-[#d6bb7e]/10 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-[0.12em] text-[#ead39e]">
+                                {ARTIST_CV_STATUS_LABELS[cv.status]}
+                              </span>
+                            </div>
+                            <p className="mt-1 text-xs text-white/55">@{cv.artistHandle || 'artist'} · Submitted {formatShortDate(cv.submittedAt || cv.createdAt)}</p>
+                            <p className="mt-2 text-xs text-white/60">Professional CV includes biography, statement, education, experience, exhibitions, awards, and specialisation.</p>
+                          </div>
+                        </div>
+                        <div className="flex shrink-0 flex-wrap gap-2">
+                          {cv.status === 'pending' && (
+                            <>
+                              <button
+                                type="button"
+                                disabled={savingApprovalId === cv.id}
+                                onClick={() => void handleArtistCvDecision(cv, 'approve')}
+                                className="rounded-lg bg-emerald-500/15 px-3 py-2 text-xs font-semibold text-emerald-100 transition-colors hover:bg-emerald-500/25 disabled:opacity-50"
+                              >
+                                Approve CV
+                              </button>
+                              <button
+                                type="button"
+                                disabled={savingApprovalId === cv.id}
+                                onClick={() => void handleArtistCvDecision(cv, 'reject')}
+                                className="rounded-lg bg-red-500/10 px-3 py-2 text-xs font-semibold text-red-100 transition-colors hover:bg-red-500/20 disabled:opacity-50"
+                              >
+                                Reject CV
+                              </button>
+                            </>
+                          )}
+                          {cv.status !== 'pending' && (
+                            <button
+                              type="button"
+                              onClick={() => window.alert(`${cv.artistName}'s CV\n\n${cv.biography}\n\n${cv.artisticStatement}\n\nEducation & training:\n${cv.education}\n\nArtistic experience:\n${cv.experience}\n\nExhibitions:\n${cv.exhibitions}\n\nAwards:\n${cv.awards}\n\nSpecialisation:\n${cv.specialisation}`)}
+                              className="rounded-lg border border-white/15 bg-white/[0.05] px-3 py-2 text-xs font-medium text-white hover:bg-white/[0.08]"
+                            >
+                              View complete CV
+                            </button>
+                          )}
+                        </div>
+                      </div>
+                      {cv.adminFeedback && (
+                        <div className="mt-4 rounded-xl border border-[#d6bb7e]/20 bg-[#d6bb7e]/[0.08] p-3 text-sm text-white/80">
+                          <span className="text-[10px] uppercase tracking-[0.14em] text-[#ead39e]">Feedback</span>
+                          <p className="mt-2 whitespace-pre-wrap">{cv.adminFeedback}</p>
+                        </div>
+                      )}
+                    </article>
+                  ))}
+                  {artistCvs.records.length === 0 && (
+                    <div className="rounded-xl border border-dashed border-white/20 p-8 text-center text-sm text-white/55">
+                      No artist CV submissions match these filters.
+                    </div>
+                  )}
+                </div>
+              )}
+              {artistCvs && <Pager data={artistCvs} onPage={setPage} />}
             </section>
           )}
 

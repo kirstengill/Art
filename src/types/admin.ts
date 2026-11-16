@@ -146,3 +146,25 @@ export interface AdminCollectorApprovalRecord {
   collectorApprovedBy: string | null;
   collectorRejectionReason: string | null;
 }
+
+export interface ArtistCVApprovalRecord {
+  id: string;
+  artistId: string;
+  artistName: string;
+  artistHandle: string;
+  artistAvatar: string | null;
+  biography: string;
+  artisticStatement: string;
+  education: string;
+  experience: string;
+  exhibitions: string;
+  awards: string;
+  specialisation: string;
+  status: 'draft' | 'pending' | 'approved' | 'rejected';
+  adminFeedback: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}

@@ -228,6 +228,209 @@ function createApp() {
     }
   });
 
+  app.get('/api/artist-cv', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const { data, error } = await req.supabase
+        .from('artist_cvs')
+        .select('*')
+        .eq('artist_id', req.user!.uid)
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      res.json({ cv: data ? fromDatabase(data) : null });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load artist CV.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.post('/api/artist-cv', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const payload = req.body || {};
+      const nextPayload = {
+        artist_id: req.user!.uid,
+        biography: String(payload.biography ?? '').trim(),
+        artistic_statement: String(payload.artisticStatement ?? '').trim(),
+        education: String(payload.education ?? '').trim(),
+        experience: String(payload.experience ?? '').trim(),
+        exhibitions: String(payload.exhibitions ?? '').trim(),
+        awards: String(payload.awards ?? '').trim(),
+        specialisation: String(payload.specialisation ?? '').trim(),
+        status: payload.status === 'draft' || payload.status === 'rejected' ? payload.status : 'draft',
+        admin_feedback: payload.adminFeedback ?? null,
+        reviewed_by: payload.reviewedBy ?? null,
+        reviewed_at: payload.reviewedAt ?? null,
+        submitted_at: payload.submittedAt ?? null,
+      };
+      const { data, error } = await req.supabase
+        .from('artist_cvs')
+        .upsert(nextPayload, { onConflict: 'artist_id' })
+        .select('*')
+        .single();
+      if (error) throw new Error(error.message);
+      res.json({ cv: fromDatabase(data) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to save artist CV draft.';
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.post('/api/artist-cv/submit', requireAuth, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const payload = req.body || {};
+      const required = [
+        'biography',
+        'artisticStatement',
+        'education',
+        'experience',
+        'exhibitions',
+        'awards',
+        'specialisation',
+      ];
+      const missing = required.filter((key) => typeof payload[key] !== 'string' || payload[key].trim().length < 20);
+      if (missing.length > 0) {
+        res.status(400).json({ error: 'Please complete the required CV fields before submitting for approval.' });
+        return;
+      }
+      const row = {
+        artist_id: req.user!.uid,
+        biography: String(payload.biography).trim(),
+        artistic_statement: String(payload.artisticStatement).trim(),
+        education: String(payload.education).trim(),
+        experience: String(payload.experience).trim(),
+        exhibitions: String(payload.exhibitions).trim(),
+        awards: String(payload.awards).trim(),
+        specialisation: String(payload.specialisation).trim(),
+        status: 'pending',
+        admin_feedback: null,
+        reviewed_by: null,
+        reviewed_at: null,
+        submitted_at: new Date().toISOString(),
+        updated_at: new Date().toISOString(),
+      };
+      const { data, error } = await req.supabase
+        .from('artist_cvs')
+        .upsert(row, { onConflict: 'artist_id' })
+        .select('*')
+        .single();
+      if (error) throw new Error(error.message);
+      res.json({ cv: fromDatabase(data) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to submit artist CV.';
+      res.status(400).json({ error: message });
+    }
+  });
+
+  app.get('/api/artists/:artistId/cv', optionalAuth, async (req, res) => {
+    try {
+      const client = getSupabaseServiceClient();
+      const { data, error } = await client
+        .from('artist_cvs')
+        .select('*')
+        .eq('artist_id', req.params.artistId)
+        .eq('status', 'approved')
+        .maybeSingle();
+      if (error) throw new Error(error.message);
+      res.json({ cv: data ? fromDatabase(data) : null });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Failed to load public artist CV.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.get('/api/admin/artist-cvs', requireAuth, requireAdmin, async (req, res) => {
+    try {
+      const page = Number(req.query.page ?? 1) || 1;
+      const pageSize = Number(req.query.pageSize ?? 20) || 20;
+      const filter = typeof req.query.filter === 'string' ? req.query.filter : 'all';
+      const search = typeof req.query.search === 'string' ? req.query.search.trim() : '';
+      const service = getSupabaseServiceClient();
+      let query = service.from('artist_cvs').select('*').order('submitted_at', { ascending: false, nullsFirst: false });
+      if (filter !== 'all' && ['pending', 'approved', 'rejected'].includes(filter)) {
+        query = query.eq('status', filter);
+      }
+      if (search) {
+        query = query.or(`biography.ilike.%${search}%,artistic_statement.ilike.%${search}%,education.ilike.%${search}%,experience.ilike.%${search}%`);
+      }
+      const { data, error } = await query.range((page - 1) * pageSize, page * pageSize - 1);
+      if (error) throw new Error(error.message);
+      const artistIds = Array.from(new Set((data || []).map((row) => row.artist_id).filter(Boolean)));
+      const { data: profilesData, error: profilesError } = artistIds.length
+        ? await service
+            .from('profiles')
+            .select('id, full_name, handle, avatar_url')
+            .in('id', artistIds)
+        : { data: [], error: null };
+      if (profilesError) throw new Error(profilesError.message);
+      const profileMap = new Map((profilesData || []).map((profile) => [profile.id, profile]));
+      const records = (data || []).map((row) => {
+        const profile = profileMap.get(row.artist_id as string) as { full_name?: string; handle?: string; avatar_url?: string } | undefined;
+        const normalized = fromDatabase<Record<string, unknown>>(row) ?? {};
+        return {
+          ...(normalized as object),
+          artistName: profile?.full_name || 'Artist',
+          artistHandle: profile?.handle || '',
+          artistAvatar: profile?.avatar_url || null,
+        };
+      });
+      res.json({ records, page, pageSize, total: records.length });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to load artist CV approvals.';
+      res.status(500).json({ error: message });
+    }
+  });
+
+  app.patch('/api/admin/artist-cvs/:id', requireAuth, requireAdmin, async (req: AuthRequest, res) => {
+    try {
+      if (!req.supabase) throw new Error('Supabase database access is not configured.');
+      const action = req.body?.action;
+      if (action !== 'approve' && action !== 'reject') {
+        res.status(400).json({ error: 'Action must be approve or reject.' });
+        return;
+      }
+      const { data: existing, error: fetchError } = await req.supabase
+        .from('artist_cvs')
+        .select('*')
+        .eq('id', req.params.id)
+        .maybeSingle();
+      if (fetchError) throw new Error(fetchError.message);
+      if (!existing) {
+        res.status(404).json({ error: 'Artist CV not found.' });
+        return;
+      }
+      const nextStatus = action === 'approve' ? 'approved' : 'rejected';
+      const review = {
+        artist_cv_id: req.params.id,
+        artist_id: existing.artist_id,
+        status: nextStatus,
+        feedback: String(req.body?.feedback ?? '').trim() || null,
+        reviewed_by: req.user!.uid,
+        reviewed_at: new Date().toISOString(),
+      };
+      const { error: reviewError } = await req.supabase.from('artist_cv_reviews').insert(review);
+      if (reviewError) throw new Error(reviewError.message);
+      const { data, error } = await req.supabase
+        .from('artist_cvs')
+        .update({
+          status: nextStatus,
+          admin_feedback: review.feedback || null,
+          reviewed_by: req.user!.uid,
+          reviewed_at: review.reviewed_at,
+          updated_at: new Date().toISOString(),
+        })
+        .eq('id', req.params.id)
+        .select('*')
+        .single();
+      if (error) throw new Error(error.message);
+      res.json({ cv: fromDatabase(data) });
+    } catch (error: unknown) {
+      const message = error instanceof Error ? error.message : 'Unable to review artist CV.';
+      res.status(400).json({ error: message });
+    }
+  });
+
   app.get('/api/admin/overview', requireAuth, requireAdmin, async (req, res) => {
     const rawTimeframe = req.query.timeframe;
     let timeframe: AdminTimeframe = 30;
