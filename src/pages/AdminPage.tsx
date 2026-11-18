@@ -15,6 +15,7 @@ import {
   Trash2,
   UserCheck,
   Users,
+  Video,
   X,
   XCircle,
 } from 'lucide-react';
@@ -37,8 +38,9 @@ import type {
 import { formatMoney, formatRoleLabel, formatShortDate } from '../utils/formatters';
 import { ARTIST_CV_STATUS_LABELS } from '../utils/artistCV';
 import { ArtworkImage } from '../data/artworkImages';
+import { OnlineClassesAdmin } from '../components/admin/OnlineClassesAdmin';
 
-type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders' | 'purchase_requests' | 'collector_approval' | 'artist_cvs' | 'donations' | 'exhibitions';
+type AdminSection = 'overview' | 'users' | 'artists' | 'content' | 'orders' | 'purchase_requests' | 'collector_approval' | 'artist_cvs' | 'donations' | 'exhibitions' | 'online_classes';
 
 const ORDER_STATUS_TRANSITIONS: Record<string, string[]> = {
   intent_created: ['awaiting_payment', 'cancelled'],
@@ -62,6 +64,7 @@ const NAV_ITEMS: Array<{ id: AdminSection; label: string; icon: React.FC<{ class
   { id: 'artist_cvs', label: 'Artist CV Approvals', icon: Brush },
   { id: 'donations', label: 'Donations', icon: CreditCard },
   { id: 'exhibitions', label: 'Exhibitions', icon: Image },
+  { id: 'online_classes', label: 'Online Classes', icon: Video },
 ];
 
 function ErrorNotice({ message }: { message: string }) {
@@ -1470,12 +1473,15 @@ export const AdminPage: React.FC = () => {
                           {savingExhibitionId === e.id ? 'Publishing…' : 'Publish to exhibitions'}
                         </button>
                       )}
+
                     </div>
                   ))}
                 </div>
               )}
             </section>
           )}
+
+          {section === 'online_classes' && <OnlineClassesAdmin />}
         </main>
       </div>
       {viewingArtistCv && (

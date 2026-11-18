@@ -32,6 +32,7 @@ const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage').then((m) 
 const DonationPage = lazy(() => import('./pages/DonationPage').then((m) => ({ default: m.DonationPage })));
 const ExhibitionPage = lazy(() => import('./pages/ExhibitionPage').then((m) => ({ default: m.ExhibitionPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const OnlineClassesPage = lazy(() => import('./pages/OnlineClassesPage').then((m) => ({ default: m.OnlineClassesPage })));
 
 const PageLoader: React.FC = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -112,6 +113,7 @@ const ScrollAndAnimateRoutes: React.FC = () => {
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminPage /></ProtectedRoute>} />
               <Route path="/exhibitions" element={<ExhibitionPage />} />
+              <Route path="/online-classes" element={<OnlineClassesPage />} />
               <Route path="/donations" element={<ProtectedRoute><DonationPage /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
