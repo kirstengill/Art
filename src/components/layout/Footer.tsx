@@ -58,6 +58,16 @@ export const Footer: React.FC = () => {
             </h3>
             <ul className="space-y-2">
               <li>
+                <Link to="/about" className="hover:text-[#141312] transition-colors">
+                  About Louvre Singa
+                </Link>
+              </li>
+              <li>
+                <Link to="/exhibitions" className="hover:text-[#141312] transition-colors">
+                  Exhibitions
+                </Link>
+              </li>
+              <li>
                 <Link to="/gallery" className="hover:text-[#141312] transition-colors">
                   Artwork Gallery
                 </Link>
@@ -119,7 +129,7 @@ export const Footer: React.FC = () => {
               Connect with Louvre Singa through our configured social channels.
             </p>
             <div className="flex flex-wrap gap-2 ">
-              {/* {HELPLINE_LINKS.map(({ label, href, icon: Icon }) => (
+              {HELPLINE_LINKS.map(({ label, href, icon: Icon }) => (
                 <a
                   key={label}
                   href={href}
@@ -131,39 +141,15 @@ export const Footer: React.FC = () => {
                 >
                   <Icon aria-hidden="true" className="h-4 w-4" />
                 </a>
-              ))} */}
-                <a
-        href="https://www.instagram.com/your_username/"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="Instagram"
-      >
-        <FaInstagram size={25}/>
-      </a>
-        <a
-        href="https://www.instagram.com/your_username/"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="TikTok"
-      >
-        <FaTiktok size={25}/>
-      </a>
-        <a
-        href="https://www.instagram.com/your_username/"
-        target="_blank"
-        rel="noopener noreferrer"
-        aria-label="WhatsApp"
-      >
-        <FaWhatsapp size={25}/>
-      </a>
+              ))}
             </div>
-            {/* {HELPLINE_LINKS.length < 3 && (
+            {HELPLINE_LINKS.length < 3 && (
               <p className="text-[11px] text-[#7A7267]">
                 {HELPLINE_LINKS.length === 0
                   ? 'Social links will appear when configured.'
                   : 'Some social links are not configured yet.'}
               </p>
-            )} */}
+            )}
           </div>
         </div>
 

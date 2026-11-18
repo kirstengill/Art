@@ -1,5 +1,157 @@
 {
+    "redirects": [
+        {
+            "source": "/about/",
+            "destination": "/about",
+            "permanent": true
+        },
+        {
+            "source": "/exhibitions/",
+            "destination": "/exhibitions",
+            "permanent": true
+        },
+        {
+            "source": "/community/",
+            "destination": "/community",
+            "permanent": true
+        },
+        {
+            "source": "/:path*",
+            "has": [
+                {
+                    "type": "host",
+                    "value": "www.louvresinga.com"
+                }
+            ],
+            "destination": "https://louvresinga.com/:path*",
+            "permanent": true
+        }
+    ],
+    "headers": [
+        {
+            "source": "/api/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/admin/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/dashboard/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/home/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/messages/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/collection/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/add-artwork/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/donations/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/login",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/signin",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/signup",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/auth/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/gallery/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/explore/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/artwork/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/artists/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        },
+        {
+            "source": "/online-classes/:path*",
+            "headers": [
+                { "key": "X-Robots-Tag", "value": "noindex, nofollow" }
+            ]
+        }
+    ],
     "rewrites": [
+        {
+            "source": "/robots.txt",
+            "destination": "/seo/robots.txt"
+        },
+        {
+            "source": "/sitemap.xml",
+            "destination": "/seo/sitemap.xml"
+        },
+        {
+            "source": "/about",
+            "destination": "/about/index.html"
+        },
+        {
+            "source": "/exhibitions",
+            "destination": "/exhibitions/index.html"
+        },
+        {
+            "source": "/community",
+            "destination": "/community/index.html"
+        },
         {
             "source": "/api/:path*",
             "destination": "/api/[...path]"

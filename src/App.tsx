@@ -19,6 +19,8 @@ import { CommunityPage } from './pages/CommunityPage';
 import { ProtectedRoute } from './components/guards/ProtectedRoute';
 import { LoadingStatusIndicator } from './components/ui/LoadingStatusIndicator';
 import { dashboardPathForRole } from './utils/roleRoutes';
+import { applyRouteMetadata } from './utils/seo';
+import { AboutPage } from './pages/AboutPage';
 
 // Lazy load heavy pages - note: these use named exports
 const DiscoverPage = lazy(() => import('./pages/DiscoverPage').then((m) => ({ default: m.DiscoverPage })));
@@ -55,6 +57,10 @@ const ScrollAndAnimateRoutes: React.FC = () => {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [location.pathname]);
+
+  useEffect(() => {
+    applyRouteMetadata(location.pathname);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -100,6 +106,7 @@ const ScrollAndAnimateRoutes: React.FC = () => {
               <Route path="/artists" element={<ArtistsPage />} />
               <Route path="/artists/:id" element={<ArtistProfilePage />} />
               <Route path="/community" element={<CommunityPage />} />
+              <Route path="/about" element={<AboutPage />} />
               <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />
               <Route path="/dashboard/artist" element={<ProtectedRoute allowedRoles={['artist']}><DashboardPage /></ProtectedRoute>} />
