@@ -19,6 +19,8 @@ import { CommunityPage } from './pages/CommunityPage';
 import { ProtectedRoute } from './components/guards/ProtectedRoute';
 import { LoadingStatusIndicator } from './components/ui/LoadingStatusIndicator';
 import { dashboardPathForRole } from './utils/roleRoutes';
+import { applyRouteMetadata } from './utils/seo';
+import { AboutPage } from './pages/AboutPage';
 
 // Lazy load heavy pages - note: these use named exports
 const DiscoverPage = lazy(() => import('./pages/DiscoverPage').then((m) => ({ default: m.DiscoverPage })));
@@ -32,6 +34,7 @@ const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage').then((m) 
 const DonationPage = lazy(() => import('./pages/DonationPage').then((m) => ({ default: m.DonationPage })));
 const ExhibitionPage = lazy(() => import('./pages/ExhibitionPage').then((m) => ({ default: m.ExhibitionPage })));
 const AdminPage = lazy(() => import('./pages/AdminPage').then((m) => ({ default: m.AdminPage })));
+const OnlineClassesPage = lazy(() => import('./pages/OnlineClassesPage').then((m) => ({ default: m.OnlineClassesPage })));
 
 const PageLoader: React.FC = () => (
   <div className="flex items-center justify-center min-h-screen">
@@ -54,6 +57,10 @@ const ScrollAndAnimateRoutes: React.FC = () => {
 
   useEffect(() => {
     window.scrollTo({ top: 0, behavior: 'auto' });
+  }, [location.pathname]);
+
+  useEffect(() => {
+    applyRouteMetadata(location.pathname);
   }, [location.pathname]);
 
   useEffect(() => {
@@ -99,6 +106,7 @@ const ScrollAndAnimateRoutes: React.FC = () => {
               <Route path="/artists" element={<ArtistsPage />} />
               <Route path="/artists/:id" element={<ArtistProfilePage />} />
               <Route path="/community" element={<CommunityPage />} />
+              <Route path="/about" element={<AboutPage />} />
               <Route path="/messages" element={<ProtectedRoute><MessagesPage /></ProtectedRoute>} />
               <Route path="/dashboard" element={<ProtectedRoute><DashboardRedirect /></ProtectedRoute>} />
               <Route path="/dashboard/artist" element={<ProtectedRoute allowedRoles={['artist']}><DashboardPage /></ProtectedRoute>} />
@@ -112,6 +120,7 @@ const ScrollAndAnimateRoutes: React.FC = () => {
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminPage /></ProtectedRoute>} />
               <Route path="/exhibitions" element={<ExhibitionPage />} />
+              <Route path="/online-classes" element={<OnlineClassesPage />} />
               <Route path="/donations" element={<ProtectedRoute><DonationPage /></ProtectedRoute>} />
               <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>

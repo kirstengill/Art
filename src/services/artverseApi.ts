@@ -4,6 +4,7 @@ import type {
   Artwork,
   ArtworkInput,
   ArtworkOffer,
+  ArtistCV,
   ArtistProfile,
   CommunityPost,
   Conversation,
@@ -28,6 +29,7 @@ import type {
   AdminArtworkFilter,
   AdminCollectorApprovalFilter,
   AdminCollectorApprovalRecord,
+  ArtistCVApprovalRecord,
   AdminContentKind,
   AdminContentRecord,
   AdminOverview,
@@ -240,6 +242,48 @@ export class ApiClient {
 
   fetchArtists(): Promise<ArtistsResponse> {
     return this.request('/api/artists');
+  }
+
+  fetchArtistCV(): Promise<{ cv: ArtistCV | null }> {
+    return this.request('/api/artist-cv');
+  }
+
+  saveArtistCV(input: Partial<ArtistCV>): Promise<{ cv: ArtistCV }> {
+    return this.request('/api/artist-cv', { method: 'POST', body: input });
+  }
+
+  submitArtistCV(input: Partial<ArtistCV>): Promise<{ cv: ArtistCV }> {
+    return this.request('/api/artist-cv/submit', { method: 'POST', body: input });
+  }
+
+  fetchPublicArtistCV(artistId: string): Promise<{ cv: ArtistCV | null }> {
+    return this.request(`/api/artists/${encodeURIComponent(artistId)}/cv`);
+  }
+
+  fetchArtistCVApprovals(options: {
+    page: number;
+    pageSize: number;
+    filter: 'all' | 'pending' | 'approved' | 'rejected';
+    search: string;
+  }): Promise<{ records: ArtistCVApprovalRecord[]; page: number; pageSize: number; total: number }> {
+    const params = new URLSearchParams({
+      page: String(options.page),
+      pageSize: String(options.pageSize),
+      filter: options.filter,
+      search: options.search,
+    });
+    return this.request(`/api/admin/artist-cvs?${params}`);
+  }
+
+  reviewArtistCV(
+    cvId: string,
+    action: 'approve' | 'reject',
+    feedback?: string
+  ): Promise<{ cv: ArtistCV }> {
+    return this.request(`/api/admin/artist-cvs/${encodeURIComponent(cvId)}`, {
+      method: 'PATCH',
+      body: { action, feedback },
+    });
   }
 
   saveArtwork(input: ArtworkInput): Promise<{ artwork: Artwork }> {

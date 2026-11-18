@@ -8,6 +8,8 @@ import louvreSingaLogo from '../images/Louvre Singa Art Gallery Logo.png';
 const NAV_LINKS = [
   { to: '/', label: 'Home' },
   { to: '/gallery', label: 'Explore' },
+  { to: '/about', label: 'About' },
+  { to: '/exhibitions', label: 'Exhibitions' },
 ];
 
 const HERO_WORDS = ['Every Masterpiece Tells a Story', 'Every Masterpiece Inspires Souls', 'Every Masterpiece Creates Magic'];
@@ -196,7 +198,7 @@ export const LandingPage: React.FC = () => {
             <span className="sr-only">Every Masterpiece Tells a Story</span>
           </h1>
           <p className="mt-7 max-w-xl text-base leading-relaxed text-white/85 sm:text-lg">
-            Explore extraordinary artwork, discover talented artists, and celebrate creativity. Whether you're an artist, collector, or art lover, <strong className="text-white">Louvre Singa</strong> brings you closer to the beauty of art.
+            Louvre Singa is a digital fine-art gallery and collector community in Uganda. Explore original artwork, discover artists, and connect with art as an artist, collector, or art lover.
           </p>
           <div className="mt-9 grid max-w-2xl grid-cols-1 gap-3 sm:grid-cols-3">
             <Link

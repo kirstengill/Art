@@ -1,0 +1,22 @@
+{
+  "/": {
+    "title": "Louvre Singa | Discover and Collect Fine Art in Uganda",
+    "description": "Discover Louvre Singa, a fine-art community connecting artists and collectors. Explore original artwork, find Ugandan artists, and experience art from Uganda.",
+    "indexable": true
+  },
+  "/about": {
+    "title": "About Louvre Singa | Fine Art Community in Uganda",
+    "description": "Learn about Louvre Singa, a digital fine-art gallery and community where artists share original work and collectors discover art.",
+    "indexable": true
+  },
+  "/exhibitions": {
+    "title": "Art Exhibitions | Louvre Singa",
+    "description": "Explore current and upcoming exhibitions from the Louvre Singa fine-art community.",
+    "indexable": true
+  },
+  "/community": {
+    "title": "Art Community & Studio Journal | Louvre Singa",
+    "description": "Read studio dispatches, exhibition notes, and conversations from the Louvre Singa art community.",
+    "indexable": true
+  }
+}

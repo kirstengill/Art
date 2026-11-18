@@ -29,7 +29,7 @@ export interface SupabaseDatabase {
           created_at: string;
           updated_at: string;
         };
-      };
+      } & { Insert: Record<string, unknown>; Update: Record<string, unknown>; Relationships: [] };
       artworks: {
         Row: {
           id: string;
@@ -53,7 +53,7 @@ export interface SupabaseDatabase {
           created_at: string;
           updated_at: string;
         };
-      };
+      } & { Insert: Record<string, unknown>; Update: Record<string, unknown>; Relationships: [] };
       conversations: {
         Row: {
           id: string;
@@ -64,7 +64,7 @@ export interface SupabaseDatabase {
           last_message_at: string;
           created_at: string;
         };
-      };
+      } & { Insert: Record<string, unknown>; Update: Record<string, unknown>; Relationships: [] };
       messages: {
         Row: {
           id: string;
@@ -75,7 +75,7 @@ export interface SupabaseDatabase {
           message_type: 'text' | 'offer_event' | 'system';
           created_at: string;
         };
-      };
+      } & { Insert: Record<string, unknown>; Update: Record<string, unknown>; Relationships: [] };
       artwork_offers: {
         Row: {
           id: string;
@@ -92,8 +92,85 @@ export interface SupabaseDatabase {
           created_at: string;
           updated_at: string;
         };
+      } & { Insert: Record<string, unknown>; Update: Record<string, unknown>; Relationships: [] };
+      online_classes: {
+        Relationships: [];
+        Row: {
+          id: string;
+          title: string;
+          description: string;
+          thumbnail_url: string | null;
+          instructor_name: string;
+          category: 'live_class' | 'demonstration' | 'recorded_tutorial' | 'art_tutorial';
+          provider: 'youtube' | 'tiktok';
+          video_url: string;
+          video_id: string;
+          scheduled_at: string | null;
+          status: 'draft' | 'scheduled' | 'live' | 'completed' | 'cancelled';
+          published: boolean;
+          created_by: string | null;
+          created_at: string;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          title: string;
+          description?: string;
+          thumbnail_url?: string | null;
+          instructor_name: string;
+          category: 'live_class' | 'demonstration' | 'recorded_tutorial' | 'art_tutorial';
+          provider: 'youtube' | 'tiktok';
+          video_url: string;
+          video_id: string;
+          scheduled_at?: string | null;
+          status?: 'draft' | 'scheduled' | 'live' | 'completed' | 'cancelled';
+          published?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          title?: string;
+          description?: string;
+          thumbnail_url?: string | null;
+          instructor_name?: string;
+          category?: 'live_class' | 'demonstration' | 'recorded_tutorial' | 'art_tutorial';
+          provider?: 'youtube' | 'tiktok';
+          video_url?: string;
+          video_id?: string;
+          scheduled_at?: string | null;
+          status?: 'draft' | 'scheduled' | 'live' | 'completed' | 'cancelled';
+          published?: boolean;
+          created_by?: string | null;
+          created_at?: string;
+          updated_at?: string;
+        };
+      };
+      class_enrollments: {
+        Relationships: [];
+        Row: {
+          id: string;
+          class_id: string;
+          user_id: string;
+          enrolled_at: string;
+        };
+        Insert: {
+          id?: string;
+          class_id: string;
+          user_id: string;
+          enrolled_at?: string;
+        };
+        Update: {
+          id?: string;
+          class_id?: string;
+          user_id?: string;
+          enrolled_at?: string;
+        };
       };
     };
+    Views: {};
+    Functions: {};
   };
 }
 

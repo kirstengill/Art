@@ -77,6 +77,33 @@ async function many<T>(
   return fromDatabase<T[]>(data);
 }
 
+async function getPostLikeCounts(
+  db: SupabaseDataClient,
+  postIds: string[]
+): Promise<Map<string, number>> {
+  const counts = new Map<string, number>();
+  if (postIds.length === 0) return counts;
+
+  const pageSize = 1000;
+  for (let offset = 0; ; offset += pageSize) {
+    const likes = await many<DbRow>(
+      db
+        .from('likes')
+        .select('post_id')
+        .in('post_id', postIds)
+        .order('id', { ascending: true })
+        .range(offset, offset + pageSize - 1)
+    );
+    for (const like of likes) {
+      const postId = String(like.postId);
+      counts.set(postId, (counts.get(postId) ?? 0) + 1);
+    }
+    if (likes.length < pageSize) break;
+  }
+
+  return counts;
+}
+
 function requireImageKey(imageKey: string): void {
   if (
     typeof imageKey !== 'string' ||
@@ -192,6 +219,7 @@ export async function getPublicCommunityFeed(db: SupabaseDataClient, viewerUid?:
       visibleArtists.has(String(post.authorId))
   );
   const visiblePostIds = new Set(visiblePosts.map((post) => String(post.id)));
+  const postLikeCounts = await getPostLikeCounts(db, Array.from(visiblePostIds));
   const visibleComments = commentRows.filter(
     (comment) =>
       visiblePostIds.has(String(comment.postId)) &&
@@ -223,7 +251,10 @@ export async function getPublicCommunityFeed(db: SupabaseDataClient, viewerUid?:
   return {
     profiles: visibleProfiles.map((profile) => ({ ...profile, email: '' })),
     artworks,
-    posts: visiblePosts,
+    posts: visiblePosts.map((post): DbRow & { likesCount: number } => ({
+      ...post,
+      likesCount: postLikeCounts.get(String(post.id)) ?? 0,
+    })),
     comments: visibleComments,
     followedArtistIds: followRows
       .filter((follow) => visibleArtists.has(String(follow.followingId)))
@@ -328,6 +359,10 @@ export async function getPublicCatalog(db: SupabaseDataClient, viewerUid?: strin
     visiblePostIds,
     visibleComments,
   } = filterVisibleCatalogRows(profileRows, artworkRows, postRows, commentRows);
+  const postLikeCounts = await getPostLikeCounts(
+    db,
+    Array.from(visiblePostIds, (id) => String(id))
+  );
 
   return {
     profiles: visibleProfiles.map((profile) => ({
@@ -335,7 +370,10 @@ export async function getPublicCatalog(db: SupabaseDataClient, viewerUid?: strin
       email: '',
     })),
     artworks: visibleArtworks,
-    posts: visiblePosts,
+    posts: visiblePosts.map((post): DbRow & { likesCount: number } => ({
+      ...post,
+      likesCount: postLikeCounts.get(String(post.id)) ?? 0,
+    })),
     comments: visibleComments,
     followedArtistIds: followRows
       .filter((follow) => visibleProfileIds.has(String(follow.followingId)))
@@ -589,8 +627,8 @@ export async function togglePostLikeInDb(db: SupabaseDataClient, userUid: string
   } else {
     await execute(db.from('likes').insert({ post_id: postId, user_id: userUid }));
   }
-  const likes = await many<DbRow>(db.from('likes').select('id').eq('post_id', postId));
-  return { liked: !existing, likesCount: likes.length };
+  const likesCount = (await getPostLikeCounts(db, [postId])).get(postId) ?? 0;
+  return { liked: !existing, likesCount };
 }
 
 export async function getConversationsForParticipant(db: SupabaseDataClient, uid: string) {

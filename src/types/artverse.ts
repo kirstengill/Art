@@ -88,6 +88,8 @@ export type OfferStatus =
   | 'withdrawn'
   | 'expired';
 
+export type ArtistCVStatus = 'draft' | 'pending' | 'approved' | 'rejected';
+
 export type AccountStatus = 'active' | 'pending' | 'suspended' | 'deleted';
 
 export interface Profile {
@@ -235,6 +237,35 @@ export interface PurchaseRequestReceipt {
   amount: number;
   currency: string;
   createdAt: string;
+}
+
+export interface ArtistCV {
+  id: string;
+  artistId: string;
+  biography: string;
+  artisticStatement: string;
+  education: string;
+  experience: string;
+  exhibitions: string;
+  awards: string;
+  specialisation: string;
+  status: ArtistCVStatus;
+  adminFeedback: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string | null;
+  submittedAt: string | null;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ArtistCVReview {
+  id: string;
+  artistCvId: string;
+  artistId: string;
+  status: ArtistCVStatus;
+  feedback: string | null;
+  reviewedBy: string | null;
+  reviewedAt: string;
 }
 
 export interface PurchaseRequest {
