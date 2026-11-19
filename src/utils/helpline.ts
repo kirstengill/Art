@@ -1,6 +1,7 @@
 export function getWhatsAppHelplineUrl(message?: string): string | undefined {
-  const href = import.meta.env.VITE_HELPLINE_WHATSAPP_URL;
-  if (!href) return undefined;
+  const href =
+    import.meta.env.VITE_HELPLINE_WHATSAPP_URL ||
+    'https://wa.me/256757339658';
   try {
     const url = new URL(href);
     const approvedHost =

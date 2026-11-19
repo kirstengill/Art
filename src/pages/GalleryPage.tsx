@@ -448,7 +448,7 @@ export const GalleryPage: React.FC = () => {
       
       {/* Floating WhatsApp Helpline */}
       <a
-        href={import.meta.env.VITE_HELPLINE_WHATSAPP_URL || 'https://wa.me'}
+        href={import.meta.env.VITE_HELPLINE_WHATSAPP_URL || 'https://wa.me/256760795175'}
         target="_blank"
         rel="noopener noreferrer"
         aria-label="Contact us on WhatsApp"

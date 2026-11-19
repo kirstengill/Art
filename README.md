@@ -41,7 +41,7 @@ LOUVRE SINGA implements a **role-based access control system** with three user t
   - **Role selection**: Users choose their role during signup (Artist, Collector, or Art Lover)
   - **Role switching**: Users can create multiple accounts with different roles
 - **Page transitions**: Route changes use lightweight Motion transitions and respect the user's reduced-motion preference.
-- **Helpline**: Footer links for WhatsApp, TikTok, and Instagram appear only when configured with HTTPS URLs on the corresponding platform domains. A configured destination is not, by itself, a claim that the account is verified.
+- **Helpline**: The footer links to the Louvre Singa TikTok profile and restored WhatsApp and Instagram destinations by default. Environment overrides must use HTTPS and the corresponding platform domain.
 - **Artist artwork uploads**: Uploaded JPEG, PNG, and WebP images are stored in the public `artwork-images` Supabase Storage bucket. Artwork records store the resulting public Supabase URL, so the image is available across browsers and to all visitors.
 - **Role-based access**: Users can sign up as **Artist**, **Collector**, or **Art Lover**. Each role has specific permissions for browsing, purchasing, uploading, and collecting artwork.
 
@@ -70,7 +70,7 @@ Copy `.env.example` to `.env` and populate the required placeholders (never comm
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (required by the browser; use only the Supabase publishable/anon key)
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (server equivalents; may be omitted when the `VITE_` equivalents are present)
 - `SUPABASE_SECRET_KEY` (required for trusted profile synchronization and admin queries; server only; a legacy `SUPABASE_SERVICE_ROLE_KEY` is also accepted)
-- `VITE_HELPLINE_WHATSAPP_URL`, `VITE_HELPLINE_TIKTOK_URL`, `VITE_HELPLINE_INSTAGRAM_URL` (optional HTTPS destinations for the footer icons; unconfigured or unsupported URLs are omitted)
+- `VITE_HELPLINE_WHATSAPP_URL`, `VITE_HELPLINE_TIKTOK_URL`, `VITE_HELPLINE_INSTAGRAM_URL` (optional HTTPS overrides for the footer icons; the earlier social destinations are used as defaults)
 
 `GEMINI_API_KEY` and `APP_URL` remain available for the existing AI/hosting integrations. No separately hosted PostgreSQL instance or database login credentials are required.
 
@@ -91,7 +91,7 @@ For Vercel, add the required variables under **Project Settings → Environment 
 2. Add each app callback URL to Supabase Auth's allowed redirect URLs, including `http://localhost:3000/auth/callback` for local development and the corresponding URL for each deployed origin.
 3. Assign `role = 'admin'` to the existing administrator's profile only through a trusted database operation. Public registration and profile synchronization cannot create or promote an administrator.
 4. Link the Supabase CLI to project `majessboafhzsbardtmb` and review/apply pending migrations with `npx supabase db push`. Do not re-run the full `supabase/schema.sql` snapshot against an existing project.
-5. Configure Helpline URL variables only with your official WhatsApp, X/Twitter, and Etsy destinations. Invalid or unset URLs stay hidden.
+5. Configure Helpline URL variables only with your official WhatsApp, TikTok, and Instagram destinations. Invalid URLs are omitted; unset URLs use the restored defaults.
 
 The app's profile sync and admin routes require a server-only Supabase secret key. Missing credentials prevent those routes from succeeding; local build/tests do not verify a live Supabase project.
 

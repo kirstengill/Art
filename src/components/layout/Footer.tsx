@@ -5,19 +5,19 @@ import { FaInstagram, FaTiktok, FaWhatsapp } from 'react-icons/fa6';
 const HELPLINE_LINKS = [
   {
     label: 'WhatsApp',
-    href: import.meta.env.VITE_HELPLINE_WHATSAPP_URL,
+    href: import.meta.env.VITE_HELPLINE_WHATSAPP_URL || 'https://wa.me/256760795175',
     icon: FaWhatsapp,
     domains: ['wa.me', 'whatsapp.com'],
   },
   {
     label: 'TikTok',
-    href: import.meta.env.VITE_HELPLINE_TIKTOK_URL,
+    href: import.meta.env.VITE_HELPLINE_TIKTOK_URL || 'https://www.tiktok.com/@louvre_singa',
     icon: FaTiktok,
     domains: ['tiktok.com'],
   },
   {
     label: 'Instagram',
-    href: import.meta.env.VITE_HELPLINE_INSTAGRAM_URL,
+    href: import.meta.env.VITE_HELPLINE_INSTAGRAM_URL || 'https://www.instagram.com/anthony_rays/',
     icon: FaInstagram,
     domains: ['instagram.com'],
   },
@@ -129,7 +129,7 @@ export const Footer: React.FC = () => {
               Connect with Louvre Singa through our configured social channels.
             </p>
             <div className="flex flex-wrap gap-2 ">
-              {HELPLINE_LINKS.map(({ label, href, icon: Icon }) => (
+              {/* {HELPLINE_LINKS.map(({ label, href, icon: Icon }) => (
                 <a
                   key={label}
                   href={href}
@@ -141,15 +141,41 @@ export const Footer: React.FC = () => {
                 >
                   <Icon aria-hidden="true" className="h-4 w-4" />
                 </a>
-              ))}
+              ))} */}
+               <a
+                  key="WhatsApp"
+                  href="https://wa.me/256757339658"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open Louvre Singa on WhatsApp"
+                  title="WhatsApp"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D0C1] text-[#5C554C] transition-colors hover:border-[#B38B40] hover:bg-white hover:text-[#141312] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B38B40]"
+                >
+                  <FaWhatsapp aria-hidden="true" className="h-4 w-4"  size={25}/>
+                </a>
+                <a
+                  key="tiktok"
+                  href="https://www.tiktok.com/@louvre_singa"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open Louvre Singa on TikTok"
+                  title="TikTok"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D0C1] text-[#5C554C] transition-colors hover:border-[#B38B40] hover:bg-white hover:text-[#141312] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B38B40]"
+                >
+                  <FaTiktok aria-hidden="true" className="h-4 w-4"  size={25}/>
+                </a>
+                <a
+                  key="instagram"
+                  href="https://www.instagram.com/lou.vresinga/"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label="Open Louvre Singa on Instagram"
+                  title="Instagram"
+                  className="inline-flex h-10 w-10 items-center justify-center rounded-full border border-[#D8D0C1] text-[#5C554C] transition-colors hover:border-[#B38B40] hover:bg-white hover:text-[#141312] focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-[#B38B40]"
+                >
+                  <FaInstagram aria-hidden="true" className="h-4 w-4"  size={25}/>
+                </a>
             </div>
-            {HELPLINE_LINKS.length < 3 && (
-              <p className="text-[11px] text-[#7A7267]">
-                {HELPLINE_LINKS.length === 0
-                  ? 'Social links will appear when configured.'
-                  : 'Some social links are not configured yet.'}
-              </p>
-            )}
           </div>
         </div>
 
