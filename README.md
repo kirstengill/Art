@@ -12,7 +12,7 @@ LOUVRE SINGA implements a **role-based access control system** with three user t
 | **Collector** | ✅ | ✅ | ❌ | ❌ | ✅ | ✅ |
 | **Artist** | ✅ | ❌ | ✅ | ✅ | ❌ | ❌ |
 
-**Note:** All artwork is **publicly visible** to all users regardless of account type or authentication status.
+**Note:** The current application requires a signed-in Collector to open the artwork catalogue, artist directory, and artwork detail routes. These pages are not included in the public SEO sitemap and must not be made indexable by weakening their existing access controls.
 
 ## Features Implemented
 
@@ -48,7 +48,7 @@ LOUVRE SINGA implements a **role-based access control system** with three user t
 ## Architecture & Database Setup
 
 - **Supabase is the single persistent backend**: Supabase Postgres stores profiles, private account details, artwork, community activity, saved collections, inquiries/offers, purchase intents, and administrator-only purchase requests. The Express API uses the caller's verified Supabase access token for ordinary operations and the server-only Supabase secret for trusted operations.
-- **Vercel deployment**: `api/[...path].ts` exposes the Express API as a Vercel Function; the SPA fallback in `vercel.json` excludes `/api/` so API methods such as `POST /api/auth/sync` reach that function. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Vercel for the browser build, and `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or the matching `VITE_` variables) for the API function. Both sets must point to the same Supabase project; Vite embeds its variables at build time, while the API reads its variables at function runtime. The ignored local `.env` file is not deployed. `SUPABASE_SECRET_KEY` is also required at runtime for profile synchronization and must remain server-only. Apply the Supabase migrations so public read access for active artist profiles and artworks is configured. Redeploy after changing environment variables.
+- **Vercel deployment**: `api/[...path].ts` exposes the Express API as a Vercel Function; the API rewrite in `vercel.json` routes `/api/*` to that function. Configure `VITE_SUPABASE_URL` and `VITE_SUPABASE_ANON_KEY` in Vercel for the browser build, and `SUPABASE_URL` and `SUPABASE_ANON_KEY` (or the matching `VITE_` variables) for the API function. Both sets must point to the same Supabase project; Vite embeds its variables at build time, while the API reads its variables at function runtime. The ignored local `.env` file is not deployed. `SUPABASE_SECRET_KEY` is also required at runtime for profile synchronization and must remain server-only. Redeploy after changing environment variables.
 - **Authentication**: Supabase Auth is the only account/session provider. Email/password registration and sign-in use the existing Supabase Auth flow; explore remains available without signing in. Public signup accepts Artist, Collector, or Art Lover. The user's role is read from their `public.profiles` row; profile roles cannot be changed through authenticated profile updates.
 - **Artwork storage**: Images go to the existing public `artwork-images` bucket. Uploads are restricted to authenticated artist accounts and a folder named for their Auth user ID; MIME types are JPEG, PNG, WebP, or GIF, up to 10 MB. Artwork metadata references the public Storage URL.
 - **Administrator dashboard**: `/admin` and `/api/admin/*` require an authenticated account whose `public.profiles.role` is `admin`. User lists and analytics are loaded from persistent Supabase profile and content tables through the server API. The API verifies the role from Supabase using the caller's access token before querying administrator data. Administrator roles must be assigned through a trusted database operation. Configure `SUPABASE_SECRET_KEY` only in the trusted server/deployment environment. Never prefix it with `VITE_`.
@@ -75,6 +75,15 @@ Copy `.env.example` to `.env` and populate the required placeholders (never comm
 `GEMINI_API_KEY` and `APP_URL` remain available for the existing AI/hosting integrations. No separately hosted PostgreSQL instance or database login credentials are required.
 
 For Vercel, add the required variables under **Project Settings → Environment Variables** for each deployment environment, then trigger a new deployment. The browser variables must be present at build time; the API variables must be available to the function at runtime.
+
+## SEO and Search Engine Setup
+
+- The preferred origin is `https://louvresinga.com`. The Vercel configuration redirects `www.louvresinga.com` to the canonical host once deployed; Vercel already redirects HTTP requests to HTTPS.
+- `npm run build` prerenders crawlable HTML for `/`, `/about`, `/exhibitions`, and `/community`, with route-specific titles, descriptions, canonicals, Open Graph/Twitter cards, and breadcrumbs. Organization and WebSite JSON-LD are included without unverified addresses, contact details, reviews, or social accounts.
+- The build generates `/robots.txt` and `/sitemap.xml` and copies them into the production output. The Vercel rewrites serve them at those public paths. The sitemap contains only the four public routes listed above. Dynamic artwork, artist, member-only class, account, and admin routes are excluded because the current application requires authentication or does not provide public detail routes. Do not loosen Supabase RLS to expand the sitemap.
+- After deployment, protected routes and API responses receive `X-Robots-Tag: noindex, nofollow`; the React metadata manager also marks non-public routes `noindex`.
+- Register a **Domain property** for `louvresinga.com` in Google Search Console and Bing Webmaster Tools. Verify ownership by adding the exact DNS TXT record each service provides at the domain's DNS host. Do not add a guessed verification token or claim verification until the service confirms it.
+- After the SEO deployment is live, submit `https://louvresinga.com/sitemap.xml` in both webmaster tools. Use URL Inspection to test the homepage and About and Exhibitions pages. Search Console verification, sitemap submission, and indexing have not been performed by this repository.
 
 ### Supabase Auth Setup
 

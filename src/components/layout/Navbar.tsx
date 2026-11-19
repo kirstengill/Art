@@ -17,6 +17,8 @@ const PUBLIC_LINKS = [
   { to: '/', label: 'Home' },
   { to: '/gallery', label: 'Explore' },
   { to: '/exhibitions', label: 'Exhibitions' },
+  { to: '/about', label: 'About' },
+  { to: '/online-classes', label: 'Online Classes' },
   { to: '/artists', label: 'Artists' },
   { to: '/community', label: 'Community' },
 ];
