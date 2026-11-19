@@ -65,6 +65,7 @@ interface ArtVerseContextValue {
   likedPostIds: string[];
   purchasedArtworkIds: string[];
   currentUser: Profile | null;
+  unverifiedEmail: string | null;
   authMode: 'authenticated' | 'guest';
   isAuthLoading: boolean;
   authError: string | null;
@@ -85,6 +86,7 @@ interface ArtVerseContextValue {
   refreshNotifications: () => Promise<void>;
   markNotificationRead: (notificationId: string) => Promise<void>;
   signInWithEmail: (email: string, password: string) => Promise<void>;
+  resendConfirmationEmail: (email: string) => Promise<void>;
   signUpWithEmail: (params: {
     email: string;
     password: string;
@@ -94,7 +96,7 @@ interface ArtVerseContextValue {
     fullName?: string;
     role: UserRole;
     location?: string;
-  }) => Promise<{ emailConfirmationRequired: boolean; profile?: Profile }>;
+  }) => Promise<void>;
   logout: () => Promise<void>;
   updateProfileAvatar: (imageDataUrl: string) => Promise<void>;
   toggleSaveArtwork: (artworkId: string) => Promise<void>;
@@ -211,6 +213,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [likedPostIds, setLikedPostIds] = useState<string[]>([]);
   const [purchasedArtworkIds, setPurchasedArtworkIds] = useState<string[]>([]);
   const [currentUser, setCurrentUser] = useState<Profile | null>(null);
+  const [unverifiedEmail, setUnverifiedEmail] = useState<string | null>(null);
   const [authMode, setAuthMode] = useState<'authenticated' | 'guest'>('guest');
   const [isAuthLoading, setIsAuthLoading] = useState(Boolean(supabase));
   const [authError, setAuthError] = useState<string | null>(null);
@@ -226,10 +229,18 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   const [exhibitionError, setExhibitionError] = useState<string | null>(null);
   const profileSyncTasks = useRef(new Map<string, Promise<Profile>>());
   const activeAuthUserId = useRef<string | null>(null);
+  const registrationInProgress = useRef(false);
+  const registrationEmail = useRef<string | null>(null);
+  const blockedRegistrationUserId = useRef<string | null>(null);
   const catalogRequestId = useRef(0);
 
   const syncSupabaseProfile = useCallback(
     (user: SupabaseUser) => {
+      if (!user.email_confirmed_at) {
+        return Promise.reject(
+          new Error('EMAIL_NOT_VERIFIED')
+        );
+      }
       const taskKey = user.id;
       const activeTask = profileSyncTasks.current.get(taskKey);
       if (activeTask) return activeTask;
@@ -501,11 +512,12 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
   }, [currentUser, loadCatalog]);
 
   useEffect(() => {
-    if (!supabase) return;
+    const authClient = supabase;
+    if (!authClient) return;
     let active = true;
     const {
       data: { subscription },
-    } = supabase.auth.onAuthStateChange((_event, session) => {
+    } = authClient.auth.onAuthStateChange((_event, session) => {
       artverseApi.setSession(session);
       if (!active) return;
       if (!session?.user) {
@@ -531,6 +543,30 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       }
 
       const user = session.user;
+      const isRegistrationSession =
+        registrationInProgress.current &&
+        registrationEmail.current === user.email?.trim().toLowerCase();
+      if (
+        !user.email_confirmed_at ||
+        isRegistrationSession ||
+        blockedRegistrationUserId.current === user.id
+      ) {
+        activeAuthUserId.current = null;
+        setCurrentUser(null);
+        setAuthMode('guest');
+        setUnverifiedEmail(user.email ?? null);
+        setIsAuthLoading(false);
+        setAuthError(null);
+        artverseApi.setSession(null);
+        window.setTimeout(() => {
+          void authClient.auth.signOut().then(({ error }) => {
+            if (error) console.error('Unable to clear an unverified signup session:', error);
+          });
+        }, 0);
+        return;
+      }
+
+      setUnverifiedEmail(null);
       activeAuthUserId.current = user.id;
       setCurrentUser(null);
       setAuthMode('guest');
@@ -574,13 +610,29 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       setAuthMode('guest');
       setIsAuthLoading(true);
       setAuthError(null);
+      setUnverifiedEmail(null);
       try {
         const { data, error } = await supabase.auth.signInWithPassword({
           email: email.trim(),
           password,
         });
         if (error || !data.user) {
+          if (
+            error &&
+            (error.code === 'email_not_confirmed' ||
+              error.message.toLowerCase().includes('email not confirmed'))
+          ) {
+            throw new Error('EMAIL_NOT_VERIFIED');
+          }
           throw error || new Error('Supabase did not return an authenticated user.');
+        }
+        if (!data.user.email_confirmed_at) {
+          if (data.session) {
+            const { error: signOutError } = await supabase.auth.signOut();
+            if (signOutError) throw signOutError;
+          }
+          artverseApi.setSession(null);
+          throw new Error('EMAIL_NOT_VERIFIED');
         }
         artverseApi.setSession(data.session);
         activeAuthUserId.current = data.user.id;
@@ -592,6 +644,19 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     },
     [syncSupabaseProfile]
   );
+
+  const resendConfirmationEmail = useCallback(async (email: string) => {
+    if (!supabase || !isSupabaseConfigured) {
+      throw new Error('Supabase Auth is not configured. Check the Supabase URL and publishable key.');
+    }
+    const callbackUrl = new URL('/auth/callback', window.location.origin);
+    const { error } = await supabase.auth.resend({
+      type: 'signup',
+      email: email.trim(),
+      options: { emailRedirectTo: callbackUrl.toString() },
+    });
+    if (error) throw error;
+  }, []);
 
   const signUpWithEmail = useCallback(
     async (params: {
@@ -608,34 +673,45 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
         throw new Error('Supabase Auth is not configured. Check the Supabase URL and publishable key.');
       }
       const callbackUrl = new URL('/auth/callback', window.location.origin);
-      const { data, error } = await supabase.auth.signUp({
-        email: params.email.trim(),
-        password: params.password,
-        options: {
-          emailRedirectTo: callbackUrl.toString(),
-          data: {
-            full_name:
-              params.fullName?.trim() ||
-              [params.firstName, params.lastName].filter(Boolean).join(' '),
-            role: params.role,
-            location: params.location?.trim() || '',
-            first_name: params.firstName?.trim() || '',
-            last_name: params.lastName?.trim() || '',
-            phone_number: params.phoneNumber?.trim() || '',
+      registrationInProgress.current = true;
+      registrationEmail.current = params.email.trim().toLowerCase();
+      try {
+        const { data, error } = await supabase.auth.signUp({
+          email: params.email.trim(),
+          password: params.password,
+          options: {
+            emailRedirectTo: callbackUrl.toString(),
+            data: {
+              full_name:
+                params.fullName?.trim() ||
+                [params.firstName, params.lastName].filter(Boolean).join(' '),
+              role: params.role,
+              location: params.location?.trim() || '',
+              first_name: params.firstName?.trim() || '',
+              last_name: params.lastName?.trim() || '',
+              phone_number: params.phoneNumber?.trim() || '',
+            },
           },
-        },
-      });
-      if (error) throw error;
-      artverseApi.setSession(data.session);
+        });
+        if (error) throw error;
+        artverseApi.setSession(null);
 
-      if (!data.session || !data.user) {
-        return { emailConfirmationRequired: true };
+        if (data.session) {
+          blockedRegistrationUserId.current = data.user?.id ?? null;
+          const { error: signOutError } = await supabase.auth.signOut();
+          blockedRegistrationUserId.current = null;
+          if (signOutError) throw signOutError;
+          throw new Error(
+            'Email confirmation is disabled for this Supabase project. Enable email confirmation in Supabase Auth settings before registering.'
+          );
+        }
+        return;
+      } finally {
+        registrationInProgress.current = false;
+        registrationEmail.current = null;
       }
-      activeAuthUserId.current = data.user.id;
-      const profile = await syncSupabaseProfile(data.user);
-      return { emailConfirmationRequired: false, profile };
     },
-    [syncSupabaseProfile]
+    []
   );
 
   const logout = useCallback(async () => {
@@ -649,6 +725,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
     setAuthMode('guest');
     setIsAuthLoading(false);
     setAuthError(null);
+    setUnverifiedEmail(null);
     setSavedArtworkIds([]);
     setFollowedArtistIds([]);
     setLikedPostIds([]);
@@ -1135,6 +1212,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       likedPostIds,
       purchasedArtworkIds,
       currentUser,
+      unverifiedEmail,
       authMode,
       isAuthLoading,
       authError,
@@ -1155,6 +1233,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       refreshNotifications,
       markNotificationRead,
       signInWithEmail,
+      resendConfirmationEmail,
       signUpWithEmail,
       logout,
       updateProfileAvatar,
@@ -1202,6 +1281,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       likedPostIds,
       purchasedArtworkIds,
       currentUser,
+      unverifiedEmail,
       authMode,
       isAuthLoading,
       authError,
@@ -1222,6 +1302,7 @@ export const ArtVerseProvider: React.FC<{ children: React.ReactNode }> = ({
       refreshNotifications,
       markNotificationRead,
       signInWithEmail,
+      resendConfirmationEmail,
       signUpWithEmail,
       logout,
       updateProfileAvatar,

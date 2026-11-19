@@ -37,7 +37,7 @@ LOUVRE SINGA implements a **role-based access control system** with three user t
   - Shows purchased artwork with all details
   - Responsive grid layout matching the main gallery style
 - **Role-based Dashboards (`/dashboard/artist`, `/dashboard/collector`, `/dashboard/art-lover`, `/admin`)**: Sign-in is routed to the dashboard matching the role stored in `public.profiles`. `/dashboard` resolves to the current user's role-specific dashboard; artists manage listings at `/add-artwork`.
-- **Authentication (`/login`, `/signup`)**: Supabase Auth manages email/password accounts for `Admin`, `Artist`, `Collector`, and `Art Lover`. Public registration is limited to Artist, Collector, and Art Lover. Passwords are never stored in application tables; first/last name and phone details are stored separately from the public profile.
+- **Authentication (`/login`, `/signup`, `/verify-email`)**: Supabase Auth manages email/password accounts for `Admin`, `Artist`, `Collector`, and `Art Lover`. Public registration is limited to Artist, Collector, and Art Lover. New accounts must confirm their email before profile synchronization or protected dashboard/API access; confirmation links return through `/auth/callback`. Passwords are never stored in application tables; first/last name and phone details are stored separately from the public profile.
   - **Role selection**: Users choose their role during signup (Artist, Collector, or Art Lover)
   - **Role switching**: Users can create multiple accounts with different roles
 - **Page transitions**: Route changes use lightweight Motion transitions and respect the user's reduced-motion preference.
@@ -87,8 +87,8 @@ For Vercel, add the required variables under **Project Settings → Environment 
 
 ### Supabase Auth Setup
 
-1. Enable email/password authentication in the Supabase dashboard. Configure email confirmation according to your deployment policy.
-2. Add each app callback URL to Supabase Auth's allowed redirect URLs, including `http://localhost:3000/auth/callback` for local development and the corresponding URL for each deployed origin.
+1. Enable email/password authentication and **require email confirmation** in the Supabase dashboard. Signup intentionally refuses to establish an application session if Supabase returns an immediate session, which indicates email confirmation is disabled.
+2. Set the Supabase Auth site URL and add each app origin to its allowed redirect URLs, including `http://localhost:3000/auth/callback` for local development and the corresponding `/auth/callback` URL for each deployed origin.
 3. Assign `role = 'admin'` to the existing administrator's profile only through a trusted database operation. Public registration and profile synchronization cannot create or promote an administrator.
 4. Link the Supabase CLI to project `majessboafhzsbardtmb` and review/apply pending migrations with `npx supabase db push`. Do not re-run the full `supabase/schema.sql` snapshot against an existing project.
 5. Configure Helpline URL variables only with your official WhatsApp, TikTok, and Instagram destinations. Invalid URLs are omitted; unset URLs use the restored defaults.

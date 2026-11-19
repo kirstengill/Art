@@ -103,7 +103,21 @@ export const requireAuth = async (
     }
     // No profile yet (first sign-in before sync): allow through; sync creates it.
     if (!profile) {
+      if (!user.email_confirmed_at) {
+        res.status(403).json({
+          error: 'Confirm your email address before accessing your account.',
+          code: 'EMAIL_NOT_VERIFIED',
+        });
+        return;
+      }
       next();
+      return;
+    }
+    if (!user.email_confirmed_at && profile.role !== 'admin') {
+      res.status(403).json({
+        error: 'Confirm your email address before accessing your account.',
+        code: 'EMAIL_NOT_VERIFIED',
+      });
       return;
     }
     if (

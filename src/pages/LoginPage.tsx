@@ -4,6 +4,7 @@ import { motion, useReducedMotion } from 'motion/react';
 import { Eye, EyeOff } from 'lucide-react';
 import { useArtVerse } from '../context/ArtVerseContext';
 import { GlassPanel } from '../components/ui/GlassCard';
+import { ResendConfirmationButton } from '../components/auth/ResendConfirmationButton';
 import { dashboardPathForRole } from '../utils/roleRoutes';
 import gildedArtwork from '../assets/images/hero_gilded_horizon_1792993235968.webp';
 
@@ -18,6 +19,7 @@ export const LoginPage: React.FC = () => {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [needsVerification, setNeedsVerification] = useState(false);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
@@ -39,12 +41,18 @@ export const LoginPage: React.FC = () => {
     }
 
     setError(null);
+    setNeedsVerification(false);
     setLoading(true);
     try {
       await signInWithEmail(trimmedEmail, password);
       setPassword('');
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Unable to sign in.');
+      if (err instanceof Error && err.message === 'EMAIL_NOT_VERIFIED') {
+        setNeedsVerification(true);
+        setError('Please confirm your email address before signing in.');
+      } else {
+        setError(err instanceof Error ? err.message : 'Unable to sign in.');
+      }
     } finally {
       setLoading(false);
     }
@@ -94,7 +102,11 @@ export const LoginPage: React.FC = () => {
               type="email"
               autoComplete="email"
               value={email}
-              onChange={(e) => setEmail(e.target.value)}
+              onChange={(e) => {
+                setEmail(e.target.value);
+                setNeedsVerification(false);
+                setError(null);
+              }}
               placeholder="collector@example.com"
               className="w-full rounded-xl border border-white/25 bg-white/10 px-4 py-2.5 text-sm text-white placeholder:text-white/55 focus:border-[#e3c783] focus:outline-none transition-colors"
             />
@@ -141,6 +153,9 @@ export const LoginPage: React.FC = () => {
             <p role="alert" className="text-xs font-medium text-red-200">
               {authError}
             </p>
+          )}
+          {needsVerification && (
+            <ResendConfirmationButton email={email.trim()} />
           )}
 
           <motion.button

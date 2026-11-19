@@ -7,7 +7,6 @@ import type { UserRole } from '../types/artverse';
 import { formatRoleLabel } from '../utils/formatters';
 import { GlassPanel } from '../components/ui/GlassCard';
 import terracottaArtwork from '../assets/images/art_terracotta_study_1792993240609.webp';
-import { dashboardPathForRole } from '../utils/roleRoutes';
 
 const ROLE_DESCRIPTIONS: Record<UserRole, string> = {
   artist: 'Publish original works, set direct or offer pricing, and manage collector inquiries.',
@@ -40,7 +39,6 @@ export const SignupPage: React.FC = () => {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [notice, setNotice] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
   const handleSignupSubmit = async (event: React.FormEvent) => {
@@ -76,10 +74,9 @@ export const SignupPage: React.FC = () => {
     }
 
     setError(null);
-    setNotice(null);
     setLoading(true);
     try {
-      const { emailConfirmationRequired, profile } = await signUpWithEmail({
+      await signUpWithEmail({
         email: normalizedEmail,
         password,
         firstName: role === 'art_lover' ? undefined : firstName.trim(),
@@ -90,11 +87,8 @@ export const SignupPage: React.FC = () => {
       });
       setPassword('');
       setConfirmPassword('');
-      if (emailConfirmationRequired) {
-        setNotice('Account created. Check your email and confirm your address before signing in.');
-      } else if (profile) {
-        navigate(dashboardPathForRole(profile.role), { replace: true });
-      }
+      window.sessionStorage.setItem('louvre-singa-pending-email', normalizedEmail);
+      navigate('/verify-email', { replace: true, state: { email: normalizedEmail } });
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unable to create your account.');
     } finally {
@@ -209,8 +203,6 @@ export const SignupPage: React.FC = () => {
             </div>
 
             {error && <p role="alert" className="text-xs font-medium text-red-200">{error}</p>}
-            {notice && <p role="status" className="text-xs font-medium text-emerald-100">{notice}</p>}
-
             <motion.button
               type="submit"
               disabled={loading}
@@ -220,7 +212,7 @@ export const SignupPage: React.FC = () => {
               {loading ? 'Creating Account...' : `Create ${formatRoleLabel(role)} Account`}
             </motion.button>
             <p className="text-center text-[11px] leading-relaxed text-white/70">
-              Supabase securely manages your password. Email confirmation may be required.
+              Supabase securely manages your password. Confirm your email to activate your account.
             </p>
           </form>
 

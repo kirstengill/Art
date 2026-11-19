@@ -5,6 +5,7 @@ export type SupabaseDataClient = SupabaseClient;
 interface SupabaseAuthUser {
   uid: string;
   email?: string;
+  email_confirmed_at?: string;
   name?: string;
   user_metadata: Record<string, unknown>;
 }
@@ -111,6 +112,7 @@ export async function verifySupabaseAccessToken(
   return {
     uid: data.user.id,
     email: data.user.email,
+    email_confirmed_at: data.user.email_confirmed_at,
     name,
     user_metadata: metadata,
   };

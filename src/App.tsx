@@ -30,6 +30,7 @@ const AddArtworkPage = lazy(() => import('./pages/AddArtworkPage').then((m) => (
 const CollectedGalleryPage = lazy(() => import('./pages/CollectedGalleryPage').then((m) => ({ default: m.CollectedGalleryPage })));
 const LoginPage = lazy(() => import('./pages/LoginPage').then((m) => ({ default: m.LoginPage })));
 const SignupPage = lazy(() => import('./pages/SignupPage').then((m) => ({ default: m.SignupPage })));
+const VerificationPendingPage = lazy(() => import('./pages/VerificationPendingPage').then((m) => ({ default: m.VerificationPendingPage })));
 const AuthCallbackPage = lazy(() => import('./pages/AuthCallbackPage').then((m) => ({ default: m.AuthCallbackPage })));
 const DonationPage = lazy(() => import('./pages/DonationPage').then((m) => ({ default: m.DonationPage })));
 const ExhibitionPage = lazy(() => import('./pages/ExhibitionPage').then((m) => ({ default: m.ExhibitionPage })));
@@ -71,9 +72,14 @@ const ScrollAndAnimateRoutes: React.FC = () => {
     return () => window.clearTimeout(timeout);
   }, [location.pathname]);
 
-  const isImmersivePage = ['/', '/login', '/signin', '/signup', '/auth/callback'].includes(
-    location.pathname
-  );
+  const isImmersivePage = [
+    '/',
+    '/login',
+    '/signin',
+    '/signup',
+    '/verify-email',
+    '/auth/callback',
+  ].includes(location.pathname);
 
   return (
     <>
@@ -117,6 +123,7 @@ const ScrollAndAnimateRoutes: React.FC = () => {
               <Route path="/login" element={<LoginPage />} />
               <Route path="/signin" element={<LoginPage />} />
               <Route path="/signup" element={<SignupPage />} />
+              <Route path="/verify-email" element={<VerificationPendingPage />} />
               <Route path="/auth/callback" element={<AuthCallbackPage />} />
               <Route path="/admin" element={<ProtectedRoute allowedRoles={['admin']}><AdminPage /></ProtectedRoute>} />
               <Route path="/exhibitions" element={<ExhibitionPage />} />

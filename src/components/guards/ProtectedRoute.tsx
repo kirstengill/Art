@@ -15,7 +15,7 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
   requireAuth = true,
   allowedRoles,
 }) => {
-  const { currentUser, isAuthLoading, authError } = useArtVerse();
+  const { currentUser, unverifiedEmail, isAuthLoading, authError } = useArtVerse();
   const location = useLocation();
 
   if (requireAuth && isAuthLoading) {
@@ -36,6 +36,16 @@ export const ProtectedRoute: React.FC<ProtectedRouteProps> = ({
           Unable to verify your account role. Please try signing in again.
         </p>
       </div>
+    );
+  }
+
+  if (requireAuth && unverifiedEmail) {
+    return (
+      <Navigate
+        to="/verify-email"
+        state={{ email: unverifiedEmail }}
+        replace
+      />
     );
   }
 
