@@ -41,7 +41,7 @@ LOUVRE SINGA implements a **role-based access control system** with three user t
   - **Role selection**: Users choose their role during signup (Artist, Collector, or Art Lover)
   - **Role switching**: Users can create multiple accounts with different roles
 - **Page transitions**: Route changes use lightweight Motion transitions and respect the user's reduced-motion preference.
-- **Helpline**: Footer links for WhatsApp, X/Twitter, and Etsy are enabled through configured official destinations; unset links are not fabricated.
+- **Helpline**: Footer links for WhatsApp, TikTok, and Instagram appear only when configured with HTTPS URLs on the corresponding platform domains. A configured destination is not, by itself, a claim that the account is verified.
 - **Artist artwork uploads**: Uploaded JPEG, PNG, and WebP images are stored in the public `artwork-images` Supabase Storage bucket. Artwork records store the resulting public Supabase URL, so the image is available across browsers and to all visitors.
 - **Role-based access**: Users can sign up as **Artist**, **Collector**, or **Art Lover**. Each role has specific permissions for browsing, purchasing, uploading, and collecting artwork.
 
@@ -70,7 +70,7 @@ Copy `.env.example` to `.env` and populate the required placeholders (never comm
 - `VITE_SUPABASE_URL`, `VITE_SUPABASE_ANON_KEY` (required by the browser; use only the Supabase publishable/anon key)
 - `SUPABASE_URL`, `SUPABASE_ANON_KEY` (server equivalents; may be omitted when the `VITE_` equivalents are present)
 - `SUPABASE_SECRET_KEY` (required for trusted profile synchronization and admin queries; server only; a legacy `SUPABASE_SERVICE_ROLE_KEY` is also accepted)
-- `VITE_HELPLINE_WHATSAPP_URL`, `VITE_HELPLINE_X_URL`, `VITE_HELPLINE_ETSY_URL` (optional official HTTPS destinations for the footer icons)
+- `VITE_HELPLINE_WHATSAPP_URL`, `VITE_HELPLINE_TIKTOK_URL`, `VITE_HELPLINE_INSTAGRAM_URL` (optional HTTPS destinations for the footer icons; unconfigured or unsupported URLs are omitted)
 
 `GEMINI_API_KEY` and `APP_URL` remain available for the existing AI/hosting integrations. No separately hosted PostgreSQL instance or database login credentials are required.
 
